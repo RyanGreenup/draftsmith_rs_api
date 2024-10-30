@@ -1,6 +1,18 @@
 [package]
-name = "draftsmith_rest_api"
+name = "rust-cli-app"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+
+[[bin]]
+name = "cli"
+path = "src/bin/cli.rs"
+dependencies = ["clap"]
+
+[dependencies.clap]
+version = "4.5.20"
+features = ["derive"]
+
