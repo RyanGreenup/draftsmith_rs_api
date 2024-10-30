@@ -1,10 +1,5 @@
 use clap::Parser;
 
-#[cfg(test)]
-use assert_cmd::prelude::*;
-#[cfg(test)]
-use predicates::prelude::*;
-
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -32,7 +27,8 @@ mod tests {
     #[test]
     fn test_cli_with_name() {
         let mut cmd = Command::cargo_bin("cli").unwrap();
-        cmd.arg("--name").arg("Alice")
+        cmd.arg("--name")
+            .arg("Alice")
             .assert()
             .success()
             .stdout("Hello Alice!\n");
@@ -41,8 +37,10 @@ mod tests {
     #[test]
     fn test_cli_with_name_and_count() {
         let mut cmd = Command::cargo_bin("cli").unwrap();
-        cmd.arg("--name").arg("Bob")
-            .arg("--count").arg("3")
+        cmd.arg("--name")
+            .arg("Bob")
+            .arg("--count")
+            .arg("3")
             .assert()
             .success()
             .stdout("Hello Bob!\nHello Bob!\nHello Bob!\n");
@@ -51,8 +49,8 @@ mod tests {
     #[test]
     fn test_cli_missing_name() {
         let mut cmd = Command::cargo_bin("cli").unwrap();
-        cmd.assert()
-            .failure()
-            .stderr(predicates::str::contains("error: the following required arguments were not provided:"));
+        cmd.assert().failure().stderr(predicates::str::contains(
+            "error: the following required arguments were not provided:",
+        ));
     }
 }
