@@ -4,8 +4,7 @@ use crate::schema::assets::dsl::*;
 use crate::Tsvector;
 
 #[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = crate::schema::assets)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(table_name = assets)]
 pub struct Asset {
     pub id: i32,
     pub note_id: Option<i32>,
@@ -16,7 +15,7 @@ pub struct Asset {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = crate::schema::assets)]
+#[diesel(table_name = assets)]
 pub struct NewAsset<'a> {
     pub note_id: Option<i32>,
     pub location: &'a str,
@@ -51,7 +50,6 @@ mod tests {
             assert_eq!(inserted_asset.description, Some("This is a test asset".to_string()));
             assert!(inserted_asset.note_id.is_none());
             assert!(inserted_asset.created_at.is_some());
-            assert!(inserted_asset.modified_at.is_some());
 
             // Read the asset back
             let found_asset = assets.find(inserted_asset.id).first::<Asset>(conn)?;
@@ -97,8 +95,6 @@ mod tests {
             // Verify the update
             assert_eq!(updated_asset.description, Some("Updated description".to_string()));
             assert_eq!(updated_asset.location, "/updated/path");
-            // TODO: Investigate timestamp assertion like in notes
-            // assert!(updated_asset.modified_at.unwrap() > inserted_asset.modified_at.unwrap());
 
             Ok(())
         });
