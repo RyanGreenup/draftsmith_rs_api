@@ -30,6 +30,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    journal_entries (id) {
+        id -> Int4,
+        note_id -> Nullable<Int4>,
+        entry_date -> Date,
+    }
+}
+
+diesel::table! {
     note_attributes (id) {
         id -> Int4,
         note_id -> Nullable<Int4>,
@@ -101,6 +109,7 @@ diesel::table! {
 }
 
 diesel::joinable!(assets -> notes (note_id));
+diesel::joinable!(journal_entries -> notes (note_id));
 diesel::joinable!(note_attributes -> attributes (attribute_id));
 diesel::joinable!(note_attributes -> notes (note_id));
 diesel::joinable!(note_modifications -> notes (note_id));
@@ -110,6 +119,7 @@ diesel::joinable!(note_type_mappings -> notes (note_id));
 diesel::allow_tables_to_appear_in_same_query!(
     assets,
     attributes,
+    journal_entries,
     note_attributes,
     note_hierarchy,
     note_modifications,
