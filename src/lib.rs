@@ -66,8 +66,7 @@ mod tests {
         
         let conn = &mut establish_test_connection();
 
-        // Start a test transaction that will be rolled back
-        let result = conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create a new note
             let new_note = NewNote {
                 title: "Test Note",
@@ -97,9 +96,6 @@ mod tests {
 
             Ok(())
         });
-
-        // Check if the test transaction succeeded
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -108,7 +104,7 @@ mod tests {
         
         let conn = &mut establish_test_connection();
 
-        let result = conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create initial note
             let new_note = NewNote {
                 title: "Initial Title",
@@ -135,7 +131,5 @@ mod tests {
 
             Ok(())
         });
-
-        assert!(result.is_ok());
     }
 }
