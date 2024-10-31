@@ -1,0 +1,9 @@
+DROP TRIGGER IF EXISTS track_note_modifications ON notes;
+DROP FUNCTION IF EXISTS LOG_NOTE_MODIFICATIONS();
+DROP TABLE IF EXISTS tag_hierarchy;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS note_modifications;
+DROP TABLE IF EXISTS note_hierarchy;
+DROP TRIGGER IF EXISTS notes_fts_update ON notes;
+DROP INDEX IF EXISTS notes_fts_idx;
+DROP TABLE IF EXISTS notes;
