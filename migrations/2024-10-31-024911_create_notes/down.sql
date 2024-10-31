@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS note_type_mappings;
+DROP TABLE IF EXISTS note_types;
+DROP TABLE IF EXISTS note_attributes;
+DROP TABLE IF EXISTS attributes;
 DROP TRIGGER IF EXISTS track_note_modifications ON notes;
 DROP FUNCTION IF EXISTS LOG_NOTE_MODIFICATIONS();
 DROP TABLE IF EXISTS tag_hierarchy;

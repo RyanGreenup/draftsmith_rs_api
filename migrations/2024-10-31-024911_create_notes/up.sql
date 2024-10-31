@@ -76,3 +76,50 @@ CREATE TABLE tag_hierarchy (
     UNIQUE (child_tag_id)  -- Tags can only have one parent
 );
 
+
+-- ** Note Attributes----------------------------------------------------------
+-- Table for misc attributes
+CREATE TABLE attributes (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE note_attributes (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    note_id INT REFERENCES notes(id),
+    attribute_id INT REFERENCES attributes(id),
+    VALUE TEXT NOT NULL
+);
+
+-- Populate initial data for attributes
+INSERT INTO attributes (name, description) VALUES
+    ('location', 'Location of the note'),
+    ('author', 'Author of the note'),
+    ('source', 'Source of the note');
+
+
+-- ** Note Types --------------------------------------------------------------
+
+-- Table for note types
+CREATE TABLE note_types (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    description TEXT
+);
+
+CREATE TABLE note_type_mappings (
+    note_id INT REFERENCES notes(id),
+    type_id INT REFERENCES note_types(id),
+    PRIMARY KEY (note_id, type_id)
+);
+
+
+-- Populate initial data for note types
+INSERT INTO note_types (name, description) VALUES
+    ('asset', 'Asset related notes'),
+    ('bookmark', 'Bookmark related notes'),
+    ('contact', 'Contact information'),
+    ('page', 'A standalone page'),
+    ('block', 'A block of information within a page'),
+    ('subpage', 'A subpage within a note');
