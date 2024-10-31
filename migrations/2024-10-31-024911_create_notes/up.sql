@@ -22,6 +22,20 @@ FOR EACH ROW EXECUTE PROCEDURE TSVECTOR_UPDATE_TRIGGER(
     fts, 'pg_catalog.english', title, content
 );
 
+-- *** Auto update modified_at ------------------------------------------------
+CREATE OR REPLACE FUNCTION update_modified_at_column_on_notes()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.modified_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_modified_at
+BEFORE UPDATE ON notes
+FOR EACH ROW
+EXECUTE FUNCTION update_modified_at_column_on_notes();
+
 -- *** Hierarchy --------------------------------------------------------------
 CREATE TABLE note_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

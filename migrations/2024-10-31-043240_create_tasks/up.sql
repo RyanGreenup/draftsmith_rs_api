@@ -26,6 +26,20 @@ CREATE TABLE tasks (
     UNIQUE (note_id)
 );
 
+-- Auto update the modified_at column
+CREATE OR REPLACE FUNCTION update_modified_at_column_on_tasks()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.modified_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_modified_at
+BEFORE UPDATE ON tasks
+FOR EACH ROW
+EXECUTE FUNCTION update_modified_at_column_on_tasks();
+
 -- Schedule tasks over certain days
 CREATE TABLE task_schedules (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
