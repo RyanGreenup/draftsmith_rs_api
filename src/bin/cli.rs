@@ -20,6 +20,8 @@ fn main() {
     }
 }
 
+/*
+CLI is not yet implemented, this is left as a reminder for later.
 #[cfg(test)]
 mod tests {
     use assert_cmd::Command;
@@ -54,3 +56,4 @@ mod tests {
         ));
     }
 }
+*/

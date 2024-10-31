@@ -120,8 +120,14 @@ mod tests {
                 .set((title.eq("Updated Title"), content.eq("Updated content")))
                 .get_result::<Note>(conn)?;
 
-            dbg!(format!("The original note has modified_at: {:#?}", inserted_note.modified_at));
-            dbg!(format!("The updated  note has modified_at: {:#?}", updated_note.modified_at));
+            dbg!(format!(
+                "The original note has modified_at: {:#?}",
+                inserted_note.modified_at
+            ));
+            dbg!(format!(
+                "The updated  note has modified_at: {:#?}",
+                updated_note.modified_at
+            ));
             // Verify the update
             assert_eq!(updated_note.title, "Updated Title");
             assert_eq!(updated_note.content, "Updated content");
