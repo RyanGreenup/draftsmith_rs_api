@@ -1,6 +1,7 @@
 -- Table for assets
 CREATE TABLE assets (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- May relate an asset to a key note, e.g. a book to a book note
     note_id INT REFERENCES notes (id),
     location TEXT NOT NULL UNIQUE,
     description TEXT,
