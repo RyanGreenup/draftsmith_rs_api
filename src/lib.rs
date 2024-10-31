@@ -1,6 +1,7 @@
 pub mod schema;
 use diesel::prelude::*;
-use diesel::sql_types::Tsvector as TsvectorType;
+use diesel::{AsExpression, FromSqlRow};
+use crate::schema::sql_types::Tsvector as TsvectorType;
 use diesel::serialize::{ToSql, Output, IsNull};
 use diesel::deserialize::{FromSql, Result};
 use diesel::pg::{Pg, PgValue};
