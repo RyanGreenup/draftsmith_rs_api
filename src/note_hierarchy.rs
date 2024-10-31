@@ -1,6 +1,6 @@
-use diesel::prelude::*;
-use diesel::pg::PgConnection;
 use crate::schema::note_hierarchy;
+use diesel::pg::PgConnection;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable)]
 pub struct NoteHierarchy {
@@ -21,9 +21,9 @@ pub struct NewNoteHierarchy<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::establish_test_connection;
     use crate::notes::{NewNote, Note};
     use crate::schema::notes::dsl::*;
+    use crate::test_utils::establish_test_connection;
     use diesel::RunQueryDsl;
 
     fn create_test_note<'a>(conn: &mut PgConnection, note_title: &'a str) -> Note {

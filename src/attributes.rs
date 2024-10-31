@@ -1,6 +1,6 @@
-use diesel::prelude::*;
 use crate::schema::attributes;
 use crate::schema::attributes::dsl::*;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = attributes)]
@@ -41,15 +41,23 @@ mod tests {
 
             // Verify the inserted data
             assert_eq!(inserted_attribute.name, "Test Attribute");
-            assert_eq!(inserted_attribute.description, Some("Test Description".to_string()));
+            assert_eq!(
+                inserted_attribute.description,
+                Some("Test Description".to_string())
+            );
 
             // Read the attribute back
-            let found_attribute = attributes.find(inserted_attribute.id).first::<Attribute>(conn)?;
+            let found_attribute = attributes
+                .find(inserted_attribute.id)
+                .first::<Attribute>(conn)?;
 
             // Verify the read data
             assert_eq!(found_attribute.id, inserted_attribute.id);
             assert_eq!(found_attribute.name, "Test Attribute");
-            assert_eq!(found_attribute.description, Some("Test Description".to_string()));
+            assert_eq!(
+                found_attribute.description,
+                Some("Test Description".to_string())
+            );
 
             Ok(())
         });
@@ -81,7 +89,10 @@ mod tests {
 
             // Verify the update
             assert_eq!(updated_attribute.name, "Updated Name");
-            assert_eq!(updated_attribute.description, Some("Updated description".to_string()));
+            assert_eq!(
+                updated_attribute.description,
+                Some("Updated description".to_string())
+            );
 
             Ok(())
         });
@@ -104,14 +115,16 @@ mod tests {
                 .get_result(conn)?;
 
             // Delete the attribute
-            let deleted_count = diesel::delete(attributes.find(inserted_attribute.id))
-                .execute(conn)?;
+            let deleted_count =
+                diesel::delete(attributes.find(inserted_attribute.id)).execute(conn)?;
 
             // Verify one record was deleted
             assert_eq!(deleted_count, 1);
 
             // Verify the attribute no longer exists
-            let find_result = attributes.find(inserted_attribute.id).first::<Attribute>(conn);
+            let find_result = attributes
+                .find(inserted_attribute.id)
+                .first::<Attribute>(conn);
             assert!(find_result.is_err());
 
             Ok(())

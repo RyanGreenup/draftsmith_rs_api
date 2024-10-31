@@ -1,7 +1,7 @@
-use diesel::prelude::*;
 use crate::schema::journal_entries;
 use crate::schema::journal_entries::dsl::*;
 use chrono::NaiveDate;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = journal_entries)]
@@ -21,11 +21,11 @@ pub struct NewJournalEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::establish_test_connection;
-    use crate::notes::{Note, NewNote};
+    use crate::notes::{NewNote, Note};
     use crate::schema::notes::dsl::*;
-    use diesel::connection::Connection;
+    use crate::test_utils::establish_test_connection;
     use chrono::NaiveDate;
+    use diesel::connection::Connection;
 
     fn create_test_note(conn: &mut PgConnection) -> Note {
         let new_note = NewNote {
@@ -64,7 +64,9 @@ mod tests {
             assert_eq!(inserted_entry.entry_date, today);
 
             // Read the journal entry back
-            let found_entry = journal_entries.find(inserted_entry.id).first::<JournalEntry>(conn)?;
+            let found_entry = journal_entries
+                .find(inserted_entry.id)
+                .first::<JournalEntry>(conn)?;
 
             // Verify the read data
             assert_eq!(found_entry.id, inserted_entry.id);
@@ -128,14 +130,16 @@ mod tests {
                 .get_result(conn)?;
 
             // Delete the journal entry
-            let deleted_count = diesel::delete(journal_entries.find(inserted_entry.id))
-                .execute(conn)?;
+            let deleted_count =
+                diesel::delete(journal_entries.find(inserted_entry.id)).execute(conn)?;
 
             // Verify one record was deleted
             assert_eq!(deleted_count, 1);
 
             // Verify the journal entry no longer exists
-            let find_result = journal_entries.find(inserted_entry.id).first::<JournalEntry>(conn);
+            let find_result = journal_entries
+                .find(inserted_entry.id)
+                .first::<JournalEntry>(conn);
             assert!(find_result.is_err());
 
             Ok(())

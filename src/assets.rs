@@ -1,7 +1,7 @@
-use diesel::prelude::*;
 use crate::schema::assets;
 use crate::schema::assets::dsl::*;
 use crate::Tsvector;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = assets)]
@@ -25,8 +25,8 @@ pub struct NewAsset<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::connection::Connection;
     use crate::test_utils::establish_test_connection;
+    use diesel::connection::Connection;
 
     #[test]
     fn test_create_and_read_asset() {
@@ -47,7 +47,10 @@ mod tests {
 
             // Verify the inserted data
             assert_eq!(inserted_asset.location, "/path/to/asset");
-            assert_eq!(inserted_asset.description, Some("This is a test asset".to_string()));
+            assert_eq!(
+                inserted_asset.description,
+                Some("This is a test asset".to_string())
+            );
             assert!(inserted_asset.note_id.is_none());
             assert!(inserted_asset.created_at.is_some());
 
@@ -57,7 +60,10 @@ mod tests {
             // Verify the read data
             assert_eq!(found_asset.id, inserted_asset.id);
             assert_eq!(found_asset.location, "/path/to/asset");
-            assert_eq!(found_asset.description, Some("This is a test asset".to_string()));
+            assert_eq!(
+                found_asset.description,
+                Some("This is a test asset".to_string())
+            );
             assert!(found_asset.note_id.is_none());
 
             Ok(())
@@ -93,7 +99,10 @@ mod tests {
                 .get_result::<Asset>(conn)?;
 
             // Verify the update
-            assert_eq!(updated_asset.description, Some("Updated description".to_string()));
+            assert_eq!(
+                updated_asset.description,
+                Some("Updated description".to_string())
+            );
             assert_eq!(updated_asset.location, "/updated/path");
 
             Ok(())

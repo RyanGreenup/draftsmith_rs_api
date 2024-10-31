@@ -1,6 +1,6 @@
-use diesel::prelude::*;
 use crate::schema::tags;
 use crate::schema::tags::dsl::*;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = tags)]
@@ -27,9 +27,7 @@ mod tests {
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create a new tag
-            let new_tag = NewTag {
-                name: "Test Tag",
-            };
+            let new_tag = NewTag { name: "Test Tag" };
 
             // Insert the tag
             let inserted_tag: Tag = diesel::insert_into(tags)
@@ -93,8 +91,7 @@ mod tests {
                 .get_result(conn)?;
 
             // Delete the tag
-            let deleted_count = diesel::delete(tags.find(inserted_tag.id))
-                .execute(conn)?;
+            let deleted_count = diesel::delete(tags.find(inserted_tag.id)).execute(conn)?;
 
             // Verify one record was deleted
             assert_eq!(deleted_count, 1);
