@@ -7,9 +7,9 @@ pub struct Note {
     pub id: i32,
     pub title: String,
     pub content: String,
-    pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
-    pub search_vector: Option<diesel::sql_types::Tsvector>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub fts: Option<diesel::sql_types::Tsvector>,
 }
 
 #[derive(Insertable)]
