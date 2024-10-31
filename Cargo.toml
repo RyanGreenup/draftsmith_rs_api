@@ -12,6 +12,10 @@ name = "cli"
 path = "src/bin/cli.rs"
 dependencies = ["clap"]
 
+[dependencies]
+diesel = { version = "2.2.4", features = ["postgres"] }
+dotenv = "0.15.0"
+
 [dependencies.clap]
 version = "4.5.20"
 features = ["derive"]
