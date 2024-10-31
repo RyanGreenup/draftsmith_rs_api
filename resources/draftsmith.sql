@@ -127,7 +127,7 @@ CREATE TABLE note_hierarchy (
     UNIQUE (child_note_id)  -- This enforces that each child note can only have one parent
 );
 
--- Table for journal/calendar view (optional)
+-- Table for journal/calendar view (unused)
 CREATE TABLE journal_entries (
     id SERIAL PRIMARY KEY,
     note_id INT REFERENCES notes(id),
