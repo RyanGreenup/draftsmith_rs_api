@@ -11,7 +11,6 @@ pub mod note_modifications;
 
 use diesel::deserialize::{FromSql, Result};
 use diesel::pg::{Pg, PgValue};
-use diesel::prelude::*;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
 use std::io::Write;

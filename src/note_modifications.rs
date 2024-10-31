@@ -1,4 +1,3 @@
-use diesel::prelude::*;
 use diesel::{Queryable, Insertable, Identifiable, Associations};
 use chrono::NaiveDateTime;
 use crate::schema::note_modifications;
@@ -27,8 +26,8 @@ mod tests {
     use super::*;
     use crate::test_utils::establish_test_connection;
     use crate::notes::{Note, NewNote};
-    use crate::schema::notes::dsl::*;
-    use crate::schema::note_modifications::dsl::*;
+    use crate::schema::notes::dsl::{notes, id as note_id};
+    use crate::schema::note_modifications::dsl::{note_modifications, id as modification_id};
     use diesel::prelude::*;
     use diesel::result::Error;
 
@@ -91,7 +90,7 @@ mod tests {
 
             // Delete the note modification
             let num_deleted = diesel::delete(
-                note_modifications.filter(id.eq(inserted_modification.id))
+                note_modifications.filter(modification_id.eq(inserted_modification.id))
             )
             .execute(txn_conn)?;
 
@@ -100,7 +99,7 @@ mod tests {
 
             // Ensure the modification no longer exists
             let fetched_modification = note_modifications
-                .filter(id.eq(inserted_modification.id))
+                .filter(modification_id.eq(inserted_modification.id))
                 .first::<NoteModification>(txn_conn)
                 .optional()?;
 
