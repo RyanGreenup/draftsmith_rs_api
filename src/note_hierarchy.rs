@@ -21,7 +21,6 @@ pub struct NewNoteHierarchy<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::connection::Connection;
     use crate::test_utils::establish_test_connection;
     use crate::notes::{NewNote, Note};
     use crate::schema::notes::dsl::*;
@@ -51,7 +50,7 @@ mod tests {
             let new_hierarchy = NewNoteHierarchy {
                 parent_note_id: Some(parent_note.id),
                 child_note_id: Some(child_note.id),
-                hierarchy_type: Some("Parent-Child"),
+                hierarchy_type: Some("subpage"),
             };
 
             let hierarchy: NoteHierarchy = diesel::insert_into(note_hierarchy::table)
@@ -61,7 +60,7 @@ mod tests {
             // Assertions
             assert_eq!(hierarchy.parent_note_id, Some(parent_note.id));
             assert_eq!(hierarchy.child_note_id, Some(child_note.id));
-            assert_eq!(hierarchy.hierarchy_type.as_deref(), Some("Parent-Child"));
+            assert_eq!(hierarchy.hierarchy_type.as_deref(), Some("subpage"));
 
             Ok(())
         });
