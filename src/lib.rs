@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn test_create_and_read_asset() {
         use crate::schema::assets::dsl::*;
-        
+
         let conn = &mut establish_test_connection();
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
@@ -179,18 +179,22 @@ mod tests {
 
             // Verify the inserted data
             assert_eq!(inserted_asset.location, "/path/to/asset");
-            assert_eq!(inserted_asset.description, Some("Test asset description".to_string()));
+            assert_eq!(
+                inserted_asset.description,
+                Some("Test asset description".to_string())
+            );
             assert!(inserted_asset.created_at.is_some());
 
             // Read the asset back
-            let found_asset = assets
-                .find(inserted_asset.id)
-                .first::<Asset>(conn)?;
+            let found_asset = assets.find(inserted_asset.id).first::<Asset>(conn)?;
 
             // Verify the read data
             assert_eq!(found_asset.id, inserted_asset.id);
             assert_eq!(found_asset.location, "/path/to/asset");
-            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+            assert_eq!(
+                found_asset.description,
+                Some("Test asset description".to_string())
+            );
 
             Ok(())
         });
@@ -199,7 +203,7 @@ mod tests {
     #[test]
     fn test_create_asset_with_note() {
         use crate::schema::{assets::dsl::*, notes::dsl::notes};
-        
+
         let conn = &mut establish_test_connection();
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
@@ -228,18 +232,22 @@ mod tests {
             // Verify the inserted data
             assert_eq!(inserted_asset.note_id, Some(inserted_note.id));
             assert_eq!(inserted_asset.location, "/path/to/asset");
-            assert_eq!(inserted_asset.description, Some("Test asset description".to_string()));
+            assert_eq!(
+                inserted_asset.description,
+                Some("Test asset description".to_string())
+            );
 
             // Read the asset back
-            let found_asset = assets
-                .find(inserted_asset.id)
-                .first::<Asset>(conn)?;
+            let found_asset = assets.find(inserted_asset.id).first::<Asset>(conn)?;
 
             // Verify the read data
             assert_eq!(found_asset.id, inserted_asset.id);
             assert_eq!(found_asset.note_id, Some(inserted_note.id));
             assert_eq!(found_asset.location, "/path/to/asset");
-            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+            assert_eq!(
+                found_asset.description,
+                Some("Test asset description".to_string())
+            );
 
             Ok(())
         });
