@@ -2,7 +2,6 @@ use crate::schema::notes;
 use crate::schema::notes::dsl::*;
 use crate::Tsvector;
 use diesel::prelude::*;
-use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]

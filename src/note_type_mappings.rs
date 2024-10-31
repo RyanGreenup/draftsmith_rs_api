@@ -1,3 +1,5 @@
+use crate::notes::Note;
+use crate::note_types::NoteType;
 use crate::schema::note_type_mappings;
 use diesel::prelude::*;
 
