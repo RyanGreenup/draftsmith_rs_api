@@ -1,4 +1,6 @@
+pub mod schema;
 use diesel::prelude::*;
+use schema::notes;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
@@ -22,10 +24,58 @@ pub struct NewNote<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use diesel::Connection;
+    use diesel::pg::PgConnection;
+    use dotenv::dotenv;
+    use std::env;
+
+    fn establish_test_connection() -> PgConnection {
+        dotenv().ok();
+        let database_url = env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set");
+        PgConnection::establish(&database_url)
+            .expect("Error connecting to database")
+    }
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn test_create_and_read_note() {
+        use crate::schema::notes::dsl::*;
+        
+        let conn = &mut establish_test_connection();
+
+        // Start a test transaction that will be rolled back
+        let result = conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            // Create a new note
+            let new_note = NewNote {
+                title: "Test Note",
+                content: "This is a test note content",
+            };
+
+            // Insert the note
+            let inserted_note: Note = diesel::insert_into(notes)
+                .values(&new_note)
+                .get_result(conn)?;
+
+            // Verify the inserted data
+            assert_eq!(inserted_note.title, "Test Note");
+            assert_eq!(inserted_note.content, "This is a test note content");
+            assert!(inserted_note.created_at.is_some());
+            assert!(inserted_note.modified_at.is_some());
+
+            // Read the note back
+            let found_note = notes
+                .find(inserted_note.id)
+                .first::<Note>(conn)?;
+
+            // Verify the read data
+            assert_eq!(found_note.id, inserted_note.id);
+            assert_eq!(found_note.title, "Test Note");
+            assert_eq!(found_note.content, "This is a test note content");
+
+            Ok(())
+        });
+
+        // Check if the test transaction succeeded
+        assert!(result.is_ok());
     }
 }
