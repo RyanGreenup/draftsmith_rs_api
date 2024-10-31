@@ -140,7 +140,7 @@ CREATE TABLE journal_entries (
 -- Track notes as task objects
 
 CREATE TABLE tasks (
-    id SERIAL PRIMARY KEY,                 -- Unique task identifier
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     note_id INT REFERENCES notes(id) ON DELETE CASCADE, -- Link to notes
     status TEXT CHECK (status IN ('todo', 'done', 'wait', 'hold', 'idea', 'kill', 'proj', 'event')), -- Status of the task
     effort_estimate NUMERIC,              -- Estimated effort in hours
@@ -157,7 +157,7 @@ CREATE TABLE tasks (
 -- Schedule tasks over certain days
 
 CREATE TABLE task_schedules (
-    id SERIAL PRIMARY KEY,                 -- Unique schedule identifier
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     task_id INT REFERENCES tasks(id) ON DELETE CASCADE, -- Link to tasks
     start_datetime TIMESTAMP,              -- Scheduled start datetime
     end_datetime TIMESTAMP                 -- Scheduled end datetime
@@ -166,7 +166,7 @@ CREATE TABLE task_schedules (
 
 -- Clock Table (consider generalizing this so that notes can have clock tables too)
 CREATE TABLE task_clocks (
-    id SERIAL PRIMARY KEY,                 -- Unique clock identifier
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     task_id INT REFERENCES tasks(id) ON DELETE CASCADE, -- Link to tasks
     clock_in TIMESTAMP,                    -- Clock in time
     clock_out TIMESTAMP                    -- Clock out time

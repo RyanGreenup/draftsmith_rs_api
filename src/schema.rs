@@ -108,6 +108,40 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    task_clocks (id) {
+        id -> Int4,
+        task_id -> Nullable<Int4>,
+        clock_in -> Timestamp,
+        clock_out -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    task_schedules (id) {
+        id -> Int4,
+        task_id -> Int4,
+        start_datetime -> Nullable<Timestamp>,
+        end_datetime -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    tasks (id) {
+        id -> Int4,
+        note_id -> Nullable<Int4>,
+        status -> Text,
+        effort_estimate -> Nullable<Numeric>,
+        actual_effort -> Nullable<Numeric>,
+        deadline -> Nullable<Timestamp>,
+        priority -> Nullable<Int4>,
+        created_at -> Nullable<Timestamp>,
+        modified_at -> Nullable<Timestamp>,
+        all_day -> Nullable<Bool>,
+        goal_relationship -> Nullable<Int4>,
+    }
+}
+
 diesel::joinable!(assets -> notes (note_id));
 diesel::joinable!(journal_entries -> notes (note_id));
 diesel::joinable!(note_attributes -> attributes (attribute_id));
@@ -115,6 +149,9 @@ diesel::joinable!(note_attributes -> notes (note_id));
 diesel::joinable!(note_modifications -> notes (note_id));
 diesel::joinable!(note_type_mappings -> note_types (type_id));
 diesel::joinable!(note_type_mappings -> notes (note_id));
+diesel::joinable!(task_clocks -> tasks (task_id));
+diesel::joinable!(task_schedules -> tasks (task_id));
+diesel::joinable!(tasks -> notes (note_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     assets,
@@ -128,4 +165,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notes,
     tag_hierarchy,
     tags,
+    task_clocks,
+    task_schedules,
+    tasks,
 );
