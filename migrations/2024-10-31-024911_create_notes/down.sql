@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS attributes;
 DROP TRIGGER IF EXISTS track_note_modifications ON notes;
 DROP FUNCTION IF EXISTS log_note_modifications();
 DROP TABLE IF EXISTS tag_hierarchy;
+DROP TABLE IF EXISTS note_tags;
 DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS note_modifications;
 DROP TABLE IF EXISTS note_hierarchy;

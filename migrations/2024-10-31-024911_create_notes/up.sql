@@ -69,6 +69,12 @@ CREATE TABLE tags (
     name TEXT NOT NULL
 );
 
+CREATE TABLE note_tags (
+    note_id INT NOT NULL REFERENCES notes (id),
+    tag_id INT NOT NULL REFERENCES tags (id),
+    PRIMARY KEY (note_id, tag_id)
+);
+
 CREATE TABLE tag_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     parent_tag_id INT REFERENCES tags (id),

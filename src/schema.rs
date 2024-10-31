@@ -65,6 +65,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    note_tags (note_id, tag_id) {
+        note_id -> Int4,
+        tag_id -> Int4,
+    }
+}
+
+diesel::table! {
     note_type_mappings (note_id, type_id) {
         note_id -> Int4,
         type_id -> Int4,
@@ -147,6 +154,8 @@ diesel::joinable!(journal_entries -> notes (note_id));
 diesel::joinable!(note_attributes -> attributes (attribute_id));
 diesel::joinable!(note_attributes -> notes (note_id));
 diesel::joinable!(note_modifications -> notes (note_id));
+diesel::joinable!(note_tags -> notes (note_id));
+diesel::joinable!(note_tags -> tags (tag_id));
 diesel::joinable!(note_type_mappings -> note_types (type_id));
 diesel::joinable!(note_type_mappings -> notes (note_id));
 diesel::joinable!(task_clocks -> tasks (task_id));
@@ -160,6 +169,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     note_attributes,
     note_hierarchy,
     note_modifications,
+    note_tags,
     note_type_mappings,
     note_types,
     notes,

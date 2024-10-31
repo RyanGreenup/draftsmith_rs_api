@@ -21,11 +21,12 @@ CREATE TABLE tasks (
     goal_relationship INT CHECK (
         goal_relationship IS NULL OR goal_relationship BETWEEN 1 AND 5
     ),
-    UNIQUE (note_id)  -- A note can only be a task once, otherwise conflicts arise with schedule etc.
+    -- A note can only be a task once,
+    -- otherwise conflicts arise with schedule etc.
+    UNIQUE (note_id)
 );
 
 -- Schedule tasks over certain days
-
 CREATE TABLE task_schedules (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     -- Link to tasks
@@ -35,7 +36,8 @@ CREATE TABLE task_schedules (
 );
 
 
--- Clock Table (consider generalizing this so that notes can have clock tables too)
+-- Clock Table (consider generalizing this so that notes can
+--              have clock tables too)
 CREATE TABLE task_clocks (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     task_id INT REFERENCES tasks (id) ON DELETE CASCADE,
