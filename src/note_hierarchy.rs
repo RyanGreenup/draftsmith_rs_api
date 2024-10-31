@@ -42,10 +42,10 @@ mod tests {
     #[test]
     fn test_create_note_hierarchy() {
         let mut conn = establish_test_connection();
-        conn.test_transaction::<_, diesel::result::Error, _>(|| {
+        conn.test_transaction::<_, diesel::result::Error, _>(|txn_conn| {
             // Create parent and child notes
-            let parent_note = create_test_note(&mut conn, "Parent Note");
-            let child_note = create_test_note(&mut conn, "Child Note");
+            let parent_note = create_test_note(txn_conn, "Parent Note");
+            let child_note = create_test_note(txn_conn, "Child Note");
 
             // Create a new note hierarchy entry
             let new_hierarchy = NewNoteHierarchy {
@@ -56,7 +56,7 @@ mod tests {
 
             let hierarchy: NoteHierarchy = diesel::insert_into(note_hierarchy::table)
                 .values(&new_hierarchy)
-                .get_result(&mut conn)?;
+                .get_result(txn_conn)?;
 
             // Assertions
             assert_eq!(hierarchy.parent_note_id, Some(parent_note.id));
