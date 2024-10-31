@@ -1,6 +1,6 @@
 pub mod schema;
 use diesel::prelude::*;
-use schema::notes;
+use crate::schema::sql_types::Tsvector;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
@@ -11,7 +11,7 @@ pub struct Note {
     pub content: String,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
-    pub fts: Option<diesel::sql_types::Tsvector>,
+    pub fts: Option<Tsvector>,
 }
 
 #[derive(Insertable)]
