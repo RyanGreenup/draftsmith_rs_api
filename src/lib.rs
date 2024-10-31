@@ -7,6 +7,7 @@ pub mod note_tags;
 pub mod notes;
 pub mod schema;
 pub mod tags;
+pub mod note_modifications;
 
 use diesel::deserialize::{FromSql, Result};
 use diesel::pg::{Pg, PgValue};
