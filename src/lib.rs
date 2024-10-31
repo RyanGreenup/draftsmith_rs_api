@@ -1,6 +1,28 @@
 pub mod schema;
 use diesel::prelude::*;
-use crate::schema::sql_types::Tsvector;
+use diesel::sql_types::Tsvector as TsvectorType;
+use diesel::serialize::{ToSql, Output, IsNull};
+use diesel::deserialize::{FromSql, Result};
+use diesel::pg::{Pg, PgValue};
+use std::io::Write;
+
+#[derive(Debug, Clone, AsExpression, FromSqlRow)]
+#[diesel(sql_type = TsvectorType)]
+pub struct Tsvector(pub String);
+
+impl ToSql<TsvectorType, Pg> for Tsvector {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+        out.write_all(self.0.as_bytes())?;
+        Ok(IsNull::No)
+    }
+}
+
+impl FromSql<TsvectorType, Pg> for Tsvector {
+    fn from_sql(bytes: PgValue) -> Result<Self> {
+        let string = String::from_utf8(bytes.as_bytes().to_vec())?;
+        Ok(Tsvector(string))
+    }
+}
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
