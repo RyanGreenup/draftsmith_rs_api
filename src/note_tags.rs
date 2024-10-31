@@ -1,6 +1,6 @@
-use diesel::prelude::*;
 use crate::schema::note_tags;
 use crate::schema::note_tags::dsl::*;
+use diesel::prelude::*;
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = note_tags)]
@@ -20,11 +20,11 @@ pub struct NewNoteTag {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::establish_test_connection;
-    use crate::notes::{Note, NewNote};
-    use crate::tags::{Tag, NewTag};
+    use crate::notes::{NewNote, Note};
     use crate::schema::notes::dsl::*;
     use crate::schema::tags::dsl::*;
+    use crate::tags::{NewTag, Tag};
+    use crate::test_utils::establish_test_connection;
     use diesel::connection::Connection;
 
     fn create_test_note(conn: &mut PgConnection) -> Note {
@@ -40,9 +40,7 @@ mod tests {
     }
 
     fn create_test_tag(conn: &mut PgConnection) -> Tag {
-        let new_tag = NewTag {
-            name: "Test Tag",
-        };
+        let new_tag = NewTag { name: "Test Tag" };
 
         diesel::insert_into(tags)
             .values(&new_tag)
@@ -112,8 +110,9 @@ mod tests {
             let deleted_count = diesel::delete(
                 note_tags
                     .filter(note_id.eq(inserted_note_tag.note_id))
-                    .filter(tag_id.eq(inserted_note_tag.tag_id))
-            ).execute(conn)?;
+                    .filter(tag_id.eq(inserted_note_tag.tag_id)),
+            )
+            .execute(conn)?;
 
             // Verify one record was deleted
             assert_eq!(deleted_count, 1);
