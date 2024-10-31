@@ -78,4 +78,41 @@ mod tests {
         // Check if the test transaction succeeded
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_update_note() {
+        use crate::schema::notes::dsl::*;
+        
+        let conn = &mut establish_test_connection();
+
+        let result = conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            // Create initial note
+            let new_note = NewNote {
+                title: "Initial Title",
+                content: "Initial content",
+            };
+
+            // Insert the note
+            let inserted_note: Note = diesel::insert_into(notes)
+                .values(&new_note)
+                .get_result(conn)?;
+
+            // Update the note
+            let updated_note = diesel::update(notes.find(inserted_note.id))
+                .set((
+                    title.eq("Updated Title"),
+                    content.eq("Updated content")
+                ))
+                .get_result::<Note>(conn)?;
+
+            // Verify the update
+            assert_eq!(updated_note.title, "Updated Title");
+            assert_eq!(updated_note.content, "Updated content");
+            assert!(updated_note.modified_at > inserted_note.modified_at);
+
+            Ok(())
+        });
+
+        assert!(result.is_ok());
+    }
 }
