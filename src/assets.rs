@@ -8,20 +8,19 @@ use crate::Tsvector;
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Asset {
     pub id: i32,
-    pub name: String,
-    pub description: String,
+    pub note_id: Option<i32>,
     pub location: String,
+    pub description: Option<String>,
+    pub description_tsv: Option<Tsvector>,
     pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub fts: Option<Tsvector>,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::assets)]
 pub struct NewAsset<'a> {
-    pub name: &'a str,
-    pub description: &'a str,
+    pub note_id: Option<i32>,
     pub location: &'a str,
+    pub description: Option<&'a str>,
 }
 
 #[cfg(test)]
@@ -37,9 +36,9 @@ mod tests {
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create a new asset
             let new_asset = NewAsset {
-                name: "Test Asset",
-                description: "This is a test asset",
+                note_id: None,
                 location: "/path/to/asset",
+                description: Some("This is a test asset"),
             };
 
             // Insert the asset
@@ -48,9 +47,9 @@ mod tests {
                 .get_result(conn)?;
 
             // Verify the inserted data
-            assert_eq!(inserted_asset.name, "Test Asset");
-            assert_eq!(inserted_asset.description, "This is a test asset");
             assert_eq!(inserted_asset.location, "/path/to/asset");
+            assert_eq!(inserted_asset.description, Some("This is a test asset".to_string()));
+            assert!(inserted_asset.note_id.is_none());
             assert!(inserted_asset.created_at.is_some());
             assert!(inserted_asset.modified_at.is_some());
 
@@ -59,9 +58,9 @@ mod tests {
 
             // Verify the read data
             assert_eq!(found_asset.id, inserted_asset.id);
-            assert_eq!(found_asset.name, "Test Asset");
-            assert_eq!(found_asset.description, "This is a test asset");
             assert_eq!(found_asset.location, "/path/to/asset");
+            assert_eq!(found_asset.description, Some("This is a test asset".to_string()));
+            assert!(found_asset.note_id.is_none());
 
             Ok(())
         });
@@ -74,9 +73,9 @@ mod tests {
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create initial asset
             let new_asset = NewAsset {
-                name: "Initial Name",
-                description: "Initial description",
+                note_id: None,
                 location: "/initial/path",
+                description: Some("Initial description"),
             };
 
             // Insert the asset
@@ -90,15 +89,13 @@ mod tests {
             // Update the asset
             let updated_asset = diesel::update(assets.find(inserted_asset.id))
                 .set((
-                    name.eq("Updated Name"),
-                    description.eq("Updated description"),
+                    description.eq(Some("Updated description")),
                     location.eq("/updated/path"),
                 ))
                 .get_result::<Asset>(conn)?;
 
             // Verify the update
-            assert_eq!(updated_asset.name, "Updated Name");
-            assert_eq!(updated_asset.description, "Updated description");
+            assert_eq!(updated_asset.description, Some("Updated description".to_string()));
             assert_eq!(updated_asset.location, "/updated/path");
             // TODO: Investigate timestamp assertion like in notes
             // assert!(updated_asset.modified_at.unwrap() > inserted_asset.modified_at.unwrap());
