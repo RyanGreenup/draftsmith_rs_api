@@ -13,7 +13,6 @@ diesel::table! {
     assets (id) {
         id -> Int4,
         note_id -> Nullable<Int4>,
-        asset_type -> Text,
         location -> Text,
         description -> Nullable<Text>,
         description_tsv -> Nullable<Tsvector>,

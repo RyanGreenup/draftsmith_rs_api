@@ -2,7 +2,6 @@
 CREATE TABLE assets (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     note_id INT REFERENCES notes (id),
-    asset_type TEXT NOT NULL,
     location TEXT NOT NULL UNIQUE,
     description TEXT,
     description_tsv TSVECTOR,
