@@ -44,6 +44,26 @@ pub struct NewNote<'a> {
     pub content: &'a str,
 }
 
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::assets)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Asset {
+    pub id: i32,
+    pub note_id: Option<i32>,
+    pub location: String,
+    pub description: Option<String>,
+    pub description_tsv: Option<Tsvector>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = crate::schema::assets)]
+pub struct NewAsset<'a> {
+    pub note_id: Option<i32>,
+    pub location: &'a str,
+    pub description: Option<&'a str>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,6 +154,93 @@ mod tests {
             // I don't know why the modified_at is not changing here
             // It's changing in SQL though.
             // assert!(updated_note.modified_at.unwrap() > inserted_note.modified_at.unwrap());
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_create_and_read_asset() {
+        use crate::schema::assets::dsl::*;
+        
+        let conn = &mut establish_test_connection();
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            // Create a new asset
+            let new_asset = NewAsset {
+                note_id: None,
+                location: "/path/to/asset",
+                description: Some("Test asset description"),
+            };
+
+            // Insert the asset
+            let inserted_asset: Asset = diesel::insert_into(assets)
+                .values(&new_asset)
+                .get_result(conn)?;
+
+            // Verify the inserted data
+            assert_eq!(inserted_asset.location, "/path/to/asset");
+            assert_eq!(inserted_asset.description, Some("Test asset description".to_string()));
+            assert!(inserted_asset.created_at.is_some());
+
+            // Read the asset back
+            let found_asset = assets
+                .find(inserted_asset.id)
+                .first::<Asset>(conn)?;
+
+            // Verify the read data
+            assert_eq!(found_asset.id, inserted_asset.id);
+            assert_eq!(found_asset.location, "/path/to/asset");
+            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_create_asset_with_note() {
+        use crate::schema::{assets::dsl::*, notes::dsl::notes};
+        
+        let conn = &mut establish_test_connection();
+
+        conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
+            // First create a note
+            let new_note = NewNote {
+                title: "Test Note",
+                content: "This is a test note content",
+            };
+
+            let inserted_note: Note = diesel::insert_into(notes)
+                .values(&new_note)
+                .get_result(conn)?;
+
+            // Create a new asset linked to the note
+            let new_asset = NewAsset {
+                note_id: Some(inserted_note.id),
+                location: "/path/to/asset",
+                description: Some("Test asset description"),
+            };
+
+            // Insert the asset
+            let inserted_asset: Asset = diesel::insert_into(assets)
+                .values(&new_asset)
+                .get_result(conn)?;
+
+            // Verify the inserted data
+            assert_eq!(inserted_asset.note_id, Some(inserted_note.id));
+            assert_eq!(inserted_asset.location, "/path/to/asset");
+            assert_eq!(inserted_asset.description, Some("Test asset description".to_string()));
+
+            // Read the asset back
+            let found_asset = assets
+                .find(inserted_asset.id)
+                .first::<Asset>(conn)?;
+
+            // Verify the read data
+            assert_eq!(found_asset.id, inserted_asset.id);
+            assert_eq!(found_asset.note_id, Some(inserted_note.id));
+            assert_eq!(found_asset.location, "/path/to/asset");
+            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+
             Ok(())
         });
     }
