@@ -30,6 +30,7 @@ mod tests {
     use crate::schema::note_modifications::dsl::{note_modifications, id as modification_id};
     use diesel::prelude::*;
     use diesel::result::Error;
+    use diesel::pg::PgConnection;
 
     fn create_test_note<'a>(conn: &mut PgConnection) -> Note {
         let new_note = NewNote {
