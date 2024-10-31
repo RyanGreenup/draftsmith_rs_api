@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_create_and_read_note() {
         use crate::schema::notes::dsl::*;
-        
+
         let conn = &mut establish_test_connection();
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
@@ -101,14 +101,19 @@ mod tests {
     #[test]
     fn test_update_note() {
         use crate::schema::notes::dsl::*;
-        
+
         let conn = &mut establish_test_connection();
+
+        let init_title = "Initial Title";
+        let init_content = "Initial content";
+        let new_title = "Updated Title";
+        let new_content = "Updated content";
 
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create initial note
             let new_note = NewNote {
-                title: "Initial Title",
-                content: "Initial content",
+                title: init_title,
+                content: init_content,
             };
 
             // Insert the note
@@ -119,14 +124,14 @@ mod tests {
             // Update the note
             let updated_note = diesel::update(notes.find(inserted_note.id))
                 .set((
-                    title.eq("Updated Title"),
-                    content.eq("Updated content")
+                    title.eq(new_title),
+                    content.eq(new_content),
                 ))
                 .get_result::<Note>(conn)?;
 
             // Verify the update
-            assert_eq!(updated_note.title, "Updated Title");
-            assert_eq!(updated_note.content, "Updated content");
+            assert_eq!(updated_note.title, new_title);
+            assert_eq!(updated_note.content, new_content);
             assert!(updated_note.modified_at > inserted_note.modified_at);
 
             Ok(())
