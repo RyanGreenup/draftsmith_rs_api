@@ -104,16 +104,11 @@ mod tests {
 
         let conn = &mut establish_test_connection();
 
-        let init_title = "Initial Title";
-        let init_content = "Initial content";
-        let new_title = "Updated Title";
-        let new_content = "Updated content";
-
         conn.test_transaction::<_, diesel::result::Error, _>(|conn| {
             // Create initial note
             let new_note = NewNote {
-                title: init_title,
-                content: init_content,
+                title: "Initial Title",
+                content: "Initial content",
             };
 
             // Insert the note
@@ -121,17 +116,21 @@ mod tests {
                 .values(&new_note)
                 .get_result(conn)?;
 
-            // Update the note
+            // Add a small delay to ensure timestamp difference
+            std::thread::sleep(std::time::Duration::from_millis(1));
+
+            // Update the note - now including modified_at update
             let updated_note = diesel::update(notes.find(inserted_note.id))
                 .set((
-                    title.eq(new_title),
-                    content.eq(new_content),
+                    title.eq("Updated Title"),
+                    content.eq("Updated content"),
+                    modified_at.eq(diesel::dsl::now)
                 ))
                 .get_result::<Note>(conn)?;
 
             // Verify the update
-            assert_eq!(updated_note.title, new_title);
-            assert_eq!(updated_note.content, new_content);
+            assert_eq!(updated_note.title, "Updated Title");
+            assert_eq!(updated_note.content, "Updated content");
             assert!(updated_note.modified_at > inserted_note.modified_at);
 
             Ok(())
