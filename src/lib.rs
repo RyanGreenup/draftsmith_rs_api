@@ -8,6 +8,8 @@ pub mod notes;
 pub mod schema;
 pub mod tags;
 pub mod note_modifications;
+pub mod note_type_mappings;
+pub mod note_type_mappings;
 
 use diesel::deserialize::{FromSql, Result};
 use diesel::pg::{Pg, PgValue};
