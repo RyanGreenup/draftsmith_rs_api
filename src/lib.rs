@@ -1,5 +1,11 @@
-pub mod schema;
+pub mod assets;
+pub mod note_tags;
 pub mod notes;
+pub mod schema;
+pub mod tags;
+pub mod attributes;
+pub mod journal_entries;
+pub mod note_hierarchy;
 
 use diesel::deserialize::{FromSql, Result};
 use diesel::pg::{Pg, PgValue};
