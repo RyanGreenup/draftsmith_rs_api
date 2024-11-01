@@ -1,19 +1,19 @@
+use crate::{api::NoteResponse, BASE_URL};
 use reqwest::Error;
 use serde::Serialize;
-use crate::{api::NoteResponse, BASE_URL};
 
 const FLAT_API: &str = "notes/flat";
 
 #[derive(Serialize)]
 pub struct CreateNoteRequest {
     pub title: String,
-    pub content: String
+    pub content: String,
 }
 
 #[derive(Serialize)]
 pub struct UpdateNoteRequest {
     pub title: String,
-    pub content: String
+    pub content: String,
 }
 
 pub async fn fetch_note(base_url: &str, id: i32) -> Result<NoteResponse, Error> {
@@ -33,7 +33,8 @@ pub async fn fetch_notes(base_url: &str) -> Result<Vec<NoteResponse>, Error> {
 pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, Error> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}", base_url);
-    let response = client.post(url)
+    let response = client
+        .post(url)
         .json(&note)
         .send()
         .await?
@@ -42,10 +43,15 @@ pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<Note
     Ok(created_note)
 }
 
-pub async fn update_note(base_url: &str, id: i32, note: UpdateNoteRequest) -> Result<NoteResponse, Error> {
+pub async fn update_note(
+    base_url: &str,
+    id: i32,
+    note: UpdateNoteRequest,
+) -> Result<NoteResponse, Error> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
-    let response = client.put(url)
+    let response = client
+        .put(url)
         .json(&note)
         .send()
         .await?
@@ -57,10 +63,7 @@ pub async fn update_note(base_url: &str, id: i32, note: UpdateNoteRequest) -> Re
 pub async fn delete_note(base_url: &str, id: i32) -> Result<(), Error> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
-    client.delete(url)
-        .send()
-        .await?
-        .error_for_status()?;
+    client.delete(url).send().await?.error_for_status()?;
     Ok(())
 }
 
@@ -95,7 +98,7 @@ mod tests {
         let base_url = BASE_URL;
         let note = CreateNoteRequest {
             title: "Test Note".to_string(),
-            content: "This is a test note".to_string()
+            content: "This is a test note".to_string(),
         };
 
         let result = create_note(base_url, note).await;
@@ -111,14 +114,14 @@ mod tests {
         // First create a note to update
         let create_note_req = CreateNoteRequest {
             title: "Test Note".to_string(),
-            content: "This is a test note".to_string()
+            content: "This is a test note".to_string(),
         };
         let created_note = create_note(base_url, create_note_req).await.unwrap();
 
         // Now update it
         let update_note_req = UpdateNoteRequest {
             title: "Updated Test Note".to_string(),
-            content: "This is an updated test note".to_string()
+            content: "This is an updated test note".to_string(),
         };
         let result = update_note(base_url, created_note.id, update_note_req).await;
         assert!(result.is_ok());
@@ -134,7 +137,7 @@ mod tests {
         // First create a note to delete
         let create_note_req = CreateNoteRequest {
             title: "Test Note".to_string(),
-            content: "This is a test note".to_string()
+            content: "This is a test note".to_string(),
         };
         let created_note = create_note(base_url, create_note_req).await.unwrap();
 
