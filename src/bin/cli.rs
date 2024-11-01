@@ -54,6 +54,15 @@ enum NotesCommands {
 enum FlatCommands {
     /// Get all notes
     Get,
+    /// Create a new note
+    Create {
+        /// The title of the note
+        #[arg(long)]
+        title: String,
+        /// The content of the note
+        #[arg(long)]
+        content: String,
+    },
 }
 
 #[tokio::main]
@@ -91,6 +100,15 @@ async fn main() {
                             let notes = rust_cli_app::client::fetch_notes(&url).await.unwrap();
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
+                    }
+                    FlatCommands::Create { title, content } => {
+                        let note = rust_cli_app::client::create_note(
+                            &url,
+                            rust_cli_app::CreateNoteRequest { title, content },
+                        )
+                        .await
+                        .unwrap();
+                        println!("{}", serde_json::to_string_pretty(&note).unwrap());
                     }
                 },
             },
