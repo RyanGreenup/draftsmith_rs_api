@@ -175,10 +175,7 @@ pub async fn attach_child_note(
     Ok(())
 }
 
-pub async fn detach_child_note(
-    base_url: &str,
-    child_note_id: i32,
-) -> Result<(), NoteError> {
+pub async fn detach_child_note(base_url: &str, child_note_id: i32) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/notes/hierarchy/detach/{}", base_url, child_note_id);
     client
@@ -342,8 +339,10 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // Fetch the note tree and verify the hierarchy
-        let note_tree = fetch_note_tree(base_url).await.expect("Failed to fetch note tree");
-        
+        let note_tree = fetch_note_tree(base_url)
+            .await
+            .expect("Failed to fetch note tree");
+
         // Function to find a node in the tree by ID
         fn find_node(tree: &[NoteTreeNode], id: i32) -> Option<&NoteTreeNode> {
             for node in tree {
@@ -360,12 +359,16 @@ mod tests {
         // Verify that the child note is now under the parent note
         let parent_node = find_node(&note_tree, parent_note.id).expect("Parent note not found");
         let child_found = find_node(&parent_node.children, child_note.id).is_some();
-        
+
         if !child_found {
             // Print debug information
             println!("Parent node children: {:?}", parent_node.children);
             println!("Looking for child ID: {}", child_note.id);
-            assert!(false, "Child note {} not found under parent {}", child_note.id, parent_note.id);
+            assert!(
+                false,
+                "Child note {} not found under parent {}",
+                child_note.id, parent_note.id
+            );
         }
 
         // Detach the child note
@@ -377,7 +380,8 @@ mod tests {
 
         // Fetch the note tree again and verify the child note is detached
         let updated_note_tree = fetch_note_tree(base_url).await.unwrap();
-        let parent_node = find_node(&updated_note_tree, parent_note.id).expect("Parent note not found");
+        let parent_node =
+            find_node(&updated_note_tree, parent_note.id).expect("Parent note not found");
         assert!(
             find_node(&parent_node.children, child_note.id).is_none(),
             "Child note still attached after detachment"
@@ -418,6 +422,9 @@ mod tests {
         let attach_result = attach_child_note(base_url, attach_request).await;
 
         // Expecting an error due to invalid hierarchy type
-        assert!(attach_result.is_err(), "Attachment should fail with invalid hierarchy type");
+        assert!(
+            attach_result.is_err(),
+            "Attachment should fail with invalid hierarchy type"
+        );
     }
 }
