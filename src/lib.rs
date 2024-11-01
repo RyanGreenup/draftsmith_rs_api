@@ -1019,7 +1019,7 @@ mod tests {
             // Test Create
             let new_task = NewTask {
                 note_id: Some(created_note.id),
-                status: "pending",
+                status: "todo",
                 effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
                 actual_effort: None,
                 deadline: Some(chrono::Utc::now().naive_utc()),
@@ -1027,7 +1027,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
                 all_day: Some(false),
-                goal_relationship: Some(0),
+                goal_relationship: Some(1),
             };
 
             let created_task = diesel::insert_into(tasks::table)
@@ -1037,7 +1037,7 @@ mod tests {
 
             dbg!(format!("Created Task #: {:?}", created_task.id));
             assert_eq!(created_task.note_id, Some(created_note.id));
-            assert_eq!(created_task.status, "pending");
+            assert_eq!(created_task.status, "todo");
             assert_eq!(created_task.priority, Some(1));
 
             // Test Read
@@ -1053,14 +1053,14 @@ mod tests {
             // Test Update
             let updated_task = diesel::update(tasks::table.find(created_task.id))
                 .set((
-                    tasks::status.eq("completed"),
+                    tasks::status.eq("done"),
                     tasks::priority.eq(Some(2)),
                     tasks::actual_effort.eq(Some(bigdecimal::BigDecimal::from(3)))
                 ))
                 .get_result::<Task>(conn)
                 .expect("Error updating task");
 
-            assert_eq!(updated_task.status, "completed");
+            assert_eq!(updated_task.status, "done");
             assert_eq!(updated_task.priority, Some(2));
             assert_eq!(updated_task.actual_effort, Some(bigdecimal::BigDecimal::from(3)));
 
