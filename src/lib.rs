@@ -281,3 +281,102 @@ pub struct NewTask<'a> {
     pub all_day: Option<bool>,
     pub goal_relationship: Option<i32>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::pg::PgConnection;
+    use diesel::prelude::*;
+    use dotenv::dotenv;
+    use std::env;
+
+    fn establish_test_connection() -> PgConnection {
+        dotenv().ok();
+        let database_url = env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set");
+        PgConnection::establish(&database_url)
+            .expect("Error connecting to database")
+    }
+
+    fn setup_test_data(conn: &mut PgConnection) -> Note {
+        // Create a test note
+        let new_note = NewNote {
+            title: "Test Note",
+            content: "This is a test note content",
+            created_at: Some(chrono::Local::now().naive_local()),
+            modified_at: Some(chrono::Local::now().naive_local()),
+        };
+
+        diesel::insert_into(notes::table)
+            .values(&new_note)
+            .get_result(conn)
+            .expect("Error saving new note")
+    }
+
+    #[test]
+    fn test_create_note() {
+        let mut conn = establish_test_connection();
+        
+        let note = setup_test_data(&mut conn);
+        
+        assert_eq!(note.title, "Test Note");
+        assert_eq!(note.content, "This is a test note content");
+        assert!(note.created_at.is_some());
+        assert!(note.modified_at.is_some());
+    }
+
+    #[test]
+    fn test_read_note() {
+        let mut conn = establish_test_connection();
+        let created_note = setup_test_data(&mut conn);
+
+        let found_note = notes::table
+            .find(created_note.id)
+            .select(Note::as_select())
+            .first(&mut conn)
+            .expect("Error loading note");
+
+        assert_eq!(found_note.id, created_note.id);
+        assert_eq!(found_note.title, "Test Note");
+    }
+
+    #[test]
+    fn test_update_note() {
+        let mut conn = establish_test_connection();
+        let note = setup_test_data(&mut conn);
+
+        let updated_rows = diesel::update(notes::table.find(note.id))
+            .set(notes::title.eq("Updated Test Note"))
+            .execute(&mut conn)
+            .expect("Error updating note");
+
+        assert_eq!(updated_rows, 1);
+
+        let updated_note = notes::table
+            .find(note.id)
+            .select(Note::as_select())
+            .first(&mut conn)
+            .expect("Error loading updated note");
+
+        assert_eq!(updated_note.title, "Updated Test Note");
+    }
+
+    #[test]
+    fn test_delete_note() {
+        let mut conn = establish_test_connection();
+        let note = setup_test_data(&mut conn);
+
+        let deleted_rows = diesel::delete(notes::table.find(note.id))
+            .execute(&mut conn)
+            .expect("Error deleting note");
+
+        assert_eq!(deleted_rows, 1);
+
+        let find_result = notes::table
+            .find(note.id)
+            .select(Note::as_select())
+            .first::<Note>(&mut conn);
+
+        assert!(find_result.is_err());
+    }
+}
