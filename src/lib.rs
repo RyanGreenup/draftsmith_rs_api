@@ -285,7 +285,6 @@ pub struct NewTask<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::prelude::*;
     use diesel::result::Error as DieselError;
 
     fn establish_connection() -> PgConnection {
@@ -300,10 +299,16 @@ mod tests {
     fn test_note_crud() {
         let conn = &mut establish_connection();
         
-        // Clean up any existing test data
+        // Clean up any existing test data in the correct order
+        diesel::delete(note_hierarchy::table)
+            .execute(conn)
+            .expect("Error deleting note hierarchy");
+        diesel::delete(tasks::table)
+            .execute(conn)
+            .expect("Error deleting tasks");
         diesel::delete(notes::table)
             .execute(conn)
-            .expect("Error deleting existing notes");
+            .expect("Error deleting notes");
 
         // Test Create
         let new_note = NewNote {
