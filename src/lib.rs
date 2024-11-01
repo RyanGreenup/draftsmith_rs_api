@@ -521,6 +521,77 @@ mod tests {
     }
 
     #[test]
+    fn test_journal_entries_crud() {
+        let conn = &mut establish_connection();
+        
+        conn.test_transaction(|conn| {
+            // First create a note to work with
+            let new_note = NewNote {
+                title: "Test Note for Journal Entry",
+                content: "This is a test note for journal entry testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            // Test Create
+            let new_journal_entry = NewJournalEntry {
+                note_id: Some(created_note.id),
+                entry_date: chrono::Local::now().naive_local().date(),
+            };
+
+            let created_entry = diesel::insert_into(journal_entries::table)
+                .values(&new_journal_entry)
+                .get_result::<JournalEntry>(conn)
+                .expect("Error saving new journal entry");
+
+            dbg!(format!("Created Journal Entry #: {:?}", created_entry.id));
+            assert_eq!(created_entry.note_id, Some(created_note.id));
+            assert_eq!(created_entry.entry_date, new_journal_entry.entry_date);
+
+            // Test Read
+            let read_entry = journal_entries::table
+                .find(created_entry.id)
+                .first::<JournalEntry>(conn)
+                .expect("Error loading journal entry");
+
+            assert_eq!(read_entry.id, created_entry.id);
+            assert_eq!(read_entry.note_id, created_entry.note_id);
+            assert_eq!(read_entry.entry_date, created_entry.entry_date);
+
+            // Test Update
+            let tomorrow = chrono::Local::now().naive_local().date().succ();
+            let updated_entry = diesel::update(journal_entries::table.find(created_entry.id))
+                .set(journal_entries::entry_date.eq(tomorrow))
+                .get_result::<JournalEntry>(conn)
+                .expect("Error updating journal entry");
+
+            assert_eq!(updated_entry.entry_date, tomorrow);
+
+            dbg!(format!("Deleting Journal Entry #: {:?}", created_entry.id));
+            // Test Delete
+            let deleted_count = diesel::delete(journal_entries::table.find(created_entry.id))
+                .execute(conn)
+                .expect("Error deleting journal entry");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = journal_entries::table
+                .find(created_entry.id)
+                .first::<JournalEntry>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
         
