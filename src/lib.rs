@@ -674,6 +674,90 @@ mod tests {
     }
 
     #[test]
+    fn test_note_hierarchy_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create two notes to work with
+            let new_parent_note = NewNote {
+                title: "Parent Note",
+                content: "This is a parent note for hierarchy testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_parent = diesel::insert_into(notes::table)
+                .values(&new_parent_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving parent note");
+
+            let new_child_note = NewNote {
+                title: "Child Note",
+                content: "This is a child note for hierarchy testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_child = diesel::insert_into(notes::table)
+                .values(&new_child_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving child note");
+
+            // Test Create
+            let new_hierarchy = NewNoteHierarchy {
+                parent_note_id: Some(created_parent.id),
+                child_note_id: Some(created_child.id),
+                hierarchy_type: Some("contains"),
+            };
+
+            let created_hierarchy = diesel::insert_into(note_hierarchy::table)
+                .values(&new_hierarchy)
+                .get_result::<NoteHierarchy>(conn)
+                .expect("Error saving new note hierarchy");
+
+            dbg!(format!("Created Note Hierarchy #: {:?}", created_hierarchy.id));
+            assert_eq!(created_hierarchy.parent_note_id, Some(created_parent.id));
+            assert_eq!(created_hierarchy.child_note_id, Some(created_child.id));
+            assert_eq!(created_hierarchy.hierarchy_type, Some("contains".to_string()));
+
+            // Test Read
+            let read_hierarchy = note_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<NoteHierarchy>(conn)
+                .expect("Error loading note hierarchy");
+
+            assert_eq!(read_hierarchy.id, created_hierarchy.id);
+            assert_eq!(read_hierarchy.parent_note_id, created_hierarchy.parent_note_id);
+            assert_eq!(read_hierarchy.child_note_id, created_hierarchy.child_note_id);
+
+            // Test Update
+            let updated_hierarchy = diesel::update(note_hierarchy::table.find(created_hierarchy.id))
+                .set(note_hierarchy::hierarchy_type.eq(Some("references")))
+                .get_result::<NoteHierarchy>(conn)
+                .expect("Error updating note hierarchy");
+
+            assert_eq!(updated_hierarchy.hierarchy_type, Some("references".to_string()));
+
+            dbg!(format!("Deleting Note Hierarchy #: {:?}", created_hierarchy.id));
+            // Test Delete
+            let deleted_count = diesel::delete(note_hierarchy::table.find(created_hierarchy.id))
+                .execute(conn)
+                .expect("Error deleting note hierarchy");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = note_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<NoteHierarchy>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
