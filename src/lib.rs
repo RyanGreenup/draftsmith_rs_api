@@ -500,10 +500,87 @@ mod taskschedules {
 mod tasks {
     use super::utils::*;
     use super::*;
-    use crate::schema::assets::{self, table};
-    use crate::schema::assets::dsl::*;
+    use crate::schema::tasks::{self, table};
+    use crate::schema::tasks::dsl::*;
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
-    // TODO implement CrudTest trait for Task struct
+    use chrono::NaiveDateTime;
+    use bigdecimal::BigDecimal;
+    use std::str::FromStr;
+
+    impl CrudTest for Task {
+        type Model = Task;
+
+        fn test_create() {
+            let conn = &mut establish_test_connection();
+            
+            let new_task = NewTask {
+                note_id: Some(1),
+                status: "NEW",
+                effort_estimate: Some(BigDecimal::from_str("2.5").unwrap()),
+                actual_effort: None,
+                deadline: Some(NaiveDateTime::parse_from_str("2024-12-31 23:59:59", "%Y-%m-%d %H:%M:%S").unwrap()),
+                priority: Some(1),
+                created_at: Some(NaiveDateTime::parse_from_str("2024-11-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap()),
+                modified_at: None,
+                all_day: Some(false),
+                goal_relationship: None,
+            };
+
+            let result = diesel::insert_into(tasks::table)
+                .values(&new_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving new task");
+
+            assert_eq!(result.status, "NEW");
+            assert_eq!(result.priority, Some(1));
+        }
+
+        fn test_read() {
+            let conn = &mut establish_test_connection();
+            
+            let task = tasks
+                .first::<Task>(conn)
+                .expect("Error loading task");
+
+            assert_eq!(task.status, "NEW");
+        }
+
+        fn test_update() {
+            let conn = &mut establish_test_connection();
+            
+            let updated_rows = diesel::update(tasks.filter(id.eq(1)))
+                .set(status.eq("IN_PROGRESS"))
+                .execute(conn)
+                .expect("Error updating task");
+
+            assert_eq!(updated_rows, 1);
+
+            let updated_task = tasks
+                .find(1)
+                .first::<Task>(conn)
+                .expect("Error loading updated task");
+
+            assert_eq!(updated_task.status, "IN_PROGRESS");
+        }
+
+        fn test_delete() {
+            let conn = &mut establish_test_connection();
+            
+            let deleted_rows = diesel::delete(tasks.filter(id.eq(1)))
+                .execute(conn)
+                .expect("Error deleting task");
+
+            assert_eq!(deleted_rows, 1);
+
+            let result = tasks.find(1).first::<Task>(conn);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_task_crud() {
+        Task::test_all();
+    }
 }
 
