@@ -908,6 +908,97 @@ mod tests {
     }
 
     #[test]
+    fn test_note_type_mappings_search() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create notes and note types to work with
+            let new_note1 = NewNote {
+                title: "Test Note 1 for Type Mapping Search",
+                content: "This is test note 1 for type mapping search",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let new_note2 = NewNote {
+                title: "Test Note 2 for Type Mapping Search",
+                content: "This is test note 2 for type mapping search",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note1 = diesel::insert_into(notes::table)
+                .values(&new_note1)
+                .get_result::<Note>(conn)
+                .expect("Error saving note 1");
+
+            let created_note2 = diesel::insert_into(notes::table)
+                .values(&new_note2)
+                .get_result::<Note>(conn)
+                .expect("Error saving note 2");
+
+            let new_note_type1 = NewNoteType {
+                name: "Test Type 1",
+                description: Some("First test note type"),
+            };
+
+            let new_note_type2 = NewNoteType {
+                name: "Test Type 2",
+                description: Some("Second test note type"),
+            };
+
+            let created_type1 = diesel::insert_into(note_types::table)
+                .values(&new_note_type1)
+                .get_result::<NoteType>(conn)
+                .expect("Error saving note type 1");
+
+            let created_type2 = diesel::insert_into(note_types::table)
+                .values(&new_note_type2)
+                .get_result::<NoteType>(conn)
+                .expect("Error saving note type 2");
+
+            // Create mappings
+            let mapping1 = NewNoteTypeMapping {
+                note_id: created_note1.id,
+                type_id: created_type1.id,
+            };
+
+            let mapping2 = NewNoteTypeMapping {
+                note_id: created_note2.id,
+                type_id: created_type2.id,
+            };
+
+            diesel::insert_into(note_type_mappings::table)
+                .values(&mapping1)
+                .execute(conn)
+                .expect("Error creating mapping 1");
+
+            diesel::insert_into(note_type_mappings::table)
+                .values(&mapping2)
+                .execute(conn)
+                .expect("Error creating mapping 2");
+
+            // Test search by note title and type name
+            let search_results = note_type_mappings::table
+                .inner_join(notes::table)
+                .inner_join(note_types::table)
+                .filter(notes::title.eq("Test Note 1 for Type Mapping Search"))
+                .filter(note_types::name.eq("Test Type 1"))
+                .select((note_type_mappings::all_columns, notes::title, note_types::name))
+                .load::<(NoteTypeMapping, String, String)>(conn)
+                .expect("Error searching note type mappings");
+
+            assert_eq!(search_results.len(), 1);
+            assert_eq!(search_results[0].0.note_id, created_note1.id);
+            assert_eq!(search_results[0].0.type_id, created_type1.id);
+            assert_eq!(search_results[0].1, "Test Note 1 for Type Mapping Search");
+            assert_eq!(search_results[0].2, "Test Type 1");
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
