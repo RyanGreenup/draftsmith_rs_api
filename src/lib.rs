@@ -27,7 +27,7 @@ impl FromSql<crate::schema::sql_types::Tsvector, Pg> for Tsvector {
 }
 
 #[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = assets)]
+#[diesel(table_name = crate::schema::assets)]
 pub struct Asset {
     pub id: i32,
     pub note_id: Option<i32>,
@@ -38,7 +38,7 @@ pub struct Asset {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = assets)]
+#[diesel(table_name = crate::schema::assets)]
 pub struct NewAsset<'a> {
     pub note_id: Option<i32>,
     pub location: &'a str,
@@ -522,6 +522,7 @@ mod utils {
         };
 
         diesel::insert_into(assets::table)
+            .values(&new_asset)
             .values(&new_asset)
             .get_result(conn)
             .expect("Error saving new asset")
