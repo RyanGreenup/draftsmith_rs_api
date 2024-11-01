@@ -1,4 +1,4 @@
-use crate::{api::NoteResponse, FLAT_API, BASE_URL};
+use crate::{api::NoteResponse, FLAT_API};
 use reqwest::Error;
 use serde::Serialize;
 
@@ -31,7 +31,7 @@ pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<Note
     } else {
         format!("{}/{FLAT_API}", base_url)
     };
-    let response = reqwest::get(url).await?;
+    let response = reqwest::get(url).await?.error_for_status()?;
     let notes = response.json::<Vec<NoteResponse>>().await?;
     Ok(notes)
 }
@@ -76,6 +76,7 @@ pub async fn delete_note(base_url: &str, id: i32) -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BASE_URL;
 
     #[tokio::test]
     async fn test_fetch_notes() {
