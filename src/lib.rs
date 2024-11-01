@@ -290,7 +290,9 @@ mod tags {
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
 
-    impl CrudTest for tags {
+    pub struct TagTests;
+
+    impl CrudTest for TagTests {
         type Model = Tag;
 
         fn test_create() {
@@ -357,6 +359,14 @@ mod tags {
     
             assert!(find_result.is_err());
         }
+    }
+
+    #[test]
+    fn test_crud_tag() {
+        TagTests::test_create();
+        TagTests::test_read();
+        TagTests::test_update();
+        TagTests::test_delete();
     }
 
     #[test]
@@ -484,7 +494,9 @@ mod tests {
     use super::*;
     use crate::schema::notes;
 
-    impl CrudTest for tests {
+    pub struct NoteTests;
+
+    impl CrudTest for NoteTests {
         type Model = Note;
 
         fn test_create() {
@@ -549,6 +561,14 @@ mod tests {
     
             assert!(find_result.is_err());
         }
+    }
+
+    #[test]
+    fn test_crud_note() {
+        NoteTests::test_create();
+        NoteTests::test_read();
+        NoteTests::test_update();
+        NoteTests::test_delete();
     }
 
     #[test]
