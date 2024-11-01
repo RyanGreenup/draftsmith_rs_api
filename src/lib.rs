@@ -290,6 +290,75 @@ mod tags {
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
 
+    impl CrudTest for tags {
+        type Model = Tag;
+
+        fn test_create() {
+            let mut conn = establish_test_connection();
+            let tag = setup_test_tag(&mut conn);
+    
+            let found_tag = table
+                .find(tag.id)
+                .select(Tag::as_select())
+                .get_result(&mut conn)
+                .expect("Error loading tag");
+    
+            assert_eq!(found_tag.name, "Test Tag");
+        }
+
+        fn test_read() {
+            let mut conn = establish_test_connection();
+            let created_tag = setup_test_tag(&mut conn);
+    
+            let found_tag = table
+                .find(created_tag.id)
+                .select(Tag::as_select())
+                .get_result(&mut conn)
+                .expect("Error loading tag");
+    
+            assert_eq!(found_tag.id, created_tag.id);
+            assert_eq!(found_tag.name, "Test Tag");
+        }
+
+        fn test_update() {
+            let mut conn = establish_test_connection();
+            let tag = setup_test_tag(&mut conn);
+    
+            let updated_rows = diesel::update(table.find(tag.id))
+                .set(crate::schema::tags::dsl::name.eq("Updated Test Tag"))
+                .execute(&mut conn)
+                .expect("Error updating tag");
+    
+            assert_eq!(updated_rows, 1);
+    
+            let updated_tag = table
+                .find(tag.id)
+                .select(Tag::as_select())
+                .get_result(&mut conn)
+                .expect("Error loading updated tag");
+    
+            assert_eq!(updated_tag.name, "Updated Test Tag");
+        }
+
+        fn test_delete() {
+            let mut conn = establish_test_connection();
+            let tag = setup_test_tag(&mut conn);
+    
+            let deleted_rows = diesel::delete(table.find(tag.id))
+                .execute(&mut conn)
+                .expect("Error deleting tag");
+    
+            assert_eq!(deleted_rows, 1);
+    
+            let find_result = table
+                .find(tag.id)
+                .select(Tag::as_select())
+                .get_result::<Tag>(&mut conn);
+    
+            assert!(find_result.is_err());
+        }
+    }
+
     #[test]
     fn test_create_tag() {
         let mut conn = establish_test_connection();
@@ -360,6 +429,15 @@ mod tags {
     }
 }
 
+pub trait CrudTest {
+    type Model;
+    
+    fn test_create();
+    fn test_read();
+    fn test_update();
+    fn test_delete();
+}
+
 #[cfg(test)]
 mod utils {
     use super::*;
@@ -405,6 +483,73 @@ mod tests {
     use super::utils::*;
     use super::*;
     use crate::schema::notes;
+
+    impl CrudTest for tests {
+        type Model = Note;
+
+        fn test_create() {
+            let mut conn = establish_test_connection();
+    
+            let note = setup_test_note(&mut conn);
+    
+            assert_eq!(note.title, "Test Note");
+            assert_eq!(note.content, "This is a test note content");
+            assert!(note.created_at.is_some());
+            assert!(note.modified_at.is_some());
+        }
+
+        fn test_read() {
+            let mut conn = establish_test_connection();
+            let created_note = setup_test_note(&mut conn);
+    
+            let found_note = notes::table
+                .find(created_note.id)
+                .select(Note::as_select())
+                .first(&mut conn)
+                .expect("Error loading note");
+    
+            assert_eq!(found_note.id, created_note.id);
+            assert_eq!(found_note.title, "Test Note");
+        }
+
+        fn test_update() {
+            let mut conn = establish_test_connection();
+            let note = setup_test_note(&mut conn);
+    
+            let updated_rows = diesel::update(notes::table.find(note.id))
+                .set(notes::title.eq("Updated Test Note"))
+                .execute(&mut conn)
+                .expect("Error updating note");
+    
+            assert_eq!(updated_rows, 1);
+    
+            let updated_note = notes::table
+                .find(note.id)
+                .select(Note::as_select())
+                .first(&mut conn)
+                .expect("Error loading updated note");
+    
+            assert_eq!(updated_note.title, "Updated Test Note");
+        }
+
+        fn test_delete() {
+            let mut conn = establish_test_connection();
+            let note = setup_test_note(&mut conn);
+    
+            let deleted_rows = diesel::delete(notes::table.find(note.id))
+                .execute(&mut conn)
+                .expect("Error deleting note");
+    
+            assert_eq!(deleted_rows, 1);
+    
+            let find_result = notes::table
+                .find(note.id)
+                .select(Note::as_select())
+                .first::<Note>(&mut conn);
+    
+            assert!(find_result.is_err());
+        }
+    }
 
     #[test]
     fn test_create_note() {
