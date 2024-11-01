@@ -65,7 +65,7 @@ pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<
     }
 }
 
-pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<NoteResponse>, Error> {
+pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<NoteResponse>, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}?metadata_only=true", base_url)
     } else {
@@ -87,7 +87,7 @@ pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<Note
     }
 }
 
-pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, Error> {
+pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}", base_url);
     let response = client
@@ -104,7 +104,7 @@ pub async fn update_note(
     base_url: &str,
     id: i32,
     note: UpdateNoteRequest,
-) -> Result<NoteResponse, Error> {
+) -> Result<NoteResponse, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
     let response = client
@@ -117,7 +117,7 @@ pub async fn update_note(
     Ok(updated_note)
 }
 
-pub async fn delete_note(base_url: &str, id: i32) -> Result<(), Error> {
+pub async fn delete_note(base_url: &str, id: i32) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
     client.delete(url).send().await?.error_for_status()?;
