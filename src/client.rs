@@ -1,8 +1,6 @@
-use crate::{api::NoteResponse, BASE_URL};
+use crate::{api::NoteResponse, BASE_URL, FLAT_API};
 use reqwest::Error;
 use serde::Serialize;
-
-const FLAT_API: &str = "notes/flat";
 
 #[derive(Serialize)]
 pub struct CreateNoteRequest {
