@@ -284,17 +284,17 @@ pub struct NewTask<'a> {
 
 #[cfg(test)]
 mod tags {
-    use super::*;
     use super::utils::*;
+    use super::*;
     use crate::schema::tags::table;
-    use diesel::RunQueryDsl;
     use diesel::QueryDsl;
+    use diesel::RunQueryDsl;
 
     #[test]
     fn test_create_tag() {
         let mut conn = establish_test_connection();
         let tag = setup_test_tag(&mut conn);
-        
+
         let found_tag = table
             .find(tag.id)
             .select(Tag::as_select())
@@ -364,7 +364,6 @@ mod tags {
 mod utils {
     use super::*;
     use diesel::pg::PgConnection;
-    use diesel::prelude::*;
     use dotenv::dotenv;
     use std::env;
 
@@ -403,8 +402,8 @@ mod utils {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::utils::*;
+    use super::*;
     use crate::schema::notes;
 
     #[test]
