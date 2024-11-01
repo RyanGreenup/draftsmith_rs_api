@@ -1,6 +1,5 @@
 use reqwest::Error;
 use serde::Serialize;
-use crate::BASE_URL;
 use crate::api::NoteResponse;
 
 #[derive(Serialize)]
@@ -29,8 +28,8 @@ pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<Note
     let response = client.post(url)
         .json(&note)
         .send()
-        .await?;
-    response.error_for_status()?;
+        .await?
+        .error_for_status()?;
     let created_note = response.json::<NoteResponse>().await?;
     Ok(created_note)
 }
