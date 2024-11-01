@@ -81,7 +81,7 @@ class NotesEndpoint(Endpoint):
         self.add_method(EndpointMethod(
             method="get",
             description="List all notes",
-            output_schema=List[Note].schema()
+            output_schema={"type": "array", "items": Note.schema()}
         ))
 
         # POST /notes
