@@ -469,7 +469,7 @@ mod tests {
 
             assert!(matches!(find_result, Err(DieselError::NotFound)));
 
-            Ok(())
+            Ok::<(), diesel::result::Error>(())
         });
     }
 }
