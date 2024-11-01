@@ -521,7 +521,7 @@ mod utils {
             description: Some("Test asset description"),
         };
 
-        diesel::insert_into(assets::table)
+        diesel::insert_into(crate::schema::assets::table)
             .values(&new_asset)
             .get_result(conn)
             .expect("Error saving new asset")
