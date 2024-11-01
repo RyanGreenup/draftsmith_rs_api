@@ -532,7 +532,8 @@ mod utils {
 mod assets {
     use super::utils::*;
     use super::*;
-    use crate::schema::assets::table;
+    use crate::schema::assets::{self, table};
+    use crate::schema::assets::dsl::*;
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
 
@@ -574,10 +575,10 @@ mod assets {
             let mut conn = establish_test_connection();
             let asset = setup_test_asset(&mut conn);
 
-            let updated_rows = diesel::update(assets::table.find(asset.id))
+            let updated_rows = diesel::update(table.find(asset.id))
                 .set((
-                    assets::location.eq("/updated/path/file.txt"),
-                    assets::description.eq(Some("Updated description")),
+                    location.eq("/updated/path/file.txt"),
+                    description.eq(Some("Updated description")),
                 ))
                 .execute(&mut conn)
                 .expect("Error updating asset");
