@@ -42,6 +42,14 @@ pub struct NoteResponse {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct NoteMetadataResponse {
+    pub id: i32,
+    pub title: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+}
+
 impl From<Note> for NoteResponse {
     fn from(note: Note) -> Self {
         Self {
@@ -69,7 +77,19 @@ pub fn create_router(pool: Pool) -> Router {
 }
 
 // Handler functions
-async fn list_notes(State(state): State<AppState>) -> Result<Json<Vec<NoteResponse>>, StatusCode> {
+use axum::extract::Query;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct ListNotesParams {
+    #[serde(default)]
+    exclude_content: bool,
+}
+
+async fn list_notes(
+    State(state): State<AppState>,
+    Query(params): Query<ListNotesParams>,
+) -> Result<Json<Value>, StatusCode> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = state
@@ -81,7 +101,21 @@ async fn list_notes(State(state): State<AppState>) -> Result<Json<Vec<NoteRespon
         .load::<Note>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(Json(results.into_iter().map(Into::into).collect()))
+    if params.exclude_content {
+        let response: Vec<NoteMetadataResponse> = results
+            .into_iter()
+            .map(|note| NoteMetadataResponse {
+                id: note.id,
+                title: note.title,
+                created_at: note.created_at,
+                modified_at: note.modified_at,
+            })
+            .collect();
+        Ok(Json(json!(response)))
+    } else {
+        let response: Vec<NoteResponse> = results.into_iter().map(Into::into).collect();
+        Ok(Json(json!(response)))
+    }
 }
 
 async fn get_note(
