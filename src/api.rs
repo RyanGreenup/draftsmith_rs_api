@@ -1,15 +1,15 @@
 use crate::tables::{NewNote, Note};
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
-use serde_json::{json, Value};
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 // Connection pool type
@@ -91,7 +91,7 @@ pub fn create_router(pool: Pool) -> Router {
 async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
-    use crate::schema::{notes, note_hierarchy};
+    use crate::schema::{note_hierarchy, notes};
     use diesel::dsl::count_star;
 
     let mut conn = state
@@ -134,7 +134,9 @@ async fn get_note_tree(
         // Get all child notes for this parent
         let children = note_hierarchy::table
             .filter(note_hierarchy::parent_note_id.eq(parent_id))
-            .inner_join(notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())))
+            .inner_join(
+                notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
+            )
             .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?;
 
         let mut tree_nodes = Vec::new();
@@ -157,16 +159,17 @@ async fn get_note_tree(
     }
 
     // Start building the tree from root nodes (those with no parent)
-    let mut root_nodes = build_tree(&mut conn, None)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut root_nodes =
+        build_tree(&mut conn, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // If we got no root nodes but we know hierarchies exist,
     // there might be orphaned notes. Add them as root nodes.
     if root_nodes.is_empty() {
         let orphaned_notes = notes::table
-            .left_outer_join(note_hierarchy::table.on(
-                notes::id.eq(note_hierarchy::child_note_id.assume_not_null())
-            ))
+            .left_outer_join(
+                note_hierarchy::table
+                    .on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
+            )
             .filter(note_hierarchy::id.is_null())
             .select(notes::all_columns)
             .load::<crate::tables::Note>(&mut conn)
@@ -184,7 +187,6 @@ async fn get_note_tree(
 
     Ok(Json(root_nodes))
 }
-
 
 #[derive(Deserialize)]
 pub struct ListNotesParams {

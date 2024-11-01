@@ -38,22 +38,26 @@ pub struct UpdateNoteRequest {
     pub content: String,
 }
 
-pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<NoteResponse, NoteError> {
+pub async fn fetch_note(
+    base_url: &str,
+    id: i32,
+    metadata_only: bool,
+) -> Result<NoteResponse, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}/{}?metadata_only=true", base_url, id)
     } else {
         format!("{}/{FLAT_API}/{}", base_url, id)
     };
-    
+
     let response = reqwest::get(url).await?;
-    
+
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(NoteError::NotFound(id));
     }
-    
+
     let response = response.error_for_status()?;
     let note = response.json::<NoteResponse>().await?;
-    
+
     // If metadata_only is true, ensure content field is empty
     if metadata_only {
         Ok(NoteResponse {
@@ -65,7 +69,10 @@ pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<
     }
 }
 
-pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<NoteResponse>, NoteError> {
+pub async fn fetch_notes(
+    base_url: &str,
+    metadata_only: bool,
+) -> Result<Vec<NoteResponse>, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}?metadata_only=true", base_url)
     } else {
@@ -73,10 +80,11 @@ pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<Note
     };
     let response = reqwest::get(url).await?.error_for_status()?;
     let notes = response.json::<Vec<NoteResponse>>().await?;
-    
+
     // If metadata_only is true, ensure content field is empty
     if metadata_only {
-        Ok(notes.into_iter()
+        Ok(notes
+            .into_iter()
             .map(|mut note| {
                 note.content = String::new();
                 note
@@ -87,7 +95,10 @@ pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<Note
     }
 }
 
-pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, NoteError> {
+pub async fn create_note(
+    base_url: &str,
+    note: CreateNoteRequest,
+) -> Result<NoteResponse, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}", base_url);
     let response = client
@@ -107,11 +118,7 @@ pub async fn update_note(
 ) -> Result<NoteResponse, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
-    let response = client
-        .put(url)
-        .json(&note)
-        .send()
-        .await?;
+    let response = client.put(url).json(&note).send().await?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(NoteError::NotFound(id));
@@ -126,11 +133,11 @@ pub async fn delete_note(base_url: &str, id: i32) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
     let response = client.delete(url).send().await?;
-    
+
     if response.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(NoteError::NotFound(id));
     }
-    
+
     response.error_for_status()?;
     Ok(())
 }

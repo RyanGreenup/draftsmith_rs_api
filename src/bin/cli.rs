@@ -109,7 +109,9 @@ async fn main() {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::Get { metadata_only } => {
                         if let Some(note_id) = id {
-                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only).await {
+                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
+                                .await
+                            {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
                                 }
@@ -123,7 +125,9 @@ async fn main() {
                                 }
                             }
                         } else {
-                            let notes = rust_cli_app::client::fetch_notes(&url, metadata_only).await.unwrap();
+                            let notes = rust_cli_app::client::fetch_notes(&url, metadata_only)
+                                .await
+                                .unwrap();
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
                     }
@@ -143,7 +147,8 @@ async fn main() {
                                 note_id,
                                 rust_cli_app::client::UpdateNoteRequest { title, content },
                             )
-                            .await {
+                            .await
+                            {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
                                 }
