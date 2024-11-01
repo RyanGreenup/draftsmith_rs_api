@@ -27,11 +27,18 @@ class EndpointMethod(BaseModel):
 
 class Endpoint(BaseModel):
     """Base class for API endpoints"""
+    base_url: str
+    path: str
+    description: str
+    methods: Dict[str, EndpointMethod] = {}
+
     def __init__(self, base_url: str, path: str, description: str):
-        self.base_url = base_url
-        self.path = path
-        self.description = description
-        self.methods: Dict[str, EndpointMethod] = {}
+        super().__init__(
+            base_url=base_url,
+            path=path,
+            description=description,
+            methods={}
+        )
 
     def add_method(self, method: EndpointMethod):
         self.methods[method.method] = method
