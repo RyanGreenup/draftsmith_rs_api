@@ -315,6 +315,9 @@ mod tests {
         diesel::delete(note_type_mappings::table)
             .execute(conn)
             .expect("Error deleting note type mappings");
+        diesel::delete(note_modifications::table)
+            .execute(conn)
+            .expect("Error deleting note modifications");
         diesel::delete(notes::table)
             .execute(conn)
             .expect("Error deleting notes");
