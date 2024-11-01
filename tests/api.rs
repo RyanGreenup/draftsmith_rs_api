@@ -24,7 +24,7 @@ fn setup() -> (Router, Pool) {
         .execute(&mut conn)
         .unwrap();
 
-    let app = api::create_router(pool.clone());
+    let app = TestServer::new(api::create_router(pool.clone())).unwrap();
     (app, pool)
 }
 
@@ -46,7 +46,7 @@ async fn test_notes_crud() {
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
 
-    let create_body = axum::body::to_bytes(create_response.into_body())
+    let create_body = create_response.bytes().await
         .await
         .unwrap();
     let create_json: Value = serde_json::from_slice(&create_body).unwrap();
@@ -66,7 +66,7 @@ async fn test_notes_crud() {
 
     assert_eq!(list_response.status(), StatusCode::OK);
 
-    let list_body = axum::body::to_bytes(list_response.into_body())
+    let list_body = list_response.bytes().await
         .await
         .unwrap();
     let list_json: Value = serde_json::from_slice(&list_body).unwrap();
