@@ -341,7 +341,8 @@ async fn attach_child_note(
 
     // Prevent circular hierarchy
     if let Some(parent_id) = payload.parent_note_id {
-        if is_circular_hierarchy(&mut conn, payload.child_note_id, Some(parent_id))? {
+        if is_circular_hierarchy(&mut conn, payload.child_note_id, Some(parent_id))
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)? {
             return Err(StatusCode::BAD_REQUEST); // Circular hierarchy detected
         }
     }
