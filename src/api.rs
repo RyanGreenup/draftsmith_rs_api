@@ -27,6 +27,12 @@ pub struct CreateNoteRequest {
     content: String,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateNoteRequest {
+    title: String,
+    content: String,
+}
+
 #[derive(Serialize)]
 pub struct NoteResponse {
     id: i32,
@@ -92,6 +98,30 @@ async fn get_note(
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(note.into()))
+}
+
+async fn update_note(
+    Path(note_id): Path<i32>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateNoteRequest>,
+) -> Result<Json<NoteResponse>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let updated_note = diesel::update(notes.find(note_id))
+        .set((
+            title.eq(payload.title),
+            content.eq(payload.content),
+            modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+        ))
+        .get_result::<Note>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(Json(updated_note.into()))
 }
 
 async fn create_note(
