@@ -361,9 +361,9 @@ async fn get_note_tree(
             .map(|children| {
                 children
                     .iter()
-                    .map(|(child_id, hierarchy_type)| {
+                    .map(|(child_id, h_type)| {
                         let mut child = build_tree(*child_id, notes_map, parent_to_children);
-                        child.hierarchy_type = hierarchy_type.clone();
+                        child.hierarchy_type = h_type.clone();
                         child
                     })
                     .collect()
