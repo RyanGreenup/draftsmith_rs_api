@@ -1,12 +1,16 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
-    routing::Router,
+    Router,
 };
 use axum_test::TestServer;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
-use serde_json::{json, Value}; 
+use serde_json::{json, Value};
+use rust_cli_app::{
+    api::{self, CreateNoteRequest, NoteResponse},
+    schema::notes::dsl::notes,
+};
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
@@ -46,9 +50,7 @@ async fn test_notes_crud() {
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
 
-    let create_body = create_response.bytes().await
-        .await
-        .unwrap();
+    let create_body = create_response.bytes().await;
     let create_json: Value = serde_json::from_slice(&create_body).unwrap();
     let note_id = create_json["id"].as_i64().unwrap();
 
@@ -66,9 +68,7 @@ async fn test_notes_crud() {
 
     assert_eq!(list_response.status(), StatusCode::OK);
 
-    let list_body = list_response.bytes().await
-        .await
-        .unwrap();
+    let list_body = list_response.bytes().await;
     let list_json: Value = serde_json::from_slice(&list_body).unwrap();
     assert!(list_json.as_array().unwrap().len() > 0);
 
