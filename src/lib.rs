@@ -363,7 +363,12 @@ mod utils {
     use std::env;
 
     pub fn establish_test_connection() -> PgConnection {
-    use super::*;
+        dotenv().ok();
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        PgConnection::establish(&database_url)
+            .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
+    }
+
     pub fn setup_test_note(conn: &mut PgConnection) -> Note {
         // Create a test note
         let new_note = NewNote {
