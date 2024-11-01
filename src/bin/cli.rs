@@ -53,7 +53,11 @@ enum NotesCommands {
 #[derive(Subcommand)]
 enum FlatCommands {
     /// Get all notes
-    Get,
+    Get {
+        /// Only fetch metadata (exclude content)
+        #[arg(long)]
+        metadata_only: bool,
+    },
     /// Create a new note
     Create {
         /// The title of the note
@@ -92,14 +96,14 @@ async fn main() {
         Commands::Client { url, command } => match command {
             ClientCommands::Notes { id, command } => match command {
                 NotesCommands::Flat { command } => match command {
-                    FlatCommands::Get => {
+                    FlatCommands::Get { metadata_only } => {
                         if let Some(note_id) = id {
-                            let note = rust_cli_app::client::fetch_note(&url, note_id, false)
+                            let note = rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
                                 .await
                                 .unwrap();
                             println!("{}", serde_json::to_string_pretty(&note).unwrap());
                         } else {
-                            let notes = rust_cli_app::client::fetch_notes(&url, false).await.unwrap();
+                            let notes = rust_cli_app::client::fetch_notes(&url, metadata_only).await.unwrap();
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
                     }
