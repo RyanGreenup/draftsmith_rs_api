@@ -39,8 +39,8 @@ EXECUTE FUNCTION update_modified_at_column_on_notes();
 -- *** Hierarchy --------------------------------------------------------------
 CREATE TABLE note_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    parent_note_id INT REFERENCES notes (id),
-    child_note_id INT REFERENCES notes (id),
+    parent_note_id INT REFERENCES notes (id) ON DELETE CASCADE,
+    child_note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     hierarchy_type TEXT CHECK (hierarchy_type IN ('page', 'block', 'subpage')),
     -- This enforces that each child note can only have one parent
     UNIQUE (child_note_id)
@@ -51,7 +51,7 @@ CREATE TABLE note_hierarchy (
 
 CREATE TABLE note_modifications (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    note_id INT REFERENCES notes (id),
+    note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     previous_content TEXT NOT NULL,
     modified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -84,7 +84,7 @@ CREATE TABLE tags (
 );
 
 CREATE TABLE note_tags (
-    note_id INT NOT NULL REFERENCES notes (id),
+    note_id INT NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
     tag_id INT NOT NULL REFERENCES tags (id),
     PRIMARY KEY (note_id, tag_id)
 );
@@ -107,7 +107,7 @@ CREATE TABLE attributes (
 
 CREATE TABLE note_attributes (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    note_id INT REFERENCES notes (id),
+    note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     attribute_id INT REFERENCES attributes (id),
     value TEXT NOT NULL
 );
@@ -123,13 +123,13 @@ INSERT INTO attributes (name, description) VALUES
 
 -- Table for note types
 CREATE TABLE note_types (
-    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY ON DELETE CASCADE,
     name TEXT UNIQUE NOT NULL,
     description TEXT
 );
 
 CREATE TABLE note_type_mappings (
-    note_id INT REFERENCES notes (id),
+    note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     type_id INT REFERENCES note_types (id),
     PRIMARY KEY (note_id, type_id)
 );
@@ -148,6 +148,6 @@ INSERT INTO note_types (name, description) VALUES
 -- Table for journal/calendar view (unused)
 CREATE TABLE journal_entries (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    note_id INT REFERENCES notes (id),
+    note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     entry_date DATE NOT NULL
 );
