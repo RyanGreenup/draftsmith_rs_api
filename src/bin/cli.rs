@@ -81,11 +81,16 @@ async fn main() {
             axum::serve(listener, app).await.unwrap();
         }
         Commands::Client { url, command } => match command {
-            ClientCommands::Notes { command } => match command {
+            ClientCommands::Notes { id, command } => match command {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::Get => {
-                        let notes = rust_cli_app::client::fetch_notes(&url).await.unwrap();
-                        println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                        if let Some(note_id) = id {
+                            let note = rust_cli_app::client::fetch_note(&url, note_id).await.unwrap();
+                            println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                        } else {
+                            let notes = rust_cli_app::client::fetch_notes(&url).await.unwrap();
+                            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                        }
                     }
                 },
             },
