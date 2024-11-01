@@ -46,7 +46,7 @@ pub struct NewAsset<'a> {
 }
 
 #[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = attributes)]
+#[diesel(table_name = crate::schema::attributes)]
 pub struct Attribute {
     pub id: i32,
     pub name: String,
@@ -54,7 +54,7 @@ pub struct Attribute {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = attributes)]
+#[diesel(table_name = crate::schema::attributes)]
 pub struct NewAttribute<'a> {
     pub name: &'a str,
     pub description: Option<&'a str>,
@@ -170,7 +170,7 @@ pub struct NewNoteType<'a> {
 }
 
 #[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = notes)]
+#[diesel(table_name = crate::schema::notes)]
 pub struct Note {
     pub id: i32,
     pub title: String,
@@ -181,7 +181,7 @@ pub struct Note {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = notes)]
+#[diesel(table_name = crate::schema::notes)]
 pub struct NewNote<'a> {
     pub title: &'a str,
     pub content: &'a str,
