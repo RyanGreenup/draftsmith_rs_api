@@ -67,6 +67,15 @@ enum FlatCommands {
         #[arg(long)]
         content: String,
     },
+    /// Update an existing note
+    Update {
+        /// The title of the note
+        #[arg(long)]
+        title: String,
+        /// The content of the note
+        #[arg(long)]
+        content: String,
+    },
 }
 
 #[tokio::main]
@@ -115,6 +124,20 @@ async fn main() {
                         .await
                         .unwrap();
                         println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                    }
+                    FlatCommands::Update { title, content } => {
+                        if let Some(note_id) = id {
+                            let note = rust_cli_app::client::update_note(
+                                &url,
+                                note_id,
+                                rust_cli_app::client::UpdateNoteRequest { title, content },
+                            )
+                            .await
+                            .unwrap();
+                            println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                        } else {
+                            eprintln!("Error: --id is required for update command");
+                        }
                     }
                 },
             },
