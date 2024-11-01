@@ -17,70 +17,6 @@ impl ToSql<crate::schema::sql_types::Tsvector, Pg> for Tsvector {
         out.write_all(self.0.as_bytes())?;
         Ok(IsNull::No)
     }
-
-    #[test]
-    fn test_create_tag() {
-        let mut conn = establish_test_connection();
-        
-        let tag = setup_test_tag(&mut conn);
-        
-        assert_eq!(tag.name, "Test Tag");
-    }
-
-    #[test]
-    fn test_read_tag() {
-        let mut conn = establish_test_connection();
-        let created_tag = setup_test_tag(&mut conn);
-
-        let found_tag = tags::table
-            .find(created_tag.id)
-            .select(Tag::as_select())
-            .first(&mut conn)
-            .expect("Error loading tag");
-
-        assert_eq!(found_tag.id, created_tag.id);
-        assert_eq!(found_tag.name, "Test Tag");
-    }
-
-    #[test]
-    fn test_update_tag() {
-        let mut conn = establish_test_connection();
-        let tag = setup_test_tag(&mut conn);
-
-        let updated_rows = diesel::update(tags::table.find(tag.id))
-            .set(tags::name.eq("Updated Test Tag"))
-            .execute(&mut conn)
-            .expect("Error updating tag");
-
-        assert_eq!(updated_rows, 1);
-
-        let updated_tag = tags::table
-            .find(tag.id)
-            .select(Tag::as_select())
-            .first(&mut conn)
-            .expect("Error loading updated tag");
-
-        assert_eq!(updated_tag.name, "Updated Test Tag");
-    }
-
-    #[test]
-    fn test_delete_tag() {
-        let mut conn = establish_test_connection();
-        let tag = setup_test_tag(&mut conn);
-
-        let deleted_rows = diesel::delete(tags::table.find(tag.id))
-            .execute(&mut conn)
-            .expect("Error deleting tag");
-
-        assert_eq!(deleted_rows, 1);
-
-        let find_result = tags::table
-            .find(tag.id)
-            .select(Tag::as_select())
-            .first::<Tag>(&mut conn);
-
-        assert!(find_result.is_err());
-    }
 }
 
 impl FromSql<crate::schema::sql_types::Tsvector, Pg> for Tsvector {
@@ -353,6 +289,70 @@ mod tests {
     use diesel::prelude::*;
     use dotenv::dotenv;
     use std::env;
+
+    #[test]
+    fn test_create_tag() {
+        let mut conn = establish_test_connection();
+        
+        let tag = setup_test_tag(&mut conn);
+        
+        assert_eq!(tag.name, "Test Tag");
+    }
+
+    #[test]
+    fn test_read_tag() {
+        let mut conn = establish_test_connection();
+        let created_tag = setup_test_tag(&mut conn);
+
+        let found_tag = tags::table
+            .find(created_tag.id)
+            .select(Tag::as_select())
+            .first(&mut conn)
+            .expect("Error loading tag");
+
+        assert_eq!(found_tag.id, created_tag.id);
+        assert_eq!(found_tag.name, "Test Tag");
+    }
+
+    #[test]
+    fn test_update_tag() {
+        let mut conn = establish_test_connection();
+        let tag = setup_test_tag(&mut conn);
+
+        let updated_rows = diesel::update(tags::table.find(tag.id))
+            .set(tags::name.eq("Updated Test Tag"))
+            .execute(&mut conn)
+            .expect("Error updating tag");
+
+        assert_eq!(updated_rows, 1);
+
+        let updated_tag = tags::table
+            .find(tag.id)
+            .select(Tag::as_select())
+            .first(&mut conn)
+            .expect("Error loading updated tag");
+
+        assert_eq!(updated_tag.name, "Updated Test Tag");
+    }
+
+    #[test]
+    fn test_delete_tag() {
+        let mut conn = establish_test_connection();
+        let tag = setup_test_tag(&mut conn);
+
+        let deleted_rows = diesel::delete(tags::table.find(tag.id))
+            .execute(&mut conn)
+            .expect("Error deleting tag");
+
+        assert_eq!(deleted_rows, 1);
+
+        let find_result = tags::table
+            .find(tag.id)
+            .select(Tag::as_select())
+            .first::<Tag>(&mut conn);
+
+        assert!(find_result.is_err());
+    }
 
     fn establish_test_connection() -> PgConnection {
         dotenv().ok();
