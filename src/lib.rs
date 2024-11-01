@@ -391,9 +391,10 @@ mod utils {
     }
 
     pub fn setup_test_tag(conn: &mut PgConnection) -> Tag {
+        use crate::schema::tags::dsl::*;
         let new_tag = NewTag { name: "Test Tag" };
 
-        diesel::insert_into(tags::table)
+        diesel::insert_into(tags)
             .values(&new_tag)
             .get_result(conn)
             .expect("Error saving new tag")
