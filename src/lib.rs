@@ -481,6 +481,8 @@ mod utils {
     use dotenv::dotenv;
     use std::env;
 
+    const ASSET_LOCATION: &str = "/test/path/exemplar_file.txt";
+
     pub fn establish_test_connection() -> PgConnection {
         dotenv().ok();
         let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -517,7 +519,7 @@ mod utils {
         let note = setup_test_note(conn);
         let new_asset = NewAsset {
             note_id: Some(note.id),
-            location: "/test/path/file.txt",
+            location: ASSET_LOCATION,
             description: Some("Test asset description"),
         };
 
@@ -537,6 +539,8 @@ mod assets {
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
 
+    const ASSET_LOCATION: &str = "/test/path/exemplar_file.txt";
+
     pub struct AssetTests;
 
     impl CrudTest for AssetTests {
@@ -552,7 +556,7 @@ mod assets {
                 .first(&mut conn)
                 .expect("Error loading asset");
 
-            assert_eq!(found_asset.location, "/test/path/file.txt");
+            assert_eq!(found_asset.location, ASSET_LOCATION);
             assert_eq!(found_asset.description, Some("Test asset description".to_string()));
         }
 
@@ -567,7 +571,7 @@ mod assets {
                 .expect("Error loading asset");
 
             assert_eq!(found_asset.id, created_asset.id);
-            assert_eq!(found_asset.location, "/test/path/file.txt");
+            assert_eq!(found_asset.location, ASSET_LOCATION);
             assert_eq!(found_asset.description, Some("Test asset description".to_string()));
         }
 
@@ -577,7 +581,7 @@ mod assets {
 
             let updated_rows = diesel::update(table.find(asset.id))
                 .set((
-                    location.eq("/updated/path/file.txt"),
+                    location.eq(ASSET_LOCATION),
                     description.eq(Some("Updated description")),
                 ))
                 .execute(&mut conn)
@@ -591,7 +595,7 @@ mod assets {
                 .first(&mut conn)
                 .expect("Error loading updated asset");
 
-            assert_eq!(updated_asset.location, "/updated/path/file.txt");
+            assert_eq!(updated_asset.location, ASSET_LOCATION);
             assert_eq!(updated_asset.description, Some("Updated description".to_string()));
         }
 
