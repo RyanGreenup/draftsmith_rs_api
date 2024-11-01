@@ -398,5 +398,84 @@ mod tests {
 
         assert!(matches!(find_result, Err(DieselError::NotFound)));
     }
+
+    #[test]
+    fn test_note_tags_crud() {
+        let conn = &mut establish_connection();
+
+        // First create a note and tag to work with
+        let new_note = NewNote {
+            title: "Test Note for Tags",
+            content: "This is a test note for tag testing",
+            created_at: Some(chrono::Utc::now().naive_utc()),
+            modified_at: Some(chrono::Utc::now().naive_utc()),
+        };
+
+        let created_note = diesel::insert_into(notes::table)
+            .values(&new_note)
+            .get_result::<Note>(conn)
+            .expect("Error saving new note");
+
+        let new_tag = NewTag {
+            name: "Test Tag for Note",
+        };
+
+        let created_tag = diesel::insert_into(tags::table)
+            .values(&new_tag)
+            .get_result::<Tag>(conn)
+            .expect("Error saving new tag");
+
+        // Test Create
+        let new_note_tag = NewNoteTag {
+            note_id: created_note.id,
+            tag_id: created_tag.id,
+        };
+
+        let created_note_tag = diesel::insert_into(note_tags::table)
+            .values(&new_note_tag)
+            .get_result::<NoteTag>(conn)
+            .expect("Error saving new note_tag");
+
+        assert_eq!(created_note_tag.note_id, created_note.id);
+        assert_eq!(created_note_tag.tag_id, created_tag.id);
+
+        // Test Read
+        let read_note_tag = note_tags::table
+            .filter(note_tags::note_id.eq(created_note.id))
+            .filter(note_tags::tag_id.eq(created_tag.id))
+            .first::<NoteTag>(conn)
+            .expect("Error loading note_tag");
+
+        assert_eq!(read_note_tag.note_id, created_note_tag.note_id);
+        assert_eq!(read_note_tag.tag_id, created_note_tag.tag_id);
+
+        // Test Delete
+        let deleted_count = diesel::delete(
+            note_tags::table
+                .filter(note_tags::note_id.eq(created_note.id))
+                .filter(note_tags::tag_id.eq(created_tag.id))
+        )
+            .execute(conn)
+            .expect("Error deleting note_tag");
+
+        assert_eq!(deleted_count, 1);
+
+        // Verify deletion
+        let find_result = note_tags::table
+            .filter(note_tags::note_id.eq(created_note.id))
+            .filter(note_tags::tag_id.eq(created_tag.id))
+            .first::<NoteTag>(conn);
+
+        assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+        // Clean up the created note and tag
+        diesel::delete(notes::table.find(created_note.id))
+            .execute(conn)
+            .expect("Error deleting test note");
+
+        diesel::delete(tags::table.find(created_tag.id))
+            .execute(conn)
+            .expect("Error deleting test tag");
+    }
 }
 
