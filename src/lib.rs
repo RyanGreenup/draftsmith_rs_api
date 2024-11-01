@@ -512,6 +512,114 @@ mod utils {
             .get_result(conn)
             .expect("Error saving new tag")
     }
+
+    pub fn setup_test_asset(conn: &mut PgConnection) -> Asset {
+        let note = setup_test_note(conn);
+        let new_asset = NewAsset {
+            note_id: Some(note.id),
+            location: "/test/path/file.txt",
+            description: Some("Test asset description"),
+        };
+
+        diesel::insert_into(assets::table)
+            .values(&new_asset)
+            .get_result(conn)
+            .expect("Error saving new asset")
+    }
+}
+
+#[cfg(test)]
+mod assets {
+    use super::utils::*;
+    use super::*;
+    use crate::schema::assets;
+    use diesel::QueryDsl;
+    use diesel::RunQueryDsl;
+
+    pub struct AssetTests;
+
+    impl CrudTest for AssetTests {
+        type Model = Asset;
+
+        fn test_create() {
+            let mut conn = establish_test_connection();
+            let asset = setup_test_asset(&mut conn);
+
+            let found_asset = assets::table
+                .find(asset.id)
+                .select(Asset::as_select())
+                .first(&mut conn)
+                .expect("Error loading asset");
+
+            assert_eq!(found_asset.location, "/test/path/file.txt");
+            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+        }
+
+        fn test_read() {
+            let mut conn = establish_test_connection();
+            let created_asset = setup_test_asset(&mut conn);
+
+            let found_asset = assets::table
+                .find(created_asset.id)
+                .select(Asset::as_select())
+                .first(&mut conn)
+                .expect("Error loading asset");
+
+            assert_eq!(found_asset.id, created_asset.id);
+            assert_eq!(found_asset.location, "/test/path/file.txt");
+            assert_eq!(found_asset.description, Some("Test asset description".to_string()));
+        }
+
+        fn test_update() {
+            let mut conn = establish_test_connection();
+            let asset = setup_test_asset(&mut conn);
+
+            let updated_rows = diesel::update(assets::table.find(asset.id))
+                .set((
+                    assets::location.eq("/updated/path/file.txt"),
+                    assets::description.eq(Some("Updated description")),
+                ))
+                .execute(&mut conn)
+                .expect("Error updating asset");
+
+            assert_eq!(updated_rows, 1);
+
+            let updated_asset = assets::table
+                .find(asset.id)
+                .select(Asset::as_select())
+                .first(&mut conn)
+                .expect("Error loading updated asset");
+
+            assert_eq!(updated_asset.location, "/updated/path/file.txt");
+            assert_eq!(updated_asset.description, Some("Updated description".to_string()));
+        }
+
+        fn test_delete() {
+            let mut conn = establish_test_connection();
+            let asset = setup_test_asset(&mut conn);
+
+            let deleted_rows = diesel::delete(assets::table.find(asset.id))
+                .execute(&mut conn)
+                .expect("Error deleting asset");
+
+            assert_eq!(deleted_rows, 1);
+
+            let find_result = assets::table
+                .find(asset.id)
+                .select(Asset::as_select())
+                .first::<Asset>(&mut conn);
+
+            assert!(find_result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_crud_asset() {
+        AssetTests::test_create();
+        AssetTests::test_read();
+        AssetTests::test_update();
+        AssetTests::test_delete();
+    }
 }
 
 #[cfg(test)]
