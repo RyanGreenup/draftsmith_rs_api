@@ -52,7 +52,7 @@ async fn test_notes_crud() {
         .unwrap();
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
-    
+
     let create_body = axum::body::to_bytes(create_response.into_body())
         .await
         .unwrap();
@@ -72,7 +72,7 @@ async fn test_notes_crud() {
         .unwrap();
 
     assert_eq!(list_response.status(), StatusCode::OK);
-    
+
     let list_body = axum::body::to_bytes(list_response.into_body())
         .await
         .unwrap();

@@ -1,15 +1,18 @@
 use crate::tables::{NewNote, Note};
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::StatusCode,
+    http::{Request, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
+use rust_cli_app::{api, schema};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tower::ServiceExt;
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -61,7 +64,10 @@ pub fn create_router(pool: Pool) -> Router {
 
     Router::new()
         .route("/notes/flat", get(list_notes).post(create_note))
-        .route("/notes/flat/:id", get(get_note).put(update_note).delete(delete_note))
+        .route(
+            "/notes/flat/:id",
+            get(get_note).put(update_note).delete(delete_note),
+        )
         .with_state(state)
 }
 
