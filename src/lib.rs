@@ -1214,7 +1214,7 @@ mod tests {
 
             dbg!(format!("Created Task Clock #: {:?}", created_clock.id));
             assert_eq!(created_clock.task_id, Some(created_task.id));
-            assert_eq!(created_clock.clock_in.timestamp(), clock_in_time.timestamp());
+            assert_eq!(created_clock.clock_in.and_utc().timestamp(), clock_in_time.and_utc().timestamp());
             assert_eq!(created_clock.clock_out, None);
 
             // Test Read
@@ -1225,7 +1225,7 @@ mod tests {
 
             assert_eq!(read_clock.id, created_clock.id);
             assert_eq!(read_clock.task_id, created_clock.task_id);
-            assert_eq!(read_clock.clock_in.timestamp(), created_clock.clock_in.timestamp());
+            assert_eq!(read_clock.clock_in.and_utc().timestamp(), created_clock.clock_in.and_utc().timestamp());
 
             // Test Update
             let clock_out_time = chrono::Utc::now().naive_utc();
@@ -1234,7 +1234,7 @@ mod tests {
                 .get_result::<TaskClock>(conn)
                 .expect("Error updating task clock");
 
-            assert_eq!(updated_clock.clock_out.expect("Could not get clock_out").timestamp(), clock_out_time.timestamp());
+            assert_eq!(updated_clock.clock_out.expect("Could not get clock_out").and_utc().timestamp(), clock_out_time.and_utc().timestamp());
 
             dbg!(format!("Deleting Task Clock #: {:?}", created_clock.id));
             // Test Delete
