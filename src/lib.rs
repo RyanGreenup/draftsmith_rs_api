@@ -1164,6 +1164,98 @@ mod tests {
     }
 
     #[test]
+    fn test_task_schedules_types_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note and task to work with
+            let new_note = NewNote {
+                title: "Test Note for Task Schedule",
+                content: "This is a test note for task schedule testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            let new_task = NewTask {
+                note_id: Some(created_note.id),
+                status: "todo",
+                effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
+                actual_effort: None,
+                deadline: Some(chrono::Utc::now().naive_utc()),
+                priority: Some(1),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: Some(0),
+            };
+
+            let created_task = diesel::insert_into(tasks::table)
+                .values(&new_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving new task");
+
+            // Test Create
+            let new_schedule = NewTaskSchedule {
+                task_id: created_task.id,
+                start_datetime: Some(chrono::Utc::now().naive_utc()),
+                end_datetime: Some(chrono::Utc::now().naive_utc() + chrono::Duration::hours(2)),
+            };
+
+            let created_schedule = diesel::insert_into(task_schedules::table)
+                .values(&new_schedule)
+                .get_result::<TaskSchedule>(conn)
+                .expect("Error saving new task schedule");
+
+            dbg!(format!("Created Task Schedule #: {:?}", created_schedule.id));
+            assert_eq!(created_schedule.task_id, created_task.id);
+            assert!(created_schedule.start_datetime.is_some());
+            assert!(created_schedule.end_datetime.is_some());
+
+            // Test Read
+            let read_schedule = task_schedules::table
+                .find(created_schedule.id)
+                .first::<TaskSchedule>(conn)
+                .expect("Error loading task schedule");
+
+            assert_eq!(read_schedule.id, created_schedule.id);
+            assert_eq!(read_schedule.task_id, created_schedule.task_id);
+            assert_eq!(read_schedule.start_datetime, created_schedule.start_datetime);
+            assert_eq!(read_schedule.end_datetime, created_schedule.end_datetime);
+
+            // Test Update
+            let new_end_time = chrono::Utc::now().naive_utc() + chrono::Duration::hours(4);
+            let updated_schedule = diesel::update(task_schedules::table.find(created_schedule.id))
+                .set(task_schedules::end_datetime.eq(Some(new_end_time)))
+                .get_result::<TaskSchedule>(conn)
+                .expect("Error updating task schedule");
+
+            assert_eq!(updated_schedule.end_datetime, Some(new_end_time));
+
+            dbg!(format!("Deleting Task Schedule #: {:?}", created_schedule.id));
+            // Test Delete
+            let deleted_count = diesel::delete(task_schedules::table.find(created_schedule.id))
+                .execute(conn)
+                .expect("Error deleting task schedule");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = task_schedules::table
+                .find(created_schedule.id)
+                .first::<TaskSchedule>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
