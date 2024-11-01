@@ -500,10 +500,8 @@ mod taskschedules {
 mod tasks {
     use super::utils::*;
     use super::*;
-    use crate::schema::tasks::{self, table};
-    use crate::schema::tasks::dsl::*;
-    use diesel::QueryDsl;
-    use diesel::RunQueryDsl;
+    use crate::schema::tasks;
+    use diesel::prelude::*;
     use chrono::NaiveDateTime;
     use bigdecimal::BigDecimal;
     use std::str::FromStr;
@@ -539,7 +537,7 @@ mod tasks {
         fn test_read() {
             let conn = &mut establish_test_connection();
             
-            let task = tasks
+            let task = tasks::table
                 .first::<Task>(conn)
                 .expect("Error loading task");
 
@@ -549,14 +547,14 @@ mod tasks {
         fn test_update() {
             let conn = &mut establish_test_connection();
             
-            let updated_rows = diesel::update(tasks.filter(id.eq(1)))
-                .set(status.eq("IN_PROGRESS"))
+            let updated_rows = diesel::update(tasks::table.filter(tasks::id.eq(1)))
+                .set(tasks::status.eq("IN_PROGRESS"))
                 .execute(conn)
                 .expect("Error updating task");
 
             assert_eq!(updated_rows, 1);
 
-            let updated_task = tasks
+            let updated_task = tasks::table
                 .find(1)
                 .first::<Task>(conn)
                 .expect("Error loading updated task");
@@ -567,13 +565,13 @@ mod tasks {
         fn test_delete() {
             let conn = &mut establish_test_connection();
             
-            let deleted_rows = diesel::delete(tasks.filter(id.eq(1)))
+            let deleted_rows = diesel::delete(tasks::table.filter(tasks::id.eq(1)))
                 .execute(conn)
                 .expect("Error deleting task");
 
             assert_eq!(deleted_rows, 1);
 
-            let result = tasks.find(1).first::<Task>(conn);
+            let result = tasks::table.find(1).first::<Task>(conn);
             assert!(result.is_err());
         }
     }
