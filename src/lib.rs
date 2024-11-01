@@ -1164,6 +1164,98 @@ mod tests {
     }
 
     #[test]
+    fn test_task_clocks_types_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note and task to work with
+            let new_note = NewNote {
+                title: "Test Note for Task Clock",
+                content: "This is a test note for task clock testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            let new_task = NewTask {
+                note_id: Some(created_note.id),
+                status: "in_progress",
+                effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
+                actual_effort: None,
+                deadline: Some(chrono::Utc::now().naive_utc()),
+                priority: Some(1),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: Some(1),
+            };
+
+            let created_task = diesel::insert_into(tasks::table)
+                .values(&new_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving new task");
+
+            // Test Create
+            let clock_in_time = chrono::Utc::now().naive_utc();
+            let new_clock = NewTaskClock {
+                task_id: Some(created_task.id),
+                clock_in: clock_in_time,
+                clock_out: None,
+            };
+
+            let created_clock = diesel::insert_into(task_clocks::table)
+                .values(&new_clock)
+                .get_result::<TaskClock>(conn)
+                .expect("Error saving new task clock");
+
+            dbg!(format!("Created Task Clock #: {:?}", created_clock.id));
+            assert_eq!(created_clock.task_id, Some(created_task.id));
+            assert_eq!(created_clock.clock_in.timestamp(), clock_in_time.timestamp());
+            assert_eq!(created_clock.clock_out, None);
+
+            // Test Read
+            let read_clock = task_clocks::table
+                .find(created_clock.id)
+                .first::<TaskClock>(conn)
+                .expect("Error loading task clock");
+
+            assert_eq!(read_clock.id, created_clock.id);
+            assert_eq!(read_clock.task_id, created_clock.task_id);
+            assert_eq!(read_clock.clock_in.timestamp(), created_clock.clock_in.timestamp());
+
+            // Test Update
+            let clock_out_time = chrono::Utc::now().naive_utc();
+            let updated_clock = diesel::update(task_clocks::table.find(created_clock.id))
+                .set(task_clocks::clock_out.eq(Some(clock_out_time)))
+                .get_result::<TaskClock>(conn)
+                .expect("Error updating task clock");
+
+            assert_eq!(updated_clock.clock_out.expect("Could not get clock_out").timestamp(), clock_out_time.timestamp());
+
+            dbg!(format!("Deleting Task Clock #: {:?}", created_clock.id));
+            // Test Delete
+            let deleted_count = diesel::delete(task_clocks::table.find(created_clock.id))
+                .execute(conn)
+                .expect("Error deleting task clock");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = task_clocks::table
+                .find(created_clock.id)
+                .first::<TaskClock>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_task_schedules_types_crud() {
         let conn = &mut establish_connection();
 
