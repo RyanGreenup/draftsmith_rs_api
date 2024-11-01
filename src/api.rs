@@ -92,11 +92,39 @@ async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
     use crate::schema::{notes, note_hierarchy};
+    use diesel::dsl::count_star;
 
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Check if there are any hierarchy entries
+    let hierarchy_count: i64 = note_hierarchy::table
+        .select(count_star())
+        .first(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if hierarchy_count == 0 {
+        // If no hierarchy exists, return all notes in a linear fashion
+        let all_notes = notes::table
+            .load::<crate::tables::Note>(&mut conn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        let tree_nodes: Vec<NoteTreeNode> = all_notes
+            .into_iter()
+            .map(|note| NoteTreeNode {
+                id: note.id,
+                title: note.title,
+                created_at: note.created_at,
+                modified_at: note.modified_at,
+                hierarchy_type: None,
+                children: Vec::new(),
+            })
+            .collect();
+
+        return Ok(Json(tree_nodes));
+    }
 
     // Helper function to recursively build the tree
     fn build_tree(
@@ -129,8 +157,28 @@ async fn get_note_tree(
     }
 
     // Start building the tree from root nodes (those with no parent)
-    let root_nodes = build_tree(&mut conn, None)
+    let mut root_nodes = build_tree(&mut conn, None)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // If we got no root nodes but we know hierarchies exist,
+    // there might be orphaned notes. Add them as root nodes.
+    if root_nodes.is_empty() {
+        let orphaned_notes = notes::table
+            .left_outer_join(note_hierarchy::table)
+            .filter(note_hierarchy::id.is_null())
+            .select(notes::all_columns)
+            .load::<crate::tables::Note>(&mut conn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        root_nodes.extend(orphaned_notes.into_iter().map(|note| NoteTreeNode {
+            id: note.id,
+            title: note.title,
+            created_at: note.created_at,
+            modified_at: note.modified_at,
+            hierarchy_type: None,
+            children: Vec::new(),
+        }));
+    }
 
     Ok(Json(root_nodes))
 }
