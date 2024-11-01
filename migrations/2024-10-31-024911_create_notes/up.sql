@@ -3,7 +3,10 @@
 -- *** Main Table -------------------------------------------------------------
 -- Table to store notes with a full-text search
 CREATE TABLE notes (
-    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+--    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+-- Use serial so ID's are sequential when there are deletions
+-- more convenient for the user
+    id SERIAL PRIMARY KEY,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
