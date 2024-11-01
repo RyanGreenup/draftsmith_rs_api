@@ -298,29 +298,6 @@ mod tests {
     #[test]
     fn test_note_crud() {
         let conn = &mut establish_connection();
-        
-        // Clean up any existing test data in the correct order
-        diesel::delete(note_hierarchy::table)
-            .execute(conn)
-            .expect("Error deleting note hierarchy");
-        diesel::delete(tasks::table)
-            .execute(conn)
-            .expect("Error deleting tasks");
-        diesel::delete(note_tags::table)
-            .execute(conn)
-            .expect("Error deleting note tags");
-        diesel::delete(note_attributes::table)
-            .execute(conn)
-            .expect("Error deleting note attributes");
-        diesel::delete(note_type_mappings::table)
-            .execute(conn)
-            .expect("Error deleting note type mappings");
-        diesel::delete(note_modifications::table)
-            .execute(conn)
-            .expect("Error deleting note modifications");
-        diesel::delete(notes::table)
-            .execute(conn)
-            .expect("Error deleting notes");
 
         // Test Create
         let new_note = NewNote {
@@ -335,6 +312,7 @@ mod tests {
             .get_result::<Note>(conn)
             .expect("Error saving new note");
 
+        dbg!(format!("Created Note #: {:?}", created_note.id));
         assert_eq!(created_note.title, "Test Note");
         assert_eq!(created_note.content, "This is a test note");
 
@@ -355,6 +333,7 @@ mod tests {
 
         assert_eq!(updated_note.content, "Updated content");
 
+        dbg!(format!("Deleting Note #: {:?}", created_note.id));
         // Test Delete
         let deleted_count = diesel::delete(notes::table.find(created_note.id))
             .execute(conn)
