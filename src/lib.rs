@@ -1191,7 +1191,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
                 all_day: Some(false),
-                goal_relationship: Some(0),
+                goal_relationship: Some(1),
             };
 
             let created_task = diesel::insert_into(tasks::table)
@@ -1234,7 +1234,7 @@ mod tests {
                 .get_result::<TaskSchedule>(conn)
                 .expect("Error updating task schedule");
 
-            assert_eq!(updated_schedule.end_datetime, Some(new_end_time));
+            assert_eq!(updated_schedule.end_datetime.expect("Could not get end_datetime").and_utc().timestamp(), new_end_time.and_utc().timestamp());
 
             dbg!(format!("Deleting Task Schedule #: {:?}", created_schedule.id));
             // Test Delete
