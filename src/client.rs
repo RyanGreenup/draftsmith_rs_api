@@ -338,6 +338,9 @@ mod tests {
         let attach_result = attach_child_note(base_url, attach_request).await;
         assert!(attach_result.is_ok(), "Failed to attach child note");
 
+        // Give the server a moment to process the attachment
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Fetch the note tree and verify the hierarchy
         let note_tree = fetch_note_tree(base_url).await.unwrap();
         
@@ -356,11 +359,17 @@ mod tests {
 
         // Verify that the child note is now under the parent note
         let parent_node = find_node(&note_tree, parent_note.id).expect("Parent note not found");
-        let child_node = find_node(&parent_node.children, child_note.id).expect("Child note not attached to parent");
+        assert!(
+            find_node(&parent_node.children, child_note.id).is_some(),
+            "Child note not attached to parent"
+        );
 
         // Detach the child note
         let detach_result = detach_child_note(base_url, child_note.id).await;
         assert!(detach_result.is_ok(), "Failed to detach child note");
+
+        // Give the server a moment to process the detachment
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Fetch the note tree again and verify the child note is detached
         let updated_note_tree = fetch_note_tree(base_url).await.unwrap();
