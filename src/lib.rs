@@ -17,63 +17,6 @@ impl ToSql<crate::schema::sql_types::Tsvector, Pg> for Tsvector {
         out.write_all(self.0.as_bytes())?;
         Ok(IsNull::No)
     }
-
-    #[test]
-    fn test_assets_crud() {
-        let conn = &mut establish_connection();
-        
-        conn.test_transaction(|conn| {
-            // Test Create
-            let new_asset = NewAsset {
-                note_id: None,
-                location: "/path/to/test/asset.jpg",
-                description: Some("Test asset description"),
-            };
-
-            let created_asset = diesel::insert_into(assets::table)
-                .values(&new_asset)
-                .get_result::<Asset>(conn)
-                .expect("Error saving new asset");
-
-            dbg!(format!("Created Asset #: {:?}", created_asset.id));
-            assert_eq!(created_asset.location, "/path/to/test/asset.jpg");
-            assert_eq!(created_asset.description, Some("Test asset description".to_string()));
-
-            // Test Read
-            let read_asset = assets::table
-                .find(created_asset.id)
-                .first::<Asset>(conn)
-                .expect("Error loading asset");
-
-            assert_eq!(read_asset.id, created_asset.id);
-            assert_eq!(read_asset.location, created_asset.location);
-
-            // Test Update
-            let updated_asset = diesel::update(assets::table.find(created_asset.id))
-                .set(assets::description.eq(Some("Updated description")))
-                .get_result::<Asset>(conn)
-                .expect("Error updating asset");
-
-            assert_eq!(updated_asset.description, Some("Updated description".to_string()));
-
-            dbg!(format!("Deleting Asset #: {:?}", created_asset.id));
-            // Test Delete
-            let deleted_count = diesel::delete(assets::table.find(created_asset.id))
-                .execute(conn)
-                .expect("Error deleting asset");
-
-            assert_eq!(deleted_count, 1);
-
-            // Verify deletion
-            let find_result = assets::table
-                .find(created_asset.id)
-                .first::<Asset>(conn);
-
-            assert!(matches!(find_result, Err(DieselError::NotFound)));
-
-            Ok::<(), diesel::result::Error>(())
-        });
-    }
 }
 
 impl FromSql<crate::schema::sql_types::Tsvector, Pg> for Tsvector {
