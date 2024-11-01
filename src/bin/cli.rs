@@ -22,7 +22,7 @@ enum Commands {
     /// Client commands
     Client {
         /// The base URL of the API
-        #[arg(long, default_value = "http://localhost:37240")]
+        #[arg(long, default_value = rust_cli_app::BASE_URL)]
         url: String,
         #[command(subcommand)]
         command: ClientCommands,
