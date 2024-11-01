@@ -523,7 +523,6 @@ mod utils {
 
         diesel::insert_into(assets::table)
             .values(&new_asset)
-            .values(&new_asset)
             .get_result(conn)
             .expect("Error saving new asset")
     }
@@ -533,7 +532,7 @@ mod utils {
 mod assets {
     use super::utils::*;
     use super::*;
-    use crate::schema::assets;
+    use crate::schema::assets::table;
     use diesel::QueryDsl;
     use diesel::RunQueryDsl;
 
