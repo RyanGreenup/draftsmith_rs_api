@@ -282,3 +282,74 @@ pub struct NewTask<'a> {
     pub goal_relationship: Option<i32>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::prelude::*;
+    use diesel::result::Error as DieselError;
+
+    fn establish_connection() -> PgConnection {
+        let database_url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set");
+        PgConnection::establish(&database_url)
+            .expect("Error connecting to database")
+    }
+
+    #[test]
+    fn test_note_crud() {
+        let conn = &mut establish_connection();
+        
+        // Clean up any existing test data
+        diesel::delete(notes::table)
+            .execute(conn)
+            .expect("Error deleting existing notes");
+
+        // Test Create
+        let new_note = NewNote {
+            title: "Test Note",
+            content: "This is a test note",
+            created_at: Some(chrono::Utc::now().naive_utc()),
+            modified_at: Some(chrono::Utc::now().naive_utc()),
+        };
+
+        let created_note = diesel::insert_into(notes::table)
+            .values(&new_note)
+            .get_result::<Note>(conn)
+            .expect("Error saving new note");
+
+        assert_eq!(created_note.title, "Test Note");
+        assert_eq!(created_note.content, "This is a test note");
+
+        // Test Read
+        let read_note = notes::table
+            .find(created_note.id)
+            .first::<Note>(conn)
+            .expect("Error loading note");
+
+        assert_eq!(read_note.id, created_note.id);
+        assert_eq!(read_note.title, created_note.title);
+
+        // Test Update
+        let updated_note = diesel::update(notes::table.find(created_note.id))
+            .set(notes::content.eq("Updated content"))
+            .get_result::<Note>(conn)
+            .expect("Error updating note");
+
+        assert_eq!(updated_note.content, "Updated content");
+
+        // Test Delete
+        let deleted_count = diesel::delete(notes::table.find(created_note.id))
+            .execute(conn)
+            .expect("Error deleting note");
+
+        assert_eq!(deleted_count, 1);
+
+        // Verify deletion
+        let find_result = notes::table
+            .find(created_note.id)
+            .first::<Note>(conn);
+
+        assert!(matches!(find_result, Err(DieselError::NotFound)));
+    }
+}
+
