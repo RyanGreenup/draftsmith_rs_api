@@ -288,14 +288,22 @@ mod tags {
     use super::utils::*;
     use crate::schema::tags;
     use diesel::prelude::*;
+    use diesel::RunQueryDsl;
+    use diesel::QueryDsl;
+    use diesel::prelude::*;
 
     #[test]
     fn test_create_tag() {
         let mut conn = establish_test_connection();
-
         let tag = setup_test_tag(&mut conn);
+        
+        let found_tag = tags::table
+            .find(tag.id)
+            .select(Tag::as_select())
+            .first(&mut conn)
+            .expect("Error loading tag");
 
-        assert_eq!(tag.name, "Test Tag");
+        assert_eq!(found_tag.name, "Test Tag");
     }
 
     #[test]
