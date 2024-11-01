@@ -309,6 +309,9 @@ mod tests {
         diesel::delete(note_tags::table)
             .execute(conn)
             .expect("Error deleting note tags");
+        diesel::delete(note_attributes::table)
+            .execute(conn)
+            .expect("Error deleting note attributes");
         diesel::delete(notes::table)
             .execute(conn)
             .expect("Error deleting notes");
