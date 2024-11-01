@@ -104,7 +104,7 @@ async fn update_note(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
     Json(payload): Json<UpdateNoteRequest>,
-) -> Result<Json<NoteResponse>, StatusCode> {
+) -> Result<(StatusCode, Json<NoteResponse>), StatusCode> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = state
@@ -121,7 +121,7 @@ async fn update_note(
         .get_result::<Note>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(updated_note.into()))
+    Ok((StatusCode::OK, Json(updated_note.into())))
 }
 
 async fn create_note(
