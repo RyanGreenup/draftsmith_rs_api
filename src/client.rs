@@ -1,5 +1,5 @@
 use reqwest::Error;
-use crate::lib;
+use crate::BASE_URL;
 use crate::api::NoteResponse;
 
 pub async fn fetch_notes(base_url: &str) -> Result<Vec<NoteResponse>, Error> {
@@ -15,7 +15,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_notes() {
-        let base_url = lib::BASE_URL;
+        let base_url = BASE_URL;
         let result = fetch_notes(base_url).await;
         assert!(result.is_ok());
         let notes = result.unwrap();
