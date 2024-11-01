@@ -152,12 +152,22 @@ async fn main() {
                     }
                     FlatCommands::Delete => {
                         if let Some(note_id) = id {
-                            rust_cli_app::client::delete_note(&url, note_id)
-                                .await
-                                .unwrap();
-                            println!("Note {} deleted successfully", note_id);
+                            match rust_cli_app::client::delete_note(&url, note_id).await {
+                                Ok(_) => {
+                                    println!("Note {} deleted successfully", note_id);
+                                }
+                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                    eprintln!("Error: Note with id {} not found", id);
+                                    std::process::exit(1);
+                                }
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
                         } else {
                             eprintln!("Error: --id is required for delete command");
+                            std::process::exit(1);
                         }
                     }
                 },

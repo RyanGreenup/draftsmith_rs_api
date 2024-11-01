@@ -120,7 +120,13 @@ pub async fn update_note(
 pub async fn delete_note(base_url: &str, id: i32) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
-    client.delete(url).send().await?.error_for_status()?;
+    let response = client.delete(url).send().await?;
+    
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(id));
+    }
+    
+    response.error_for_status()?;
     Ok(())
 }
 
