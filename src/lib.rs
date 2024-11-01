@@ -762,6 +762,77 @@ mod tests {
     }
 
     #[test]
+    fn test_note_modifications_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note to work with
+            let new_note = NewNote {
+                title: "Test Note for Modifications",
+                content: "This is a test note for modifications testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            // Test Create
+            let new_modification = NewNoteModification {
+                note_id: Some(created_note.id),
+                previous_content: "Original content",
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_modification = diesel::insert_into(note_modifications::table)
+                .values(&new_modification)
+                .get_result::<NoteModification>(conn)
+                .expect("Error saving new note modification");
+
+            dbg!(format!("Created Note Modification #: {:?}", created_modification.id));
+            assert_eq!(created_modification.note_id, Some(created_note.id));
+            assert_eq!(created_modification.previous_content, "Original content");
+
+            // Test Read
+            let read_modification = note_modifications::table
+                .find(created_modification.id)
+                .first::<NoteModification>(conn)
+                .expect("Error loading note modification");
+
+            assert_eq!(read_modification.id, created_modification.id);
+            assert_eq!(read_modification.note_id, created_modification.note_id);
+            assert_eq!(read_modification.previous_content, created_modification.previous_content);
+
+            // Test Update
+            let updated_modification = diesel::update(note_modifications::table.find(created_modification.id))
+                .set(note_modifications::previous_content.eq("Updated content"))
+                .get_result::<NoteModification>(conn)
+                .expect("Error updating note modification");
+
+            assert_eq!(updated_modification.previous_content, "Updated content");
+
+            dbg!(format!("Deleting Note Modification #: {:?}", created_modification.id));
+            // Test Delete
+            let deleted_count = diesel::delete(note_modifications::table.find(created_modification.id))
+                .execute(conn)
+                .expect("Error deleting note modification");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = note_modifications::table
+                .find(created_modification.id)
+                .first::<NoteModification>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
