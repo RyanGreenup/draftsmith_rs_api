@@ -16,7 +16,7 @@ enum Commands {
     /// Start the API server
     Serve {
         /// The address to bind to
-        #[arg(short, long, default_value = "127.0.0.1:3000")]
+        #[arg(short, long, default_value = "127.0.0.1:37240")]
         addr: SocketAddr,
     },
 }
@@ -29,10 +29,10 @@ async fn main() {
     match cli.command {
         Commands::Serve { addr } => {
             println!("Starting server on {}", addr);
-            
+
             // Set up database connection pool
-            let database_url = std::env::var("DATABASE_URL")
-                .expect("DATABASE_URL must be set in .env file");
+            let database_url =
+                std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
             let manager = ConnectionManager::<PgConnection>::new(database_url);
             let pool = r2d2::Pool::builder()
                 .build(manager)
@@ -43,9 +43,7 @@ async fn main() {
 
             // Start server
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            axum::serve(listener, app)
-                .await
-                .unwrap();
+            axum::serve(listener, app).await.unwrap();
         }
     }
 }

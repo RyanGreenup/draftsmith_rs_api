@@ -60,9 +60,7 @@ pub fn create_router(pool: Pool) -> Router {
 }
 
 // Handler functions
-async fn list_notes(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<NoteResponse>>, StatusCode> {
+async fn list_notes(State(state): State<AppState>) -> Result<Json<Vec<NoteResponse>>, StatusCode> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = state
