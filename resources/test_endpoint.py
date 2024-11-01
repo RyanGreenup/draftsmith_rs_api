@@ -81,14 +81,14 @@ class NotesEndpoint(Endpoint):
         self.add_method(EndpointMethod(
             method="get",
             description="List all notes",
-            output_schema={"type": "array", "items": Note.schema()}
+            output_schema={"type": "array", "items": Note.model_json_schema()}
         ))
 
         # POST /notes
         self.add_method(EndpointMethod(
             method="post",
             description="Create a new note",
-            input_schema=NoteCreate.schema(),
+            input_schema=NoteCreate.model_json_schema(),
             example_input={
                 "title": "Test Note",
                 "content": "This is a test note"
@@ -107,7 +107,7 @@ class NotesEndpoint(Endpoint):
             method="put",
             description="Update a specific note",
             path_params={"id": "integer"},
-            input_schema=NoteCreate.schema(),
+            input_schema=NoteCreate.model_json_schema(),
             example_input={
                 "title": "Updated Test Note",
                 "content": "This note has been updated"
