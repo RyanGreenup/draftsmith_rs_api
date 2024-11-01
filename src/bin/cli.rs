@@ -76,6 +76,8 @@ enum FlatCommands {
         #[arg(long)]
         content: String,
     },
+    /// Delete a note
+    Delete,
 }
 
 #[tokio::main]
@@ -137,6 +139,16 @@ async fn main() {
                             println!("{}", serde_json::to_string_pretty(&note).unwrap());
                         } else {
                             eprintln!("Error: --id is required for update command");
+                        }
+                    }
+                    FlatCommands::Delete => {
+                        if let Some(note_id) = id {
+                            rust_cli_app::client::delete_note(&url, note_id)
+                                .await
+                                .unwrap();
+                            println!("Note {} deleted successfully", note_id);
+                        } else {
+                            eprintln!("Error: --id is required for delete command");
                         }
                     }
                 },
