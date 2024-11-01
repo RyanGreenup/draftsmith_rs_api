@@ -311,6 +311,91 @@ async fn detach_child_note(
     Ok(StatusCode::NO_CONTENT)
 }
 
+async fn get_note_tree(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+    use crate::schema::note_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get all notes
+    let all_notes: Vec<Note> = notes
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get all hierarchies
+    let hierarchies: Vec<NoteHierarchy> = note_hierarchy
+        .load::<NoteHierarchy>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Create a map of parent_id to children
+    let mut parent_to_children: HashMap<Option<i32>, Vec<(i32, Option<String>)>> = HashMap::new();
+    
+    // Track which notes are children
+    let mut child_notes: HashSet<i32> = HashSet::new();
+
+    // Build the parent-to-children mapping
+    for hierarchy in hierarchies {
+        if let Some(child_id) = hierarchy.child_note_id {
+            parent_to_children
+                .entry(hierarchy.parent_note_id)
+                .or_default()
+                .push((child_id, hierarchy.hierarchy_type));
+            child_notes.insert(child_id);
+        }
+    }
+
+    // Function to recursively build the tree
+    fn build_tree(
+        note_id: i32,
+        notes_map: &HashMap<i32, &Note>,
+        parent_to_children: &HashMap<Option<i32>, Vec<(i32, Option<String>)>>,
+    ) -> NoteTreeNode {
+        let note = notes_map.get(&note_id).unwrap();
+        let children = parent_to_children
+            .get(&Some(note_id))
+            .map(|children| {
+                children
+                    .iter()
+                    .map(|(child_id, hierarchy_type)| {
+                        let mut child = build_tree(*child_id, notes_map, parent_to_children);
+                        child.hierarchy_type = hierarchy_type.clone();
+                        child
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        NoteTreeNode {
+            id: note.id,
+            title: note.title.clone(),
+            created_at: note.created_at,
+            modified_at: note.modified_at,
+            hierarchy_type: None,
+            children,
+        }
+    }
+
+    // Create a map of note id to note for easy lookup
+    let notes_map: HashMap<_, _> = all_notes.iter().map(|note| (note.id, note)).collect();
+
+    // Build trees starting from root notes (notes that aren't children)
+    let mut tree: Vec<NoteTreeNode> = all_notes
+        .iter()
+        .filter(|note| !child_notes.contains(&note.id))
+        .map(|note| build_tree(note.id, &notes_map, &parent_to_children))
+        .collect();
+
+    // Sort the tree by note ID for consistent ordering
+    tree.sort_by_key(|node| node.id);
+
+    Ok(Json(tree))
+}
+
 async fn create_note(
     State(state): State<AppState>,
     Json(payload): Json<CreateNoteRequest>,
