@@ -145,12 +145,24 @@ async fn get_note_tree(
         parent_id: Option<i32>,
     ) -> Result<Vec<NoteTreeNode>, diesel::result::Error> {
         // Get all child notes for this parent
-        let children = note_hierarchy::table
-            .filter(note_hierarchy::parent_note_id.eq(parent_id))
-            .inner_join(
-                notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
-            )
-            .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?;
+        let children = match parent_id {
+            Some(pid) => {
+                note_hierarchy::table
+                    .filter(note_hierarchy::parent_note_id.eq(pid))
+                    .inner_join(
+                        notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
+                    )
+                    .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?
+            },
+            None => {
+                note_hierarchy::table
+                    .filter(note_hierarchy::parent_note_id.is_null())
+                    .inner_join(
+                        notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
+                    )
+                    .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?
+            },
+        };
 
         let mut tree_nodes = Vec::new();
 
