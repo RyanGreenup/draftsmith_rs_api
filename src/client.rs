@@ -27,13 +27,24 @@ pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<
 
 pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<NoteResponse>, Error> {
     let url = if metadata_only {
-        format!("{}/{FLAT_API}?exclude_content=true", base_url)
+        format!("{}/{FLAT_API}?metadata_only=true", base_url)
     } else {
         format!("{}/{FLAT_API}", base_url)
     };
     let response = reqwest::get(url).await?.error_for_status()?;
     let notes = response.json::<Vec<NoteResponse>>().await?;
-    Ok(notes)
+    
+    // If metadata_only is true, ensure content field is empty
+    if metadata_only {
+        Ok(notes.into_iter()
+            .map(|mut note| {
+                note.content = String::new();
+                note
+            })
+            .collect())
+    } else {
+        Ok(notes)
+    }
 }
 
 pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, Error> {
