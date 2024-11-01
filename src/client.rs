@@ -55,6 +55,16 @@ pub async fn update_note(base_url: &str, id: i32, note: UpdateNoteRequest) -> Re
     Ok(updated_note)
 }
 
+pub async fn delete_note(base_url: &str, id: i32) -> Result<(), Error> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/{FLAT_API}/{}", base_url, id);
+    client.delete(url)
+        .send()
+        .await?
+        .error_for_status()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,5 +127,24 @@ mod tests {
         assert_eq!(updated_note.id, created_note.id);
         assert_eq!(updated_note.title, "Updated Test Note");
         assert_eq!(updated_note.content, "This is an updated test note");
+    }
+
+    #[tokio::test]
+    async fn test_delete_note() {
+        let base_url = BASE_URL;
+        // First create a note to delete
+        let create_note_req = CreateNoteRequest {
+            title: "Test Note".to_string(),
+            content: "This is a test note".to_string()
+        };
+        let created_note = create_note(base_url, create_note_req).await.unwrap();
+
+        // Now delete it
+        let result = delete_note(base_url, created_note.id).await;
+        assert!(result.is_ok());
+
+        // Verify the note was deleted by trying to fetch it
+        let fetch_result = fetch_note(base_url, created_note.id).await;
+        assert!(fetch_result.is_err());
     }
 }
