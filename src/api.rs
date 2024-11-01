@@ -1,18 +1,15 @@
 use crate::tables::{NewNote, Note};
 use axum::{
-    body::Body,
     extract::{Path, State},
-    http::{Request, StatusCode},
+    http::StatusCode,
     response::IntoResponse,
-    routing::{get, post},
+    routing::get,
     Json, Router,
 };
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
-use rust_cli_app::{api, schema};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tower::ServiceExt;
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;

@@ -3,10 +3,10 @@ use axum::{
     http::{Request, StatusCode},
     routing::Router,
 };
+use axum_test::TestServer;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
-use serde_json::{json, Value};
-use tower::ServiceExt;
+use serde_json::{json, Value}; 
 
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
@@ -33,23 +33,16 @@ async fn test_notes_crud() {
     let (app, _pool) = setup();
 
     // Test creating a note
+    let app = TestServer::new(app).unwrap();
+    
     let create_response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/notes/flat")
-                .header("Content-Type", "application/json")
-                .body(Body::from(
-                    json!({
-                        "title": "Test Note",
-                        "content": "This is a test note"
-                    })
-                    .to_string(),
-                ))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .post("/notes/flat")
+        .json(&json!({
+            "title": "Test Note",
+            "content": "This is a test note"
+        }))
+        .send()
+        .await;
 
     assert_eq!(create_response.status(), StatusCode::CREATED);
 
