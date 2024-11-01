@@ -1,14 +1,14 @@
-use crate::tables::{NewNote, Note, NoteHierarchy, NewNoteHierarchy};
+use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Json, Router,
 };
-use diesel::result::Error as DieselError;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
+use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -94,7 +94,10 @@ pub fn create_router(pool: Pool) -> Router {
         )
         .route("/notes/tree", get(get_note_tree))
         .route("/notes/hierarchy/attach", post(attach_child_note))
-        .route("/notes/hierarchy/detach/:child_id", delete(detach_child_note))
+        .route(
+            "/notes/hierarchy/detach/:child_id",
+            delete(detach_child_note),
+        )
         .with_state(state)
 }
 
@@ -337,12 +340,16 @@ async fn attach_child_note(
     Json(payload): Json<AttachChildRequest>,
 ) -> Result<StatusCode, StatusCode> {
     use crate::schema::note_hierarchy::dsl::*;
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Prevent circular hierarchy
     if let Some(parent_id) = payload.parent_note_id {
         if is_circular_hierarchy(&mut conn, payload.child_note_id, Some(parent_id))
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)? {
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
             return Err(StatusCode::BAD_REQUEST); // Circular hierarchy detected
         }
     }
@@ -385,7 +392,10 @@ async fn detach_child_note(
     Path(child_id): Path<i32>,
 ) -> Result<StatusCode, StatusCode> {
     use crate::schema::note_hierarchy::dsl::*;
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Delete the hierarchy entry for this child note
     let num_deleted = diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id)))
