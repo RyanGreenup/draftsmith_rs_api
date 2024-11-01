@@ -1,6 +1,9 @@
 use reqwest::Error;
 use serde::Serialize;
 use crate::api::NoteResponse;
+use crate::BASE_URL;
+
+const FLAT_API: &str = "notes/flat";
 
 #[derive(Serialize)]
 pub struct CreateNoteRequest {
@@ -9,14 +12,14 @@ pub struct CreateNoteRequest {
 }
 
 pub async fn fetch_note(base_url: &str, id: i32) -> Result<NoteResponse, Error> {
-    let url = format!("{}/notes/flat/{}", base_url, id);
+    let url = format!("{}/{FLAT_API}/{}", base_url, id);
     let response = reqwest::get(url).await?;
     let note = response.json::<NoteResponse>().await?;
     Ok(note)
 }
 
 pub async fn fetch_notes(base_url: &str) -> Result<Vec<NoteResponse>, Error> {
-    let url = format!("{}/notes/flat", base_url);
+    let url = format!("{}/{FLAT_API}", base_url);
     let response = reqwest::get(url).await?;
     let notes = response.json::<Vec<NoteResponse>>().await?;
     Ok(notes)
@@ -24,7 +27,7 @@ pub async fn fetch_notes(base_url: &str) -> Result<Vec<NoteResponse>, Error> {
 
 pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<NoteResponse, Error> {
     let client = reqwest::Client::new();
-    let url = format!("{}/notes", base_url);
+    let url = format!("{}/{FLAT_API}", base_url);
     let response = client.post(url)
         .json(&note)
         .send()
