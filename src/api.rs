@@ -51,6 +51,16 @@ pub struct NoteMetadataResponse {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
+#[derive(Serialize)]
+pub struct NoteTreeNode {
+    pub id: i32,
+    pub title: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub hierarchy_type: Option<String>,
+    pub children: Vec<NoteTreeNode>,
+}
+
 impl From<Note> for NoteResponse {
     fn from(note: Note) -> Self {
         Self {
@@ -74,7 +84,55 @@ pub fn create_router(pool: Pool) -> Router {
             "/notes/flat/:id",
             get(get_note).put(update_note).delete(delete_note),
         )
+        .route("/notes/tree", get(get_note_tree))
         .with_state(state)
+}
+
+async fn get_note_tree(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
+    use crate::schema::{notes, note_hierarchy};
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Helper function to recursively build the tree
+    fn build_tree(
+        conn: &mut PgConnection,
+        parent_id: Option<i32>,
+    ) -> Result<Vec<NoteTreeNode>, diesel::result::Error> {
+        // Get all child notes for this parent
+        let children = note_hierarchy::table
+            .filter(note_hierarchy::parent_note_id.eq(parent_id))
+            .inner_join(notes::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?;
+
+        let mut tree_nodes = Vec::new();
+
+        for (hierarchy, note) in children {
+            // Recursively get children for this node
+            let child_nodes = build_tree(conn, Some(note.id))?;
+
+            tree_nodes.push(NoteTreeNode {
+                id: note.id,
+                title: note.title,
+                created_at: note.created_at,
+                modified_at: note.modified_at,
+                hierarchy_type: hierarchy.hierarchy_type,
+                children: child_nodes,
+            });
+        }
+
+        Ok(tree_nodes)
+    }
+
+    // Start building the tree from root nodes (those with no parent)
+    let root_nodes = build_tree(&mut conn, None)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(root_nodes))
 }
 
 
