@@ -252,7 +252,7 @@ pub struct NewTaskSchedule {
 }
 
 #[derive(Debug, Queryable, Selectable)]
-#[diesel(table_name = tasks)]
+#[diesel(table_name = crate::schema::tasks)]
 pub struct Task {
     pub id: i32,
     pub note_id: Option<i32>,
