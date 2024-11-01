@@ -1,6 +1,6 @@
 use crate::{api::NoteResponse, FLAT_API};
 use reqwest::Error as ReqwestError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug)]
@@ -36,6 +36,23 @@ pub struct CreateNoteRequest {
 pub struct UpdateNoteRequest {
     pub title: String,
     pub content: String,
+}
+
+#[derive(Serialize)]
+pub struct AttachChildRequest {
+    pub child_note_id: i32,
+    pub parent_note_id: Option<i32>,
+    pub hierarchy_type: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct NoteTreeNode {
+    pub id: i32,
+    pub title: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub hierarchy_type: Option<String>,
+    pub children: Vec<NoteTreeNode>,
 }
 
 pub async fn fetch_note(
@@ -142,6 +159,44 @@ pub async fn delete_note(base_url: &str, id: i32) -> Result<(), NoteError> {
     Ok(())
 }
 
+pub async fn attach_child_note(
+    base_url: &str,
+    payload: AttachChildRequest,
+) -> Result<(), NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/notes/hierarchy/attach", base_url);
+    client
+        .post(url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(NoteError::from)?;
+    Ok(())
+}
+
+pub async fn detach_child_note(
+    base_url: &str,
+    child_note_id: i32,
+) -> Result<(), NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/notes/hierarchy/detach/{}", base_url, child_note_id);
+    client
+        .delete(url)
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(NoteError::from)?;
+    Ok(())
+}
+
+pub async fn fetch_note_tree(base_url: &str) -> Result<Vec<NoteTreeNode>, NoteError> {
+    let url = format!("{}/notes/tree", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let note_tree = response.json::<Vec<NoteTreeNode>>().await?;
+    Ok(note_tree)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +301,110 @@ mod tests {
         // Verify the note was deleted by trying to fetch it
         let fetch_result = fetch_note(base_url, created_note.id, false).await;
         assert!(matches!(fetch_result, Err(NoteError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn test_attach_and_detach_child_note() {
+        let base_url = BASE_URL;
+
+        // Create parent note
+        let parent_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Parent Note".to_string(),
+                content: "This is the parent note".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create child note
+        let child_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Child Note".to_string(),
+                content: "This is the child note".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Attach child note to parent note with a valid hierarchy type
+        let attach_request = AttachChildRequest {
+            child_note_id: child_note.id,
+            parent_note_id: Some(parent_note.id),
+            hierarchy_type: Some("block".to_string()),
+        };
+        let attach_result = attach_child_note(base_url, attach_request).await;
+        assert!(attach_result.is_ok(), "Failed to attach child note");
+
+        // Fetch the note tree and verify the hierarchy
+        let note_tree = fetch_note_tree(base_url).await.unwrap();
+        
+        // Function to find a node in the tree by ID
+        fn find_node(tree: &[NoteTreeNode], id: i32) -> Option<&NoteTreeNode> {
+            for node in tree {
+                if node.id == id {
+                    return Some(node);
+                }
+                if let Some(found) = find_node(&node.children, id) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+
+        // Verify that the child note is now under the parent note
+        let parent_node = find_node(&note_tree, parent_note.id).expect("Parent note not found");
+        let child_node = find_node(&parent_node.children, child_note.id).expect("Child note not attached to parent");
+
+        // Detach the child note
+        let detach_result = detach_child_note(base_url, child_note.id).await;
+        assert!(detach_result.is_ok(), "Failed to detach child note");
+
+        // Fetch the note tree again and verify the child note is detached
+        let updated_note_tree = fetch_note_tree(base_url).await.unwrap();
+        let parent_node = find_node(&updated_note_tree, parent_note.id).expect("Parent note not found");
+        assert!(
+            find_node(&parent_node.children, child_note.id).is_none(),
+            "Child note still attached after detachment"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_attach_child_note_invalid_hierarchy_type() {
+        let base_url = BASE_URL;
+
+        // Create parent and child notes
+        let parent_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Parent Note".to_string(),
+                content: "This is the parent note".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let child_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Child Note".to_string(),
+                content: "This is the child note".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Attempt to attach with an invalid hierarchy type
+        let attach_request = AttachChildRequest {
+            child_note_id: child_note.id,
+            parent_note_id: Some(parent_note.id),
+            hierarchy_type: Some("invalid_type".to_string()),
+        };
+        let attach_result = attach_child_note(base_url, attach_request).await;
+
+        // Expecting an error due to invalid hierarchy type
+        assert!(attach_result.is_err(), "Attachment should fail with invalid hierarchy type");
     }
 }
