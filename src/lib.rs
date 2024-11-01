@@ -465,6 +465,62 @@ mod tests {
     }
 
     #[test]
+    fn test_attributes_crud() {
+        let conn = &mut establish_connection();
+        
+        conn.test_transaction(|conn| {
+            // Test Create
+            let new_attribute = NewAttribute {
+                name: "Test Attribute",
+                description: Some("Test attribute description"),
+            };
+
+            let created_attribute = diesel::insert_into(attributes::table)
+                .values(&new_attribute)
+                .get_result::<Attribute>(conn)
+                .expect("Error saving new attribute");
+
+            dbg!(format!("Created Attribute #: {:?}", created_attribute.id));
+            assert_eq!(created_attribute.name, "Test Attribute");
+            assert_eq!(created_attribute.description, Some("Test attribute description".to_string()));
+
+            // Test Read
+            let read_attribute = attributes::table
+                .find(created_attribute.id)
+                .first::<Attribute>(conn)
+                .expect("Error loading attribute");
+
+            assert_eq!(read_attribute.id, created_attribute.id);
+            assert_eq!(read_attribute.name, created_attribute.name);
+
+            // Test Update
+            let updated_attribute = diesel::update(attributes::table.find(created_attribute.id))
+                .set(attributes::description.eq(Some("Updated description")))
+                .get_result::<Attribute>(conn)
+                .expect("Error updating attribute");
+
+            assert_eq!(updated_attribute.description, Some("Updated description".to_string()));
+
+            dbg!(format!("Deleting Attribute #: {:?}", created_attribute.id));
+            // Test Delete
+            let deleted_count = diesel::delete(attributes::table.find(created_attribute.id))
+                .execute(conn)
+                .expect("Error deleting attribute");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = attributes::table
+                .find(created_attribute.id)
+                .first::<Attribute>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
         
