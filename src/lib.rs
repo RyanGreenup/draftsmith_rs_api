@@ -592,6 +592,88 @@ mod tests {
     }
 
     #[test]
+    fn test_note_attributes_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note and attribute to work with
+            let new_note = NewNote {
+                title: "Test Note for Attributes",
+                content: "This is a test note for attribute testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            let new_attribute = NewAttribute {
+                name: "Test Attribute",
+                description: Some("Test attribute description"),
+            };
+
+            let created_attribute = diesel::insert_into(attributes::table)
+                .values(&new_attribute)
+                .get_result::<Attribute>(conn)
+                .expect("Error saving new attribute");
+
+            // Test Create
+            let new_note_attribute = NewNoteAttribute {
+                note_id: Some(created_note.id),
+                attribute_id: Some(created_attribute.id),
+                value: "Test Value",
+            };
+
+            let created_note_attribute = diesel::insert_into(note_attributes::table)
+                .values(&new_note_attribute)
+                .get_result::<NoteAttribute>(conn)
+                .expect("Error saving new note_attribute");
+
+            dbg!(format!("Created Note Attribute #: {:?}", created_note_attribute.id));
+            assert_eq!(created_note_attribute.note_id, Some(created_note.id));
+            assert_eq!(created_note_attribute.attribute_id, Some(created_attribute.id));
+            assert_eq!(created_note_attribute.value, "Test Value");
+
+            // Test Read
+            let read_note_attribute = note_attributes::table
+                .find(created_note_attribute.id)
+                .first::<NoteAttribute>(conn)
+                .expect("Error loading note_attribute");
+
+            assert_eq!(read_note_attribute.id, created_note_attribute.id);
+            assert_eq!(read_note_attribute.note_id, created_note_attribute.note_id);
+            assert_eq!(read_note_attribute.value, created_note_attribute.value);
+
+            // Test Update
+            let updated_note_attribute = diesel::update(note_attributes::table.find(created_note_attribute.id))
+                .set(note_attributes::value.eq("Updated Value"))
+                .get_result::<NoteAttribute>(conn)
+                .expect("Error updating note_attribute");
+
+            assert_eq!(updated_note_attribute.value, "Updated Value");
+
+            dbg!(format!("Deleting Note Attribute #: {:?}", created_note_attribute.id));
+            // Test Delete
+            let deleted_count = diesel::delete(note_attributes::table.find(created_note_attribute.id))
+                .execute(conn)
+                .expect("Error deleting note_attribute");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = note_attributes::table
+                .find(created_note_attribute.id)
+                .first::<NoteAttribute>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
