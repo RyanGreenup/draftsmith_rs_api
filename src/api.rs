@@ -33,13 +33,13 @@ pub struct UpdateNoteRequest {
     content: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct NoteResponse {
-    id: i32,
-    title: String,
-    content: String,
-    created_at: Option<chrono::NaiveDateTime>,
-    modified_at: Option<chrono::NaiveDateTime>,
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
 impl From<Note> for NoteResponse {
