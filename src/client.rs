@@ -16,13 +16,22 @@ pub struct UpdateNoteRequest {
 
 pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<NoteResponse, Error> {
     let url = if metadata_only {
-        format!("{}/{FLAT_API}/{}?exclude_content=true", base_url, id)
+        format!("{}/{FLAT_API}/{}?metadata_only=true", base_url, id)
     } else {
         format!("{}/{FLAT_API}/{}", base_url, id)
     };
-    let response = reqwest::get(url).await?;
+    let response = reqwest::get(url).await?.error_for_status()?;
     let note = response.json::<NoteResponse>().await?;
-    Ok(note)
+    
+    // If metadata_only is true, ensure content field is empty
+    if metadata_only {
+        Ok(NoteResponse {
+            content: String::new(),
+            ..note
+        })
+    } else {
+        Ok(note)
+    }
 }
 
 pub async fn fetch_notes(base_url: &str, metadata_only: bool) -> Result<Vec<NoteResponse>, Error> {
