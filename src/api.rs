@@ -61,7 +61,7 @@ pub fn create_router(pool: Pool) -> Router {
 
     Router::new()
         .route("/notes/flat", get(list_notes).post(create_note))
-        .route("/notes/flat/:id", get(get_note).put(update_note))
+        .route("/notes/flat/:id", get(get_note).put(update_note).delete(delete_note))
         .with_state(state)
 }
 
@@ -122,6 +122,28 @@ async fn update_note(
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok((StatusCode::OK, Json(updated_note.into())))
+}
+
+async fn delete_note(
+    Path(note_id): Path<i32>,
+    State(state): State<AppState>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let result = diesel::delete(notes.find(note_id))
+        .execute(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    if result > 0 {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(StatusCode::NOT_FOUND)
+    }
 }
 
 async fn create_note(
