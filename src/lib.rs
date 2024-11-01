@@ -283,7 +283,7 @@ pub struct NewTask<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+mod tags {
     use super::*;
     use diesel::pg::PgConnection;
     use diesel::prelude::*;
@@ -293,9 +293,9 @@ mod tests {
     #[test]
     fn test_create_tag() {
         let mut conn = establish_test_connection();
-        
+
         let tag = setup_test_tag(&mut conn);
-        
+
         assert_eq!(tag.name, "Test Tag");
     }
 
@@ -353,13 +353,19 @@ mod tests {
 
         assert!(find_result.is_err());
     }
+}
 
+#[cfg(test)]
+mod utils {
+    use super::*;
+    use diesel::pg::PgConnection;
+    use diesel::prelude::*;
+    use dotenv::dotenv;
+    use std::env;
     fn establish_test_connection() -> PgConnection {
         dotenv().ok();
-        let database_url = env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
-        PgConnection::establish(&database_url)
-            .expect("Error connecting to database")
+        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        PgConnection::establish(&database_url).expect("Error connecting to database")
     }
 
     fn setup_test_note(conn: &mut PgConnection) -> Note {
@@ -378,22 +384,29 @@ mod tests {
     }
 
     fn setup_test_tag(conn: &mut PgConnection) -> Tag {
-        let new_tag = NewTag {
-            name: "Test Tag",
-        };
+        let new_tag = NewTag { name: "Test Tag" };
 
         diesel::insert_into(tags::table)
             .values(&new_tag)
             .get_result(conn)
             .expect("Error saving new tag")
     }
+}
+
+#[cfg(test)]
+mod utils {
+    use super::*;
+    use diesel::pg::PgConnection;
+    use diesel::prelude::*;
+    use dotenv::dotenv;
+    use std::env;
 
     #[test]
     fn test_create_note() {
         let mut conn = establish_test_connection();
-        
+
         let note = setup_test_note(&mut conn);
-        
+
         assert_eq!(note.title, "Test Note");
         assert_eq!(note.content, "This is a test note content");
         assert!(note.created_at.is_some());
