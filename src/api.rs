@@ -7,11 +7,11 @@ use axum::{
     Json, Router,
 };
 use diesel::prelude::*;
-use std::collections::{HashMap, HashSet};
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 // Connection pool type
@@ -101,7 +101,6 @@ pub fn create_router(pool: Pool) -> Router {
         )
         .with_state(state)
 }
-
 
 #[derive(Deserialize)]
 pub struct ListNotesParams {
@@ -314,8 +313,8 @@ async fn detach_child_note(
 async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
-    use crate::schema::notes::dsl::*;
     use crate::schema::note_hierarchy::dsl::*;
+    use crate::schema::notes::dsl::*;
 
     let mut conn = state
         .pool
@@ -334,7 +333,7 @@ async fn get_note_tree(
 
     // Create a map of parent_id to children
     let mut parent_to_children: HashMap<Option<i32>, Vec<(i32, Option<String>)>> = HashMap::new();
-    
+
     // Track which notes are children
     let mut child_notes: HashSet<i32> = HashSet::new();
 
