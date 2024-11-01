@@ -42,8 +42,8 @@ async fn main() {
             let app = api::create_router(pool);
 
             // Start server
-            axum::serve::bind(&addr)
-                .serve(app.into_make_service())
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            axum::serve(listener, app)
                 .await
                 .unwrap();
         }
