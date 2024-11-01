@@ -164,7 +164,9 @@ async fn get_note_tree(
     // there might be orphaned notes. Add them as root nodes.
     if root_nodes.is_empty() {
         let orphaned_notes = notes::table
-            .left_outer_join(note_hierarchy::table)
+            .left_outer_join(note_hierarchy::table.on(
+                notes::id.eq(note_hierarchy::child_note_id.assume_not_null())
+            ))
             .filter(note_hierarchy::id.is_null())
             .select(notes::all_columns)
             .load::<crate::tables::Note>(&mut conn)
