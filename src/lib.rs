@@ -398,7 +398,10 @@ mod utils {
 mod tests {
     use super::*;
     use super::utils::*;
-    use crate::schema::tags;
+    use crate::schema::notes;
+
+    #[test]
+    fn test_create_note() {
         let mut conn = establish_test_connection();
 
         let note = setup_test_note(&mut conn);
