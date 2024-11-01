@@ -1,11 +1,21 @@
 import requests
-import json
-from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from pydantic import BaseModel, Field
 
-@dataclass
-class EndpointMethod:
+class NoteBase(BaseModel):
+    title: str
+    content: str
+
+class NoteCreate(NoteBase):
+    pass
+
+class Note(NoteBase):
+    id: int
+    created_at: datetime
+    modified_at: datetime
+
+class EndpointMethod(BaseModel):
     """Represents a single HTTP method for an endpoint"""
     method: str
     description: str
@@ -15,7 +25,7 @@ class EndpointMethod:
     example_output: Optional[Dict[str, Any]] = None
     path_params: Optional[Dict[str, str]] = None
 
-class Endpoint:
+class Endpoint(BaseModel):
     """Base class for API endpoints"""
     def __init__(self, base_url: str, path: str, description: str):
         self.base_url = base_url
@@ -64,33 +74,14 @@ class NotesEndpoint(Endpoint):
         self.add_method(EndpointMethod(
             method="get",
             description="List all notes",
-            output_schema={
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "integer"},
-                        "title": {"type": "string"},
-                        "content": {"type": "string"},
-                        "created_at": {"type": "string", "format": "date-time"},
-                        "modified_at": {"type": "string", "format": "date-time"}
-                    }
-                }
-            }
+            output_schema=List[Note].schema()
         ))
 
         # POST /notes
         self.add_method(EndpointMethod(
             method="post",
             description="Create a new note",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "content": {"type": "string"}
-                },
-                "required": ["title", "content"]
-            },
+            input_schema=NoteCreate.schema(),
             example_input={
                 "title": "Test Note",
                 "content": "This is a test note"
@@ -109,13 +100,7 @@ class NotesEndpoint(Endpoint):
             method="put",
             description="Update a specific note",
             path_params={"id": "integer"},
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "content": {"type": "string"}
-                }
-            },
+            input_schema=NoteCreate.schema(),
             example_input={
                 "title": "Updated Test Note",
                 "content": "This note has been updated"
