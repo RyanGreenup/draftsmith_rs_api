@@ -511,10 +511,10 @@ mod tasks {
 
         fn test_create() {
             let conn = &mut establish_test_connection();
-            
+
             let new_task = NewTask {
                 note_id: Some(1),
-                status: "NEW",
+                status: "todo",
                 effort_estimate: Some(BigDecimal::from_str("2.5").unwrap()),
                 actual_effort: None,
                 deadline: Some(NaiveDateTime::parse_from_str("2024-12-31 23:59:59", "%Y-%m-%d %H:%M:%S").unwrap()),
@@ -530,23 +530,23 @@ mod tasks {
                 .get_result::<Task>(conn)
                 .expect("Error saving new task");
 
-            assert_eq!(result.status, "NEW");
+            assert_eq!(result.status, "todo");
             assert_eq!(result.priority, Some(1));
         }
 
         fn test_read() {
             let conn = &mut establish_test_connection();
-            
+
             let task = tasks::table
                 .first::<Task>(conn)
                 .expect("Error loading task");
 
-            assert_eq!(task.status, "NEW");
+            assert_eq!(task.status, "todo");
         }
 
         fn test_update() {
             let conn = &mut establish_test_connection();
-            
+
             let updated_rows = diesel::update(tasks::table.filter(tasks::id.eq(1)))
                 .set(tasks::status.eq("IN_PROGRESS"))
                 .execute(conn)
@@ -564,7 +564,7 @@ mod tasks {
 
         fn test_delete() {
             let conn = &mut establish_test_connection();
-            
+
             let deleted_rows = diesel::delete(tasks::table.filter(tasks::id.eq(1)))
                 .execute(conn)
                 .expect("Error deleting task");
