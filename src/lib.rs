@@ -999,6 +999,86 @@ mod tests {
     }
 
     #[test]
+    fn test_tag_hierarchy_types_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create two tags to work with
+            let new_parent_tag = NewTag {
+                name: "Parent Tag",
+            };
+
+            let created_parent = diesel::insert_into(tags::table)
+                .values(&new_parent_tag)
+                .get_result::<Tag>(conn)
+                .expect("Error saving parent tag");
+
+            let new_child_tag = NewTag {
+                name: "Child Tag",
+            };
+
+            let created_child = diesel::insert_into(tags::table)
+                .values(&new_child_tag)
+                .get_result::<Tag>(conn)
+                .expect("Error saving child tag");
+
+            // Test Create
+            let new_hierarchy = NewTagHierarchy {
+                parent_tag_id: Some(created_parent.id),
+                child_tag_id: Some(created_child.id),
+            };
+
+            let created_hierarchy = diesel::insert_into(tag_hierarchy::table)
+                .values(&new_hierarchy)
+                .get_result::<TagHierarchy>(conn)
+                .expect("Error saving new tag hierarchy");
+
+            dbg!(format!("Created Tag Hierarchy #: {:?}", created_hierarchy.id));
+            assert_eq!(created_hierarchy.parent_tag_id, Some(created_parent.id));
+            assert_eq!(created_hierarchy.child_tag_id, Some(created_child.id));
+
+            // Test Read
+            let read_hierarchy = tag_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<TagHierarchy>(conn)
+                .expect("Error loading tag hierarchy");
+
+            assert_eq!(read_hierarchy.id, created_hierarchy.id);
+            assert_eq!(read_hierarchy.parent_tag_id, created_hierarchy.parent_tag_id);
+            assert_eq!(read_hierarchy.child_tag_id, created_hierarchy.child_tag_id);
+
+            // Test Update - Switch parent and child
+            let updated_hierarchy = diesel::update(tag_hierarchy::table.find(created_hierarchy.id))
+                .set((
+                    tag_hierarchy::parent_tag_id.eq(Some(created_child.id)),
+                    tag_hierarchy::child_tag_id.eq(Some(created_parent.id))
+                ))
+                .get_result::<TagHierarchy>(conn)
+                .expect("Error updating tag hierarchy");
+
+            assert_eq!(updated_hierarchy.parent_tag_id, Some(created_child.id));
+            assert_eq!(updated_hierarchy.child_tag_id, Some(created_parent.id));
+
+            dbg!(format!("Deleting Tag Hierarchy #: {:?}", created_hierarchy.id));
+            // Test Delete
+            let deleted_count = diesel::delete(tag_hierarchy::table.find(created_hierarchy.id))
+                .execute(conn)
+                .expect("Error deleting tag hierarchy");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = tag_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<TagHierarchy>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
