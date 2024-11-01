@@ -833,6 +833,81 @@ mod tests {
     }
 
     #[test]
+    fn test_note_type_mappings_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note and note type to work with
+            let new_note = NewNote {
+                title: "Test Note for Type Mapping",
+                content: "This is a test note for type mapping testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            let new_note_type = NewNoteType {
+                name: "Test Note Type",
+                description: Some("Test note type description"),
+            };
+
+            let created_note_type = diesel::insert_into(note_types::table)
+                .values(&new_note_type)
+                .get_result::<NoteType>(conn)
+                .expect("Error saving new note type");
+
+            // Test Create
+            let new_type_mapping = NewNoteTypeMapping {
+                note_id: created_note.id,
+                type_id: created_note_type.id,
+            };
+
+            let created_mapping = diesel::insert_into(note_type_mappings::table)
+                .values(&new_type_mapping)
+                .get_result::<NoteTypeMapping>(conn)
+                .expect("Error saving new note type mapping");
+
+            assert_eq!(created_mapping.note_id, created_note.id);
+            assert_eq!(created_mapping.type_id, created_note_type.id);
+
+            // Test Read
+            let read_mapping = note_type_mappings::table
+                .filter(note_type_mappings::note_id.eq(created_note.id))
+                .filter(note_type_mappings::type_id.eq(created_note_type.id))
+                .first::<NoteTypeMapping>(conn)
+                .expect("Error loading note type mapping");
+
+            assert_eq!(read_mapping.note_id, created_mapping.note_id);
+            assert_eq!(read_mapping.type_id, created_mapping.type_id);
+
+            // Test Delete
+            let deleted_count = diesel::delete(
+                note_type_mappings::table
+                    .filter(note_type_mappings::note_id.eq(created_note.id))
+                    .filter(note_type_mappings::type_id.eq(created_note_type.id))
+            )
+                .execute(conn)
+                .expect("Error deleting note type mapping");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = note_type_mappings::table
+                .filter(note_type_mappings::note_id.eq(created_note.id))
+                .filter(note_type_mappings::type_id.eq(created_note_type.id))
+                .first::<NoteTypeMapping>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
 
