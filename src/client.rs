@@ -1,4 +1,4 @@
-use crate::{api::NoteResponse, FLAT_API};
+use crate::{api::NoteResponse, FLAT_API, BASE_URL};
 use reqwest::Error;
 use serde::Serialize;
 
