@@ -262,7 +262,7 @@ async fn attach_child_note(
         .optional()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if let Some(_) = existing_entry {
+    if existing_entry.is_some() {
         // Update the existing hierarchy entry
         diesel::update(note_hierarchy.filter(child_note_id.eq(payload.child_note_id)))
             .set((
