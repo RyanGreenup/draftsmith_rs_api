@@ -19,6 +19,38 @@ enum Commands {
         #[arg(short, long, default_value = "127.0.0.1:37240")]
         addr: SocketAddr,
     },
+    /// Client commands
+    Client {
+        /// The base URL of the API
+        #[arg(long, default_value = "http://localhost:37240")]
+        url: String,
+        #[command(subcommand)]
+        command: ClientCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ClientCommands {
+    /// Notes related commands
+    Notes {
+        #[command(subcommand)]
+        command: NotesCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum NotesCommands {
+    /// Flat API commands
+    Flat {
+        #[command(subcommand)]
+        command: FlatCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum FlatCommands {
+    /// Get all notes
+    Get,
 }
 
 #[tokio::main]
@@ -45,6 +77,16 @@ async fn main() {
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             axum::serve(listener, app).await.unwrap();
         }
+        Commands::Client { url, command } => match command {
+            ClientCommands::Notes { command } => match command {
+                NotesCommands::Flat { command } => match command {
+                    FlatCommands::Get => {
+                        let notes = rust_cli_app::client::fetch_notes(&url).await.unwrap();
+                        println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                    }
+                },
+            },
+        },
     }
 }
 
