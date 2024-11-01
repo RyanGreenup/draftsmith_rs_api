@@ -124,10 +124,16 @@ async fn update_note(
     Ok((StatusCode::OK, Json(updated_note.into())))
 }
 
+#[derive(Serialize)]
+struct DeleteResponse {
+    message: String,
+    deleted_id: i32,
+}
+
 async fn delete_note(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<impl IntoResponse, StatusCode> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = state
@@ -140,7 +146,11 @@ async fn delete_note(
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     if result > 0 {
-        Ok(StatusCode::NO_CONTENT)
+        let response = DeleteResponse {
+            message: format!("Note {} successfully deleted", note_id),
+            deleted_id: note_id,
+        };
+        Ok((StatusCode::OK, Json(response)))
     } else {
         Err(StatusCode::NOT_FOUND)
     }
