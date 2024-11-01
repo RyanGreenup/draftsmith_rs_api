@@ -268,7 +268,7 @@ pub struct Task {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = tasks)]
+#[diesel(table_name = crate::schema::tasks)]
 pub struct NewTask<'a> {
     pub note_id: Option<i32>,
     pub status: &'a str,
