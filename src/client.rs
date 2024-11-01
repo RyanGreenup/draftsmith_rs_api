@@ -111,8 +111,13 @@ pub async fn update_note(
         .put(url)
         .json(&note)
         .send()
-        .await?
-        .error_for_status()?;
+        .await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(id));
+    }
+
+    let response = response.error_for_status()?;
     let updated_note = response.json::<NoteResponse>().await?;
     Ok(updated_note)
 }

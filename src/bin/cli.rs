@@ -138,16 +138,27 @@ async fn main() {
                     }
                     FlatCommands::Update { title, content } => {
                         if let Some(note_id) = id {
-                            let note = rust_cli_app::client::update_note(
+                            match rust_cli_app::client::update_note(
                                 &url,
                                 note_id,
                                 rust_cli_app::client::UpdateNoteRequest { title, content },
                             )
-                            .await
-                            .unwrap();
-                            println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                            .await {
+                                Ok(note) => {
+                                    println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                                }
+                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                    eprintln!("Error: Note with id {} not found", id);
+                                    std::process::exit(1);
+                                }
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
                         } else {
                             eprintln!("Error: --id is required for update command");
+                            std::process::exit(1);
                         }
                     }
                     FlatCommands::Delete => {
