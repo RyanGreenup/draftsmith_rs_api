@@ -3,7 +3,7 @@ use crate::BASE_URL;
 use crate::api::NoteResponse;
 
 pub async fn fetch_note(base_url: &str, id: i32) -> Result<NoteResponse, Error> {
-    let url = format!("{}/notes/{}", base_url, id);
+    let url = format!("{}/notes/flat/{}", base_url, id);
     let response = reqwest::get(url).await?;
     let note = response.json::<NoteResponse>().await?;
     Ok(note)
@@ -35,7 +35,7 @@ mod tests {
         // First get all notes to find a valid ID
         let notes = fetch_notes(base_url).await.unwrap();
         let first_note_id = notes[0].id;
-        
+
         let result = fetch_note(base_url, first_note_id).await;
         assert!(result.is_ok());
         let note = result.unwrap();
