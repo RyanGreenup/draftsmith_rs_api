@@ -298,55 +298,59 @@ mod tests {
     #[test]
     fn test_note_crud() {
         let conn = &mut establish_connection();
+        
+        conn.test_transaction(|conn| {
+            // Test Create
+            let new_note = NewNote {
+                title: "Test Note",
+                content: "This is a test note",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
 
-        // Test Create
-        let new_note = NewNote {
-            title: "Test Note",
-            content: "This is a test note",
-            created_at: Some(chrono::Utc::now().naive_utc()),
-            modified_at: Some(chrono::Utc::now().naive_utc()),
-        };
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
 
-        let created_note = diesel::insert_into(notes::table)
-            .values(&new_note)
-            .get_result::<Note>(conn)
-            .expect("Error saving new note");
+            dbg!(format!("Created Note #: {:?}", created_note.id));
+            assert_eq!(created_note.title, "Test Note");
+            assert_eq!(created_note.content, "This is a test note");
 
-        dbg!(format!("Created Note #: {:?}", created_note.id));
-        assert_eq!(created_note.title, "Test Note");
-        assert_eq!(created_note.content, "This is a test note");
+            // Test Read
+            let read_note = notes::table
+                .find(created_note.id)
+                .first::<Note>(conn)
+                .expect("Error loading note");
 
-        // Test Read
-        let read_note = notes::table
-            .find(created_note.id)
-            .first::<Note>(conn)
-            .expect("Error loading note");
+            assert_eq!(read_note.id, created_note.id);
+            assert_eq!(read_note.title, created_note.title);
 
-        assert_eq!(read_note.id, created_note.id);
-        assert_eq!(read_note.title, created_note.title);
+            // Test Update
+            let updated_note = diesel::update(notes::table.find(created_note.id))
+                .set(notes::content.eq("Updated content"))
+                .get_result::<Note>(conn)
+                .expect("Error updating note");
 
-        // Test Update
-        let updated_note = diesel::update(notes::table.find(created_note.id))
-            .set(notes::content.eq("Updated content"))
-            .get_result::<Note>(conn)
-            .expect("Error updating note");
+            assert_eq!(updated_note.content, "Updated content");
 
-        assert_eq!(updated_note.content, "Updated content");
+            dbg!(format!("Deleting Note #: {:?}", created_note.id));
+            // Test Delete
+            let deleted_count = diesel::delete(notes::table.find(created_note.id))
+                .execute(conn)
+                .expect("Error deleting note");
 
-        dbg!(format!("Deleting Note #: {:?}", created_note.id));
-        // Test Delete
-        let deleted_count = diesel::delete(notes::table.find(created_note.id))
-            .execute(conn)
-            .expect("Error deleting note");
+            assert_eq!(deleted_count, 1);
 
-        assert_eq!(deleted_count, 1);
+            // Verify deletion
+            let find_result = notes::table
+                .find(created_note.id)
+                .first::<Note>(conn);
 
-        // Verify deletion
-        let find_result = notes::table
-            .find(created_note.id)
-            .first::<Note>(conn);
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
 
-        assert!(matches!(find_result, Err(DieselError::NotFound)));
+            Ok::<(), diesel::result::Error>(())
+        });
     }
 
     #[test]
