@@ -285,10 +285,9 @@ pub struct NewTask<'a> {
 #[cfg(test)]
 mod tags {
     use super::*;
-    use diesel::pg::PgConnection;
+    use super::utils::*;
+    use crate::schema::tags;
     use diesel::prelude::*;
-    use dotenv::dotenv;
-    use std::env;
 
     #[test]
     fn test_create_tag() {
@@ -362,13 +361,10 @@ mod utils {
     use diesel::prelude::*;
     use dotenv::dotenv;
     use std::env;
-    fn establish_test_connection() -> PgConnection {
-        dotenv().ok();
-        let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        PgConnection::establish(&database_url).expect("Error connecting to database")
-    }
 
-    fn setup_test_note(conn: &mut PgConnection) -> Note {
+    pub fn establish_test_connection() -> PgConnection {
+    use super::*;
+    pub fn setup_test_note(conn: &mut PgConnection) -> Note {
         // Create a test note
         let new_note = NewNote {
             title: "Test Note",
@@ -383,7 +379,7 @@ mod utils {
             .expect("Error saving new note")
     }
 
-    fn setup_test_tag(conn: &mut PgConnection) -> Tag {
+    pub fn setup_test_tag(conn: &mut PgConnection) -> Tag {
         let new_tag = NewTag { name: "Test Tag" };
 
         diesel::insert_into(tags::table)
@@ -394,15 +390,10 @@ mod utils {
 }
 
 #[cfg(test)]
-mod utils {
+mod tests {
     use super::*;
-    use diesel::pg::PgConnection;
-    use diesel::prelude::*;
-    use dotenv::dotenv;
-    use std::env;
-
-    #[test]
-    fn test_create_note() {
+    use super::utils::*;
+    use crate::schema::tags;
         let mut conn = establish_test_connection();
 
         let note = setup_test_note(&mut conn);
