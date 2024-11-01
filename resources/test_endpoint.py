@@ -13,6 +13,7 @@ class EndpointMethod:
     output_schema: Optional[Dict[str, Any]] = None
     example_input: Optional[Dict[str, Any]] = None
     example_output: Optional[Dict[str, Any]] = None
+    path_params: Optional[Dict[str, str]] = None
 
 class Endpoint:
     """Base class for API endpoints"""
