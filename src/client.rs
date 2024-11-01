@@ -142,6 +142,15 @@ mod tests {
     async fn test_fetch_notes_metadata_only() {
         let base_url = BASE_URL;
         let result = fetch_notes(base_url, true).await;
+        if let Err(ref e) = result {
+            eprintln!("Error fetching notes: {}", e);
+            if let Some(status) = e.status() {
+                eprintln!("Status code: {}", status);
+            }
+            if let Some(url) = e.url() {
+                eprintln!("URL: {}", url);
+            }
+        }
         assert!(result.is_ok());
         let notes = result.unwrap();
         assert!(!notes.is_empty());
