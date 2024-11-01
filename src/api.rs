@@ -1,6 +1,6 @@
 use crate::tables::{NewNote, Note};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -77,9 +77,6 @@ pub fn create_router(pool: Pool) -> Router {
         .with_state(state)
 }
 
-// Handler functions
-use axum::extract::Query;
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct ListNotesParams {
