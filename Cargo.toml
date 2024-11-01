@@ -13,9 +13,10 @@ path = "src/bin/cli.rs"
 
 [dependencies]
 chrono = { version = "0.4.38", features = ["serde"] }
-diesel = { version = "2.2.4", features = ["chrono", "postgres"] }
+diesel = { version = "2.2.4", features = ["chrono", "postgres", "numeric"] }
 dotenv = "0.15.0"
 tracing-subscriber = "0.3.18"
+bigdecimal = { version = "0.4.2", features = ["serde"] }
 
 [dependencies.clap]
 version = "4.5.20"
