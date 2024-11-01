@@ -33,6 +33,9 @@ enum Commands {
 enum ClientCommands {
     /// Notes related commands
     Notes {
+        /// Optional note ID
+        #[arg(long)]
+        id: Option<i32>,
         #[command(subcommand)]
         command: NotesCommands,
     },
