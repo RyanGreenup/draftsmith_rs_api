@@ -123,7 +123,7 @@ INSERT INTO attributes (name, description) VALUES
 
 -- Table for note types
 CREATE TABLE note_types (
-    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY ON DELETE CASCADE,
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     description TEXT
 );
