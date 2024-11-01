@@ -1,6 +1,30 @@
 use crate::{api::NoteResponse, FLAT_API};
-use reqwest::Error;
+use reqwest::Error as ReqwestError;
 use serde::Serialize;
+use std::fmt;
+
+#[derive(Debug)]
+pub enum NoteError {
+    NotFound(i32),
+    RequestError(ReqwestError),
+}
+
+impl fmt::Display for NoteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NoteError::NotFound(id) => write!(f, "Note with id {} not found", id),
+            NoteError::RequestError(e) => write!(f, "Request error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for NoteError {}
+
+impl From<ReqwestError> for NoteError {
+    fn from(err: ReqwestError) -> Self {
+        NoteError::RequestError(err)
+    }
+}
 
 #[derive(Serialize)]
 pub struct CreateNoteRequest {
@@ -14,13 +38,20 @@ pub struct UpdateNoteRequest {
     pub content: String,
 }
 
-pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<NoteResponse, Error> {
+pub async fn fetch_note(base_url: &str, id: i32, metadata_only: bool) -> Result<NoteResponse, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}/{}?metadata_only=true", base_url, id)
     } else {
         format!("{}/{FLAT_API}/{}", base_url, id)
     };
-    let response = reqwest::get(url).await?.error_for_status()?;
+    
+    let response = reqwest::get(url).await?;
+    
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(id));
+    }
+    
+    let response = response.error_for_status()?;
     let note = response.json::<NoteResponse>().await?;
     
     // If metadata_only is true, ensure content field is empty
@@ -194,6 +225,6 @@ mod tests {
 
         // Verify the note was deleted by trying to fetch it
         let fetch_result = fetch_note(base_url, created_note.id, false).await;
-        assert!(fetch_result.is_err());
+        assert!(matches!(fetch_result, Err(NoteError::NotFound(_))));
     }
 }
