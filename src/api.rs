@@ -7,6 +7,7 @@ use axum::{
     Json, Router,
 };
 use diesel::prelude::*;
+use std::collections::{HashMap, HashSet};
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
@@ -105,109 +106,100 @@ async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
     use crate::schema::{note_hierarchy, notes};
-    use diesel::dsl::count_star;
+    use std::collections::{HashMap, HashSet};
 
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Check if there are any hierarchy entries
-    let hierarchy_count: i64 = note_hierarchy::table
-        .select(count_star())
-        .first(&mut conn)
+    // Fetch all notes
+    let all_notes = notes::table
+        .load::<Note>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    if hierarchy_count == 0 {
-        // If no hierarchy exists, return all notes in a linear fashion
-        let all_notes = notes::table
-            .load::<crate::tables::Note>(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Build a mapping from note IDs to Note instances
+    let mut notes_map: HashMap<i32, Note> = all_notes
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
 
-        let tree_nodes: Vec<NoteTreeNode> = all_notes
-            .into_iter()
-            .map(|note| NoteTreeNode {
-                id: note.id,
-                title: note.title,
-                created_at: note.created_at,
-                modified_at: note.modified_at,
-                hierarchy_type: None,
-                children: Vec::new(),
-            })
-            .collect();
+    // Fetch all hierarchy entries
+    let hierarchies = note_hierarchy::table
+        .load::<NoteHierarchy>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        return Ok(Json(tree_nodes));
+    // Build mappings
+    let mut parent_to_children: HashMap<Option<i32>, Vec<i32>> = HashMap::new();
+    let mut hierarchy_types: HashMap<i32, Option<String>> = HashMap::new();
+
+    for hierarchy in &hierarchies {
+        let child_id = hierarchy.child_note_id.unwrap();
+        let parent_id = hierarchy.parent_note_id;
+        parent_to_children
+            .entry(parent_id)
+            .or_default()
+            .push(child_id);
+        hierarchy_types.insert(child_id, hierarchy.hierarchy_type.clone());
     }
 
-    // Helper function to recursively build the tree
-    fn build_tree(
-        conn: &mut PgConnection,
-        parent_id: Option<i32>,
-    ) -> Result<Vec<NoteTreeNode>, diesel::result::Error> {
-        // Get all child notes for this parent
-        let children = match parent_id {
-            Some(pid) => {
-                note_hierarchy::table
-                    .filter(note_hierarchy::parent_note_id.eq(pid))
-                    .inner_join(
-                        notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
-                    )
-                    .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?
-            },
-            None => {
-                note_hierarchy::table
-                    .filter(note_hierarchy::parent_note_id.is_null())
-                    .inner_join(
-                        notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
-                    )
-                    .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?
-            },
-        };
-
-        let mut tree_nodes = Vec::new();
-
-        for (hierarchy, note) in children {
-            // Recursively get children for this node
-            let child_nodes = build_tree(conn, Some(note.id))?;
-
-            tree_nodes.push(NoteTreeNode {
-                id: note.id,
-                title: note.title,
-                created_at: note.created_at,
-                modified_at: note.modified_at,
-                hierarchy_type: hierarchy.hierarchy_type,
-                children: child_nodes,
-            });
-        }
-
-        Ok(tree_nodes)
-    }
-
-    // Start building the tree from root nodes (those with no parent)
-    let mut root_nodes =
-        build_tree(&mut conn, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // If we got no root nodes but we know hierarchies exist,
-    // there might be orphaned notes. Add them as root nodes.
-    if root_nodes.is_empty() {
-        let orphaned_notes = notes::table
-            .left_outer_join(
-                note_hierarchy::table
-                    .on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())),
+    // Initialize NoteTreeNodes for all notes
+    let mut note_nodes: HashMap<i32, NoteTreeNode> = notes_map
+        .iter()
+        .map(|(&id, note)| {
+            let hierarchy_type = hierarchy_types.get(&id).cloned().flatten();
+            (
+                id,
+                NoteTreeNode {
+                    id,
+                    title: note.title.clone(),
+                    created_at: note.created_at,
+                    modified_at: note.modified_at,
+                    hierarchy_type,
+                    children: Vec::new(),
+                },
             )
-            .filter(note_hierarchy::id.is_null())
-            .select(notes::all_columns)
-            .load::<crate::tables::Note>(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        })
+        .collect();
 
-        root_nodes.extend(orphaned_notes.into_iter().map(|note| NoteTreeNode {
-            id: note.id,
-            title: note.title,
-            created_at: note.created_at,
-            modified_at: note.modified_at,
-            hierarchy_type: None,
-            children: Vec::new(),
-        }));
+    // Build the tree by linking child nodes to their parents
+    for (&parent_id_option, child_ids) in &parent_to_children {
+        if let Some(parent_id) = parent_id_option {
+            if let Some(parent_node) = note_nodes.get_mut(&parent_id) {
+                for &child_id in child_ids {
+                    if let Some(child_node) = note_nodes.get(&child_id) {
+                        parent_node.children.push(child_node.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Identify root nodes (notes without parents)
+    let mut root_ids: HashSet<i32> = notes_map.keys().cloned().collect();
+    for child_ids in parent_to_children.values() {
+        for &child_id in child_ids {
+            root_ids.remove(&child_id);
+        }
+    }
+
+    // Collect root nodes, including those not in the hierarchy
+    let mut root_nodes = Vec::new();
+    for id in root_ids {
+        if let Some(node) = note_nodes.get(&id) {
+            // Add children to root nodes if they have any
+            if let Some(child_ids) = parent_to_children.get(&Some(id)) {
+                let children = child_ids
+                    .iter()
+                    .filter_map(|&cid| note_nodes.get(&cid).cloned())
+                    .collect();
+                let mut root_node = node.clone();
+                root_node.children = children;
+                root_nodes.push(root_node);
+            } else {
+                root_nodes.push(node.clone());
+            }
+        }
     }
 
     Ok(Json(root_nodes))
