@@ -287,20 +287,20 @@ mod tags {
     use super::*;
     use super::utils::*;
     use crate::schema::tags;
+    use crate::schema::tags::dsl::*;
     use diesel::prelude::*;
     use diesel::RunQueryDsl;
     use diesel::QueryDsl;
-    use diesel::prelude::*;
 
     #[test]
     fn test_create_tag() {
         let mut conn = establish_test_connection();
         let tag = setup_test_tag(&mut conn);
         
-        let found_tag = tags::table
+        let found_tag = tags
             .find(tag.id)
             .select(Tag::as_select())
-            .first(&mut conn)
+            .get_result(&mut conn)
             .expect("Error loading tag");
 
         assert_eq!(found_tag.name, "Test Tag");
@@ -311,10 +311,10 @@ mod tags {
         let mut conn = establish_test_connection();
         let created_tag = setup_test_tag(&mut conn);
 
-        let found_tag = tags::table
+        let found_tag = tags
             .find(created_tag.id)
             .select(Tag::as_select())
-            .first(&mut conn)
+            .get_result(&mut conn)
             .expect("Error loading tag");
 
         assert_eq!(found_tag.id, created_tag.id);
@@ -326,17 +326,17 @@ mod tags {
         let mut conn = establish_test_connection();
         let tag = setup_test_tag(&mut conn);
 
-        let updated_rows = diesel::update(tags::table.find(tag.id))
-            .set(tags::name.eq("Updated Test Tag"))
+        let updated_rows = diesel::update(tags.find(tag.id))
+            .set(name.eq("Updated Test Tag"))
             .execute(&mut conn)
             .expect("Error updating tag");
 
         assert_eq!(updated_rows, 1);
 
-        let updated_tag = tags::table
+        let updated_tag = tags
             .find(tag.id)
             .select(Tag::as_select())
-            .first(&mut conn)
+            .get_result(&mut conn)
             .expect("Error loading updated tag");
 
         assert_eq!(updated_tag.name, "Updated Test Tag");
@@ -347,16 +347,16 @@ mod tags {
         let mut conn = establish_test_connection();
         let tag = setup_test_tag(&mut conn);
 
-        let deleted_rows = diesel::delete(tags::table.find(tag.id))
+        let deleted_rows = diesel::delete(tags.find(tag.id))
             .execute(&mut conn)
             .expect("Error deleting tag");
 
         assert_eq!(deleted_rows, 1);
 
-        let find_result = tags::table
+        let find_result = tags
             .find(tag.id)
             .select(Tag::as_select())
-            .first::<Tag>(&mut conn);
+            .get_result::<Tag>(&mut conn);
 
         assert!(find_result.is_err());
     }
