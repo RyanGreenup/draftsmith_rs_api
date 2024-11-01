@@ -526,7 +526,7 @@ mod tasks {
             };
 
             let result = diesel::insert_into(tasks::table)
-                .values(&new_task)
+                .values(new_task)
                 .get_result::<Task>(conn)
                 .expect("Error saving new task");
 
