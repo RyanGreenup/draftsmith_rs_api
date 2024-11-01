@@ -104,7 +104,7 @@ async fn main() {
                     FlatCommands::Create { title, content } => {
                         let note = rust_cli_app::client::create_note(
                             &url,
-                            rust_cli_app::CreateNoteRequest { title, content },
+                            rust_cli_app::client::CreateNoteRequest { title, content },
                         )
                         .await
                         .unwrap();

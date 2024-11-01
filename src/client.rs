@@ -1,7 +1,6 @@
 use reqwest::Error;
 use serde::Serialize;
 use crate::api::NoteResponse;
-use crate::BASE_URL;
 
 const FLAT_API: &str = "notes/flat";
 
