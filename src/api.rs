@@ -106,7 +106,7 @@ async fn get_note_tree(
         // Get all child notes for this parent
         let children = note_hierarchy::table
             .filter(note_hierarchy::parent_note_id.eq(parent_id))
-            .inner_join(notes::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .inner_join(notes::table.on(notes::id.eq(note_hierarchy::child_note_id.assume_not_null())))
             .load::<(crate::tables::NoteHierarchy, crate::tables::Note)>(conn)?;
 
         let mut tree_nodes = Vec::new();
