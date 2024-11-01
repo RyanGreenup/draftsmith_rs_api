@@ -1183,7 +1183,7 @@ mod tests {
 
             let new_task = NewTask {
                 note_id: Some(created_note.id),
-                status: "in_progress",
+                status: "todo",
                 effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
                 actual_effort: None,
                 deadline: Some(chrono::Utc::now().naive_utc()),
