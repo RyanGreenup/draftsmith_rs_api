@@ -703,11 +703,15 @@ mod tests {
                 .get_result::<Note>(conn)
                 .expect("Error saving child note");
 
+            let hierarchy_type_var = "subpage";
+            let hierarchy_type_var2 = "block";
+
+
             // Test Create
             let new_hierarchy = NewNoteHierarchy {
                 parent_note_id: Some(created_parent.id),
                 child_note_id: Some(created_child.id),
-                hierarchy_type: Some("contains"),
+                hierarchy_type: Some(hierarchy_type_var),
             };
 
             let created_hierarchy = diesel::insert_into(note_hierarchy::table)
@@ -718,7 +722,7 @@ mod tests {
             dbg!(format!("Created Note Hierarchy #: {:?}", created_hierarchy.id));
             assert_eq!(created_hierarchy.parent_note_id, Some(created_parent.id));
             assert_eq!(created_hierarchy.child_note_id, Some(created_child.id));
-            assert_eq!(created_hierarchy.hierarchy_type, Some("contains".to_string()));
+            assert_eq!(created_hierarchy.hierarchy_type, Some(hierarchy_type_var.to_string()));
 
             // Test Read
             let read_hierarchy = note_hierarchy::table
@@ -732,11 +736,11 @@ mod tests {
 
             // Test Update
             let updated_hierarchy = diesel::update(note_hierarchy::table.find(created_hierarchy.id))
-                .set(note_hierarchy::hierarchy_type.eq(Some("references")))
+                .set(note_hierarchy::hierarchy_type.eq(Some(hierarchy_type_var2)))
                 .get_result::<NoteHierarchy>(conn)
                 .expect("Error updating note hierarchy");
 
-            assert_eq!(updated_hierarchy.hierarchy_type, Some("references".to_string()));
+            assert_eq!(updated_hierarchy.hierarchy_type, Some(hierarchy_type_var2.to_string()));
 
             dbg!(format!("Deleting Note Hierarchy #: {:?}", created_hierarchy.id));
             // Test Delete
