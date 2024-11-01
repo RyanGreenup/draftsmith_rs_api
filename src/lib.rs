@@ -322,6 +322,12 @@ mod tests {
             .execute(conn)
             .expect("Error deleting notes");
 
+        // Also clean up at the end of the test to ensure a clean state
+        diesel::delete(note_modifications::table)
+            .filter(note_modifications::note_id.eq(created_note.id))
+            .execute(conn)
+            .expect("Error cleaning up note modifications");
+
         // Test Create
         let new_note = NewNote {
             title: "Test Note",
