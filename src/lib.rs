@@ -352,51 +352,55 @@ mod tests {
     #[test]
     fn test_tag_crud() {
         let conn = &mut establish_connection();
+        
+        conn.test_transaction(|conn| {
+            // Test Create
+            let new_tag = NewTag {
+                name: "Test Tag",
+            };
 
-        // Test Create
-        let new_tag = NewTag {
-            name: "Test Tag",
-        };
+            let created_tag = diesel::insert_into(tags::table)
+                .values(&new_tag)
+                .get_result::<Tag>(conn)
+                .expect("Error saving new tag");
 
-        let created_tag = diesel::insert_into(tags::table)
-            .values(&new_tag)
-            .get_result::<Tag>(conn)
-            .expect("Error saving new tag");
+            dbg!(format!("Created Tag #: {:?}", created_tag.id));
+            assert_eq!(created_tag.name, "Test Tag");
 
-        dbg!(format!("Created Tag #: {:?}", created_tag.id));
-        assert_eq!(created_tag.name, "Test Tag");
+            // Test Read
+            let read_tag = tags::table
+                .find(created_tag.id)
+                .first::<Tag>(conn)
+                .expect("Error loading tag");
 
-        // Test Read
-        let read_tag = tags::table
-            .find(created_tag.id)
-            .first::<Tag>(conn)
-            .expect("Error loading tag");
+            assert_eq!(read_tag.id, created_tag.id);
+            assert_eq!(read_tag.name, created_tag.name);
 
-        assert_eq!(read_tag.id, created_tag.id);
-        assert_eq!(read_tag.name, created_tag.name);
+            // Test Update
+            let updated_tag = diesel::update(tags::table.find(created_tag.id))
+                .set(tags::name.eq("Updated Tag"))
+                .get_result::<Tag>(conn)
+                .expect("Error updating tag");
 
-        // Test Update
-        let updated_tag = diesel::update(tags::table.find(created_tag.id))
-            .set(tags::name.eq("Updated Tag"))
-            .get_result::<Tag>(conn)
-            .expect("Error updating tag");
+            assert_eq!(updated_tag.name, "Updated Tag");
 
-        assert_eq!(updated_tag.name, "Updated Tag");
+            dbg!(format!("Deleting Tag #: {:?}", created_tag.id));
+            // Test Delete
+            let deleted_count = diesel::delete(tags::table.find(created_tag.id))
+                .execute(conn)
+                .expect("Error deleting tag");
 
-        dbg!(format!("Deleting Tag #: {:?}", created_tag.id));
-        // Test Delete
-        let deleted_count = diesel::delete(tags::table.find(created_tag.id))
-            .execute(conn)
-            .expect("Error deleting tag");
+            assert_eq!(deleted_count, 1);
 
-        assert_eq!(deleted_count, 1);
+            // Verify deletion
+            let find_result = tags::table
+                .find(created_tag.id)
+                .first::<Tag>(conn);
 
-        // Verify deletion
-        let find_result = tags::table
-            .find(created_tag.id)
-            .first::<Tag>(conn);
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
 
-        assert!(matches!(find_result, Err(DieselError::NotFound)));
+            Ok::<(), diesel::result::Error>(())
+        });
     }
 
     #[test] 
