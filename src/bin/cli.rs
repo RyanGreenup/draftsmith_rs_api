@@ -42,7 +42,7 @@ async fn main() {
             let app = api::create_router(pool);
 
             // Start server
-            axum::Server::bind(&addr)
+            axum::serve::bind(&addr)
                 .serve(app.into_make_service())
                 .await
                 .unwrap();
