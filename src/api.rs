@@ -54,8 +54,8 @@ pub fn create_router(pool: Pool) -> Router {
     };
 
     Router::new()
-        .route("/notes", get(list_notes).post(create_note))
-        .route("/notes/:id", get(get_note))
+        .route("/notes/flat", get(list_notes).post(create_note))
+        .route("/notes/flat/:id", get(get_note))
         .with_state(state)
 }
 
