@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use reqwest::Error;
 use serde::Deserialize;
+use crate::lib;
 
 #[derive(Debug, Deserialize)]
 pub struct NoteResponse {
@@ -24,7 +25,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_notes() {
-        let base_url = "http://localhost:8000";
+        let base_url = lib::BASE_URL;
         let result = fetch_notes(base_url).await;
         assert!(result.is_ok());
         let notes = result.unwrap();
