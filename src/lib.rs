@@ -289,8 +289,9 @@ mod tests {
     use diesel::result::Error as DieselError;
 
     fn establish_connection() -> PgConnection {
+        dotenv::dotenv().ok();
         let database_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set");
+            .expect("DATABASE_URL must be set in .env file");
         PgConnection::establish(&database_url)
             .expect("Error connecting to database")
     }
