@@ -999,6 +999,91 @@ mod tests {
     }
 
     #[test]
+    fn test_tasks_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create a note to work with
+            let new_note = NewNote {
+                title: "Test Note for Task",
+                content: "This is a test note for task testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            // Test Create
+            let new_task = NewTask {
+                note_id: Some(created_note.id),
+                status: "pending",
+                effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
+                actual_effort: None,
+                deadline: Some(chrono::Utc::now().naive_utc()),
+                priority: Some(1),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: Some(0),
+            };
+
+            let created_task = diesel::insert_into(tasks::table)
+                .values(&new_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving new task");
+
+            dbg!(format!("Created Task #: {:?}", created_task.id));
+            assert_eq!(created_task.note_id, Some(created_note.id));
+            assert_eq!(created_task.status, "pending");
+            assert_eq!(created_task.priority, Some(1));
+
+            // Test Read
+            let read_task = tasks::table
+                .find(created_task.id)
+                .first::<Task>(conn)
+                .expect("Error loading task");
+
+            assert_eq!(read_task.id, created_task.id);
+            assert_eq!(read_task.note_id, created_task.note_id);
+            assert_eq!(read_task.status, created_task.status);
+
+            // Test Update
+            let updated_task = diesel::update(tasks::table.find(created_task.id))
+                .set((
+                    tasks::status.eq("completed"),
+                    tasks::priority.eq(Some(2)),
+                    tasks::actual_effort.eq(Some(bigdecimal::BigDecimal::from(3)))
+                ))
+                .get_result::<Task>(conn)
+                .expect("Error updating task");
+
+            assert_eq!(updated_task.status, "completed");
+            assert_eq!(updated_task.priority, Some(2));
+            assert_eq!(updated_task.actual_effort, Some(bigdecimal::BigDecimal::from(3)));
+
+            dbg!(format!("Deleting Task #: {:?}", created_task.id));
+            // Test Delete
+            let deleted_count = diesel::delete(tasks::table.find(created_task.id))
+                .execute(conn)
+                .expect("Error deleting task");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = tasks::table
+                .find(created_task.id)
+                .first::<Task>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_tag_hierarchy_types_crud() {
         let conn = &mut establish_connection();
 
