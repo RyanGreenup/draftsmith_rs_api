@@ -195,11 +195,13 @@ mod tests {
         let result = fetch_notes(base_url, true).await;
         if let Err(ref e) = result {
             eprintln!("Error fetching notes: {}", e);
-            if let Some(status) = e.status() {
-                eprintln!("Status code: {}", status);
-            }
-            if let Some(url) = e.url() {
-                eprintln!("URL: {}", url);
+            if let NoteError::RequestError(req_err) = e {
+                if let Some(status) = req_err.status() {
+                    eprintln!("Status code: {}", status);
+                }
+                if let Some(url) = req_err.url() {
+                    eprintln!("URL: {}", url);
+                }
             }
         }
         assert!(result.is_ok());
