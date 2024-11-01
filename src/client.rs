@@ -11,6 +11,12 @@ pub struct CreateNoteRequest {
     pub content: String
 }
 
+#[derive(Serialize)]
+pub struct UpdateNoteRequest {
+    pub title: String,
+    pub content: String
+}
+
 pub async fn fetch_note(base_url: &str, id: i32) -> Result<NoteResponse, Error> {
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
     let response = reqwest::get(url).await?;
@@ -35,6 +41,18 @@ pub async fn create_note(base_url: &str, note: CreateNoteRequest) -> Result<Note
         .error_for_status()?;
     let created_note = response.json::<NoteResponse>().await?;
     Ok(created_note)
+}
+
+pub async fn update_note(base_url: &str, id: i32, note: UpdateNoteRequest) -> Result<NoteResponse, Error> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/{FLAT_API}/{}", base_url, id);
+    let response = client.put(url)
+        .json(&note)
+        .send()
+        .await?
+        .error_for_status()?;
+    let updated_note = response.json::<NoteResponse>().await?;
+    Ok(updated_note)
 }
 
 #[cfg(test)]
@@ -76,5 +94,28 @@ mod tests {
         let created_note = result.unwrap();
         assert!(!created_note.title.is_empty());
         assert!(!created_note.content.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_update_note() {
+        let base_url = BASE_URL;
+        // First create a note to update
+        let create_note_req = CreateNoteRequest {
+            title: "Test Note".to_string(),
+            content: "This is a test note".to_string()
+        };
+        let created_note = create_note(base_url, create_note_req).await.unwrap();
+
+        // Now update it
+        let update_note_req = UpdateNoteRequest {
+            title: "Updated Test Note".to_string(),
+            content: "This is an updated test note".to_string()
+        };
+        let result = update_note(base_url, created_note.id, update_note_req).await;
+        assert!(result.is_ok());
+        let updated_note = result.unwrap();
+        assert_eq!(updated_note.id, created_note.id);
+        assert_eq!(updated_note.title, "Updated Test Note");
+        assert_eq!(updated_note.content, "This is an updated test note");
     }
 }
