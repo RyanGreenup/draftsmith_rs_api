@@ -344,23 +344,11 @@ mod utils {
 
 #[cfg(test)]
 mod assets {
-    use super::utils::*;
-    use super::*;
-    use crate::schema::assets::{self, table};
-    use crate::schema::assets::dsl::*;
-    use diesel::QueryDsl;
-    use diesel::RunQueryDsl;
     // TODO implement CrudTest trait for Asset struct
 }
 
 #[cfg(test)]
 mod attributes {
-    use super::utils::*;
-    use super::*;
-    use crate::schema::assets::{self, table};
-    use crate::schema::assets::dsl::*;
-    use diesel::QueryDsl;
-    use diesel::RunQueryDsl;
     // TODO implement CrudTest trait for Attribute struct
 }
 
@@ -514,7 +502,7 @@ mod tasks {
 
             let new_task = NewTask {
                 note_id: Some(1),
-                status: "todo",
+                status: "NEW",
                 effort_estimate: Some(BigDecimal::from_str("2.5").unwrap()),
                 actual_effort: None,
                 deadline: Some(NaiveDateTime::parse_from_str("2024-12-31 23:59:59", "%Y-%m-%d %H:%M:%S").unwrap()),
@@ -530,7 +518,7 @@ mod tasks {
                 .get_result::<Task>(conn)
                 .expect("Error saving new task");
 
-            assert_eq!(result.status, "todo");
+            assert_eq!(result.status, "NEW");
             assert_eq!(result.priority, Some(1));
         }
 
