@@ -1,22 +1,52 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
+use diesel::pg::PgConnection;
+use diesel::r2d2::{self, ConnectionManager};
+use rust_cli_app::api;
+use std::net::SocketAddr;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// Name of the person to greet
-    #[arg(short, long)]
-    name: String,
-
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    #[command(subcommand)]
+    command: Commands,
 }
 
-fn main() {
+#[derive(Subcommand)]
+enum Commands {
+    /// Start the API server
+    Serve {
+        /// The address to bind to
+        #[arg(short, long, default_value = "127.0.0.1:3000")]
+        addr: SocketAddr,
+    },
+}
+
+#[tokio::main]
+async fn main() {
+    dotenv::dotenv().ok();
     let cli = Cli::parse();
 
-    for _ in 0..cli.count {
-        println!("Hello {}!", cli.name);
+    match cli.command {
+        Commands::Serve { addr } => {
+            println!("Starting server on {}", addr);
+            
+            // Set up database connection pool
+            let database_url = std::env::var("DATABASE_URL")
+                .expect("DATABASE_URL must be set in .env file");
+            let manager = ConnectionManager::<PgConnection>::new(database_url);
+            let pool = r2d2::Pool::builder()
+                .build(manager)
+                .expect("Failed to create pool");
+
+            // Create router with connection pool
+            let app = api::create_router(pool);
+
+            // Start server
+            axum::Server::bind(&addr)
+                .serve(app.into_make_service())
+                .await
+                .unwrap();
+        }
     }
 }
 
