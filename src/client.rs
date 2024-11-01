@@ -338,11 +338,11 @@ mod tests {
         let attach_result = attach_child_note(base_url, attach_request).await;
         assert!(attach_result.is_ok(), "Failed to attach child note");
 
-        // Give the server a moment to process the attachment
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        // Give the server more time to process the attachment
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // Fetch the note tree and verify the hierarchy
-        let note_tree = fetch_note_tree(base_url).await.unwrap();
+        let note_tree = fetch_note_tree(base_url).await.expect("Failed to fetch note tree");
         
         // Function to find a node in the tree by ID
         fn find_node(tree: &[NoteTreeNode], id: i32) -> Option<&NoteTreeNode> {
@@ -359,10 +359,14 @@ mod tests {
 
         // Verify that the child note is now under the parent note
         let parent_node = find_node(&note_tree, parent_note.id).expect("Parent note not found");
-        assert!(
-            find_node(&parent_node.children, child_note.id).is_some(),
-            "Child note not attached to parent"
-        );
+        let child_found = find_node(&parent_node.children, child_note.id).is_some();
+        
+        if !child_found {
+            // Print debug information
+            println!("Parent node children: {:?}", parent_node.children);
+            println!("Looking for child ID: {}", child_note.id);
+            assert!(false, "Child note {} not found under parent {}", child_note.id, parent_note.id);
+        }
 
         // Detach the child note
         let detach_result = detach_child_note(base_url, child_note.id).await;
