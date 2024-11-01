@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_note_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // Test Create
             let new_note = NewNote {
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn test_tag_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // Test Create
             let new_tag = NewTag {
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn test_assets_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // Test Create
             let new_asset = NewAsset {
@@ -467,7 +467,7 @@ mod tests {
     #[test]
     fn test_attributes_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // Test Create
             let new_attribute = NewAttribute {
@@ -523,7 +523,7 @@ mod tests {
     #[test]
     fn test_journal_entries_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // First create a note to work with
             let new_note = NewNote {
@@ -564,7 +564,7 @@ mod tests {
             assert_eq!(read_entry.entry_date, created_entry.entry_date);
 
             // Test Update
-            let tomorrow = chrono::Local::now().naive_local().date().succ();
+            let tomorrow = chrono::Local::now().naive_local().date().succ_opt().expect("Error getting tomorrow's date");
             let updated_entry = diesel::update(journal_entries::table.find(created_entry.id))
                 .set(journal_entries::entry_date.eq(tomorrow))
                 .get_result::<JournalEntry>(conn)
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn test_note_tags_crud() {
         let conn = &mut establish_connection();
-        
+
         conn.test_transaction(|conn| {
             // First create a note and tag to work with
             let new_note = NewNote {
