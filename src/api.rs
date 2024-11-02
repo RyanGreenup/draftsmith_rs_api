@@ -1,3 +1,4 @@
+use crate::schema::{notes, note_hierarchy};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
     extract::{Path, Query, State},
@@ -456,4 +457,151 @@ async fn create_note(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(note.into())))
+}
+
+pub async fn update_database_from_notetreenode(
+    State(state): State<AppState>,
+    Json(note_tree_node): Json<NoteTreeNode>,
+) -> Result<StatusCode, StatusCode> {
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Recursive function to process each node
+    fn process_node(
+        conn: &mut PgConnection,
+        node: NoteTreeNode,
+        parent_id: Option<i32>,
+    ) -> Result<i32, DieselError> {
+        use crate::schema::notes::dsl::*;
+        use crate::schema::note_hierarchy::dsl::*;
+        // Determine if the note is new or existing
+        let node_id = if node.id <= 0 {
+            // Insert new note
+            let new_note = NewNote {
+                title: &node.title,
+                content: "", // Add content if provided
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+            diesel::insert_into(notes)
+                .values(&new_note)
+                .returning(id)
+                .get_result::<i32>(conn)?
+        } else {
+            // Update existing note
+            diesel::update(notes.filter(id.eq(node.id)))
+                .set((
+                    title.eq(&node.title),
+                    modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+                ))
+                .execute(conn)?;
+            node.id
+        };
+
+        // Update hierarchy
+        // Remove existing hierarchy entry for this node
+        diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id)))
+            .execute(conn)?;
+
+        // Insert new hierarchy entry if there is a parent
+        if parent_id.is_some() {
+            let new_hierarchy = NewNoteHierarchy {
+                child_note_id: Some(node_id),
+                parent_note_id: parent_id,
+                hierarchy_type: node.hierarchy_type.as_deref(),
+            };
+            diesel::insert_into(note_hierarchy)
+                .values(&new_hierarchy)
+                .execute(conn)?;
+        }
+
+        // Process child nodes recursively
+        for child in node.children {
+            process_node(conn, child, Some(node_id))?;
+        }
+
+        Ok(node_id)
+    }
+
+    // Start the recursive processing from the root node
+    process_node(&mut conn, note_tree_node, None)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::extract::State;
+    use axum::Json;
+    use diesel::prelude::*;
+    use diesel::r2d2::{ConnectionManager, Pool};
+    use std::sync::Arc;
+
+    fn setup_test_state() -> AppState {
+        let database_url = "postgres://user:password@localhost/test_database";
+        let manager = ConnectionManager::<PgConnection>::new(database_url);
+        let pool = Pool::builder()
+            .build(manager)
+            .expect("Failed to create pool.");
+        AppState {
+            pool: Arc::new(pool),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_update_database_from_notetreenode() {
+        // Set up the test state
+        let state = setup_test_state();
+
+        // Create an input NoteTreeNode with new and existing notes
+        let input_tree = NoteTreeNode {
+            id: 0, // Zero or any negative number indicates a new note
+            title: "Root Note".to_string(),
+            created_at: None,
+            modified_at: None,
+            hierarchy_type: None,
+            children: vec![
+                NoteTreeNode {
+                    id: 0, // New child note
+                    title: "Child Note 1".to_string(),
+                    created_at: None,
+                    modified_at: None,
+                    hierarchy_type: Some("Type A".to_string()),
+                    children: vec![],
+                },
+                NoteTreeNode {
+                    id: 0, // New child note
+                    title: "Child Note 2".to_string(),
+                    created_at: None,
+                    modified_at: None,
+                    hierarchy_type: Some("Type B".to_string()),
+                    children: vec![],
+                },
+            ],
+        };
+
+        // Call the function to update the database
+        let response = update_database_from_notetreenode(
+            State(state.clone()),
+            Json(input_tree),
+        )
+        .await;
+
+        // Assert that the operation was successful
+        assert_eq!(response.unwrap(), StatusCode::OK);
+
+        // Verify the database state
+        let mut conn = state.pool.get().unwrap();
+
+        // Check that the notes have been added
+        use crate::schema::notes::dsl::*;
+        let notes_in_db = notes.load::<Note>(&mut conn).unwrap();
+        assert_eq!(notes_in_db.len(), 3);
+
+        // Check that the hierarchy mappings have been added
+        use crate::schema::note_hierarchy::dsl::*;
+        let hierarchies_in_db = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
+        assert_eq!(hierarchies_in_db.len(), 2);
+    }
 }
