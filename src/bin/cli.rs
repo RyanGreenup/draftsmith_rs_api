@@ -271,7 +271,7 @@ fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize)
         println!("{}:", node.id);
         // Print title with proper indentation
         print!("{}", "  ".repeat(depth + 1));
-        println!("title: \"{}\"", node.title.replace("\"", "\\\""));
+        println!("title: {}", node.title);
         // If there are children, print them as a nested list
         if !node.children.is_empty() {
             print!("{}", "  ".repeat(depth + 1));
