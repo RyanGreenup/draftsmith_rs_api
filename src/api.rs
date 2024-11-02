@@ -705,57 +705,61 @@ mod tests {
         let child1_title = format!("test_existing_child1_{}", now);
         let child2_title = format!("test_existing_child2_{}", now);
 
-        // Create initial notes and hierarchy within a transaction
-        let (root_id, child1_id, child2_id) = conn.test_transaction::<_, DieselError, _>(|conn| {
-            // Create three notes
-            use crate::schema::notes::dsl::*;
-            let root_note = diesel::insert_into(notes)
-                .values(NewNote {
-                    title: &root_title,
-                    content: "root content",
-                    created_at: Some(chrono::Utc::now().naive_utc()),
-                    modified_at: Some(chrono::Utc::now().naive_utc()),
-                })
-                .get_result::<Note>(conn)?;
+        // Create three notes
+        use crate::schema::notes::dsl::*;
+        let root_note = diesel::insert_into(notes)
+            .values(NewNote {
+                title: &root_title,
+                content: "root content",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create root note");
 
-            let child1_note = diesel::insert_into(notes)
-                .values(NewNote {
-                    title: &child1_title,
-                    content: "child1 content",
-                    created_at: Some(chrono::Utc::now().naive_utc()),
-                    modified_at: Some(chrono::Utc::now().naive_utc()),
-                })
-                .get_result::<Note>(conn)?;
+        let child1_note = diesel::insert_into(notes)
+            .values(NewNote {
+                title: &child1_title,
+                content: "child1 content",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create child1 note");
 
-            let child2_note = diesel::insert_into(notes)
-                .values(NewNote {
-                    title: &child2_title,
-                    content: "child2 content",
-                    created_at: Some(chrono::Utc::now().naive_utc()),
-                    modified_at: Some(chrono::Utc::now().naive_utc()),
-                })
-                .get_result::<Note>(conn)?;
+        let child2_note = diesel::insert_into(notes)
+            .values(NewNote {
+                title: &child2_title,
+                content: "child2 content",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create child2 note");
 
-            // Create initial hierarchy: root -> child1 -> child2
-            use crate::schema::note_hierarchy::dsl::*;
-            diesel::insert_into(note_hierarchy)
-                .values(&NewNoteHierarchy {
-                    child_note_id: Some(child1_note.id),
-                    parent_note_id: Some(root_note.id),
-                    hierarchy_type: Some("block"),
-                })
-                .execute(conn)?;
+        // Create initial hierarchy: root -> child1 -> child2
+        use crate::schema::note_hierarchy::dsl::*;
+        diesel::insert_into(note_hierarchy)
+            .values(&NewNoteHierarchy {
+                child_note_id: Some(child1_note.id),
+                parent_note_id: Some(root_note.id),
+                hierarchy_type: Some("block"),
+            })
+            .execute(&mut conn)
+            .expect("Failed to create first hierarchy link");
 
-            diesel::insert_into(note_hierarchy)
-                .values(&NewNoteHierarchy {
-                    child_note_id: Some(child2_note.id),
-                    parent_note_id: Some(child1_note.id),
-                    hierarchy_type: Some("block"),
-                })
-                .execute(conn)?;
+        diesel::insert_into(note_hierarchy)
+            .values(&NewNoteHierarchy {
+                child_note_id: Some(child2_note.id),
+                parent_note_id: Some(child1_note.id),
+                hierarchy_type: Some("block"),
+            })
+            .execute(&mut conn)
+            .expect("Failed to create second hierarchy link");
 
-            Ok((root_note.id, child1_note.id, child2_note.id))
-        });
+        let root_id = root_note.id;
+        let child1_id = child1_note.id;
+        let child2_id = child2_note.id;
 
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
@@ -788,35 +792,49 @@ mod tests {
         assert_eq!(response, StatusCode::OK);
 
         // Verify the new hierarchy structure
-        conn.test_transaction::<_, DieselError, _>(|conn| {
-            use crate::schema::note_hierarchy::dsl::*;
+        // Verify the new hierarchy structure
+        use crate::schema::note_hierarchy::dsl::*;
 
-            // Check child2 is now directly under root
-            let root_children = note_hierarchy
-                .filter(parent_note_id.eq(root_id))
-                .load::<NoteHierarchy>(conn)?;
-            assert_eq!(root_children.len(), 1);
-            assert_eq!(root_children[0].child_note_id, Some(child2_id));
-            assert_eq!(root_children[0].hierarchy_type, Some("block".to_string()));
+        // Check child2 is now directly under root
+        let root_children = note_hierarchy
+            .filter(parent_note_id.eq(root_id))
+            .load::<NoteHierarchy>(&mut conn)
+            .expect("Failed to load root children");
+        assert_eq!(root_children.len(), 1);
+        assert_eq!(root_children[0].child_note_id, Some(child2_id));
+        assert_eq!(root_children[0].hierarchy_type, Some("block".to_string()));
 
-            // Check child1 is now under child2
-            let child2_children = note_hierarchy
-                .filter(parent_note_id.eq(child2_id))
-                .load::<NoteHierarchy>(conn)?;
-            assert_eq!(child2_children.len(), 1);
-            assert_eq!(child2_children[0].child_note_id, Some(child1_id));
-            assert_eq!(
-                child2_children[0].hierarchy_type,
-                Some("reference".to_string())
-            );
+        // Check child1 is now under child2
+        let child2_children = note_hierarchy
+            .filter(parent_note_id.eq(child2_id))
+            .load::<NoteHierarchy>(&mut conn)
+            .expect("Failed to load child2 children");
+        assert_eq!(child2_children.len(), 1);
+        assert_eq!(child2_children[0].child_note_id, Some(child1_id));
+        assert_eq!(
+            child2_children[0].hierarchy_type,
+            Some("reference".to_string())
+        );
 
-            // Check child1 has no children
-            let child1_children = note_hierarchy
-                .filter(parent_note_id.eq(child1_id))
-                .load::<NoteHierarchy>(conn)?;
-            assert_eq!(child1_children.len(), 0);
+        // Check child1 has no children
+        let child1_children = note_hierarchy
+            .filter(parent_note_id.eq(child1_id))
+            .load::<NoteHierarchy>(&mut conn)
+            .expect("Failed to load child1 children");
+        assert_eq!(child1_children.len(), 0);
 
-            Ok(())
-        })
+        // Clean up test data
+        diesel::delete(note_hierarchy)
+            .filter(
+                child_note_id.eq_any(vec![child1_id, child2_id])
+                    .or(parent_note_id.eq_any(vec![root_id, child1_id, child2_id])),
+            )
+            .execute(&mut conn)
+            .expect("Failed to clean up hierarchy");
+
+        diesel::delete(notes)
+            .filter(id.eq_any(vec![root_id, child1_id, child2_id]))
+            .execute(&mut conn)
+            .expect("Failed to clean up notes");
     }
 }
