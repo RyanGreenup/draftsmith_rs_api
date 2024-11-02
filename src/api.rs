@@ -835,7 +835,7 @@ mod tests {
 
         // check that the note content has been updated
         let updated_notes = notes
-            .filter(id.eq_any(vec![root_id, child1_id, child2_id]))
+            .filter(notes_id.eq_any(vec![root_id, child1_id, child2_id]))
             .load::<Note>(&mut conn)
             .expect("Failed to load notes from database");
 
