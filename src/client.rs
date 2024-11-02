@@ -45,7 +45,7 @@ pub struct AttachChildRequest {
     pub hierarchy_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: String,
