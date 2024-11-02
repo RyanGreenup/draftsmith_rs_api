@@ -1,4 +1,3 @@
-use crate::schema::{note_hierarchy, notes};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
     extract::{Path, Query, State},
@@ -475,10 +474,10 @@ pub async fn update_database_from_notetreenode(
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
         use crate::schema::note_hierarchy::dsl::{
-            child_note_id, hierarchy_type, note_hierarchy, parent_note_id,
+            child_note_id, note_hierarchy,
         };
         use crate::schema::notes::dsl::{
-            content, created_at, id as notes_id, modified_at, notes, title,
+            id as notes_id, modified_at, notes, title,
         };
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
@@ -539,7 +538,6 @@ mod tests {
     use super::*;
     use axum::extract::State;
     use axum::Json;
-    use diesel::prelude::*;
     use diesel::r2d2::{ConnectionManager, Pool};
     use dotenv::dotenv;
     use std::sync::Arc;
@@ -735,7 +733,7 @@ mod tests {
 
                 Ok((root_note.id, child1_note.id, child2_note.id))
             })
-            .expect("Failed to create initial notes and hierarchy");
+            .unwrap_or_else(|_| panic!("Failed to create initial notes and hierarchy"));
 
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
