@@ -733,7 +733,7 @@ mod tests {
 
                 Ok((root_note.id, child1_note.id, child2_note.id))
             })
-            .unwrap_or_else(|_| panic!("Failed to create initial notes and hierarchy"));
+            .unwrap();
 
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
