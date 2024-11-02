@@ -471,8 +471,12 @@ pub async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
-        use crate::schema::notes::dsl::*;
-        use crate::schema::note_hierarchy::dsl::*;
+        use crate::schema::notes::dsl::{
+            id as notes_id, modified_at, notes, title, content, created_at,
+        };
+        use crate::schema::note_hierarchy::dsl::{
+            note_hierarchy, child_note_id, parent_note_id, hierarchy_type,
+        };
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
             // Insert new note
@@ -484,11 +488,11 @@ pub async fn update_database_from_notetreenode(
             };
             diesel::insert_into(notes)
                 .values(&new_note)
-                .returning(id)
+                .returning(notes_id)
                 .get_result::<i32>(conn)?
         } else {
             // Update existing note
-            diesel::update(notes.filter(id.eq(node.id)))
+            diesel::update(notes.filter(notes_id.eq(node.id)))
                 .set((
                     title.eq(&node.title),
                     modified_at.eq(Some(chrono::Utc::now().naive_utc())),
@@ -503,10 +507,10 @@ pub async fn update_database_from_notetreenode(
             .execute(conn)?;
 
         // Insert new hierarchy entry if there is a parent
-        if parent_id.is_some() {
+        if let Some(p_id) = parent_id {
             let new_hierarchy = NewNoteHierarchy {
                 child_note_id: Some(node_id),
-                parent_note_id: parent_id,
+                parent_note_id: Some(p_id),
                 hierarchy_type: node.hierarchy_type.as_deref(),
             };
             diesel::insert_into(note_hierarchy)
