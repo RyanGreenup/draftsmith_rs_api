@@ -71,6 +71,7 @@ pub struct HierarchyMapping {
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: String,
+    pub content: String,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub hierarchy_type: Option<String>,
@@ -380,6 +381,7 @@ async fn get_note_tree(
         NoteTreeNode {
             id: note.id,
             title: note.title.clone(),
+            content: note.content.clone(),
             created_at: note.created_at,
             modified_at: note.modified_at,
             hierarchy_type: None,
@@ -593,6 +595,7 @@ mod tests {
         let input_tree = NoteTreeNode {
             id: 0, // Indicates a new note
             title: id_root.to_string(),
+            content: "root content".to_string(),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
@@ -600,6 +603,7 @@ mod tests {
                 NoteTreeNode {
                     id: 0, // New child note
                     title: id_1.to_string(),
+                    content: "child 1 content".to_string(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -608,6 +612,7 @@ mod tests {
                 NoteTreeNode {
                     id: 0, // New child note
                     title: id_2.to_string(),
+                    content: "child 2 content".to_string(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -762,18 +767,21 @@ mod tests {
         let modified_tree = NoteTreeNode {
             id: root_id,
             title: root_title,
+            content: "root content".to_string(),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![NoteTreeNode {
                 id: child2_id,
                 title: child2_title,
+                content: "child2 content".to_string(),
                 created_at: None,
                 modified_at: None,
                 hierarchy_type: Some("block".to_string()),
                 children: vec![NoteTreeNode {
                     id: child1_id,
                     title: child1_title,
+                    content: "child1 content".to_string(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
