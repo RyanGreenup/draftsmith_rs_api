@@ -48,6 +48,22 @@ enum NotesCommands {
         #[command(subcommand)]
         command: FlatCommands,
     },
+    /// Hierarchy commands
+    Hierarchy {
+        #[command(subcommand)]
+        command: HierarchyCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum HierarchyCommands {
+    /// Attach a note to a parent
+    Attach {
+        /// The parent note ID
+        parent_id: i32,
+    },
+    /// Detach a note from its parent
+    Detach,
 }
 
 #[derive(Subcommand)]
@@ -107,6 +123,28 @@ async fn main() {
         Commands::Client { url, command } => match command {
             ClientCommands::Notes { id, command } => match command {
                 NotesCommands::Flat { command } => match command {
+                    FlatCommands::Get { metadata_only } => {
+                        if let Some(note_id) = id {
+                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only).await {
+                                Ok(note) => {
+                                    println!("{}", serde_json::to_string_pretty(&note).unwrap());
+                                }
+                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                    eprintln!("Error: Note with id {} not found", id);
+                                    std::process::exit(1);
+                                }
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            let notes = rust_cli_app::client::fetch_notes(&url, metadata_only)
+                                .await
+                                .unwrap();
+                            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                        }
+                    }
                     FlatCommands::Get { metadata_only } => {
                         if let Some(note_id) = id {
                             match rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
@@ -187,6 +225,38 @@ async fn main() {
                         }
                     }
                 },
+                NotesCommands::Hierarchy { command } => {
+                    if let Some(child_id) = id {
+                        match command {
+                            HierarchyCommands::Attach { parent_id } => {
+                                let request = rust_cli_app::client::AttachChildRequest {
+                                    child_note_id: child_id,
+                                    parent_note_id: Some(parent_id),
+                                    hierarchy_type: Some("block".to_string()),
+                                };
+                                match rust_cli_app::client::attach_child_note(&url, request).await {
+                                    Ok(_) => println!("Successfully attached note {} to parent {}", child_id, parent_id),
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                }
+                            }
+                            HierarchyCommands::Detach => {
+                                match rust_cli_app::client::detach_child_note(&url, child_id).await {
+                                    Ok(_) => println!("Successfully detached note {}", child_id),
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for hierarchy commands");
+                        std::process::exit(1);
+                    }
+                }
             },
         },
     }
