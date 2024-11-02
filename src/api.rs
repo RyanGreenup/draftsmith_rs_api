@@ -1,4 +1,4 @@
-use crate::schema::{notes, note_hierarchy};
+use crate::schema::{note_hierarchy, notes};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
     extract::{Path, Query, State},
@@ -463,7 +463,10 @@ pub async fn update_database_from_notetreenode(
     State(state): State<AppState>,
     Json(note_tree_node): Json<NoteTreeNode>,
 ) -> Result<StatusCode, StatusCode> {
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Recursive function to process each node
     fn process_node(
@@ -471,11 +474,11 @@ pub async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
-        use crate::schema::notes::dsl::{
-            id as notes_id, modified_at, notes, title, content, created_at,
-        };
         use crate::schema::note_hierarchy::dsl::{
-            note_hierarchy, child_note_id, parent_note_id, hierarchy_type,
+            child_note_id, hierarchy_type, note_hierarchy, parent_note_id,
+        };
+        use crate::schema::notes::dsl::{
+            content, created_at, id as notes_id, modified_at, notes, title,
         };
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
@@ -503,8 +506,7 @@ pub async fn update_database_from_notetreenode(
 
         // Update hierarchy
         // Remove existing hierarchy entry for this node
-        diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id)))
-            .execute(conn)?;
+        diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn)?;
 
         // Insert new hierarchy entry if there is a parent
         if let Some(p_id) = parent_id {
@@ -527,8 +529,7 @@ pub async fn update_database_from_notetreenode(
     }
 
     // Start the recursive processing from the root node
-    process_node(&mut conn, note_tree_node, None)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    process_node(&mut conn, note_tree_node, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -540,13 +541,13 @@ mod tests {
     use axum::Json;
     use diesel::prelude::*;
     use diesel::r2d2::{ConnectionManager, Pool};
-    use std::sync::Arc;
     use dotenv::dotenv;
+    use std::sync::Arc;
 
     fn setup_test_state() -> AppState {
         dotenv().ok();
-        let database_url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set in .env file");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
         let manager = ConnectionManager::<PgConnection>::new(&database_url);
         let pool = Pool::builder()
             .build(manager)
@@ -561,54 +562,109 @@ mod tests {
         // Set up the test state
         let state = setup_test_state();
 
+        // Verify the database state
+        let mut conn = state.pool.get().unwrap();
+
+        // Hierarchies before
+        let hierarchies_in_db = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
+
+        // Drop the connection
+        drop(conn);
+
+        // Probably safe to assume that these IDs are unique
+        let id_root = "root--lklkklklkljdkdkdkdieieieieiwiwk329032903290329032903290";
+        let id_1 = "001--111idkdkcci382902192j2kj2adidsidsikk218cke91";
+        let id_2 = "002--2222idskldkdkl21908210921092109219021903210921";
+
         // Create an input NoteTreeNode with new and existing notes
         let input_tree = NoteTreeNode {
             id: 0, // Zero or any negative number indicates a new note
-            title: "Root Note".to_string(),
+            title: id_root.to_string(),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
                     id: 0, // New child note
-                    title: "Child Note 1".to_string(),
+                    title: id_1.to_string(),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("Type A".to_string()),
+                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
                 NoteTreeNode {
                     id: 0, // New child note
-                    title: "Child Note 2".to_string(),
+                    title: id_2.to_string(),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("Type B".to_string()),
+                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
             ],
         };
 
         // Call the function to update the database
-        let response = update_database_from_notetreenode(
-            State(state.clone()),
-            Json(input_tree),
-        )
-        .await;
+        let response =
+            update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
+
+        // Give the database a moment to process this
+        std::thread::sleep(std::time::Duration::from_secs(2));
 
         // Assert that the operation was successful
         assert_eq!(response.unwrap(), StatusCode::OK);
 
-        // Verify the database state
-        let mut conn = state.pool.get().unwrap();
-
         // Check that the notes have been added
         use crate::schema::notes::dsl::*;
+        // Reset the connection
+        let mut conn = state.pool.get().expect("Failed to get DB connection");
         let notes_in_db = notes.load::<Note>(&mut conn).unwrap();
-        assert_eq!(notes_in_db.len(), 3);
+        drop(conn);
+        // Look through the notes for those ids
+        let note_1 = notes_in_db
+            .iter()
+            .find(|note| note.title == id_1)
+            .expect("Unable to find note 1");
+        let note_2 = notes_in_db
+            .iter()
+            .find(|note| note.title == id_2)
+            .expect("Unable to find note 2");
+        assert_eq!(note_1.title, id_1);
+        assert_eq!(note_2.title, id_2);
+        let note_root = notes_in_db
+            .iter()
+            .find(|note| note.title == id_root)
+            .expect("Unable to find root note");
+
+        // Verify that the parent_id of note_1 is the root note
+        use crate::schema::note_hierarchy::dsl::*;
+        let mut conn = state.pool.get().expect("Failed to get DB connection");
+        let hierarchies_in_db_after = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
+        // Find the parent id with a child id of note_1.id
+        dbg!(format!("Note 1 ID: {}", note_1.id));
+        dbg!(format!("Note 2 ID: {}", note_2.id));
+        dbg!(format!("Root Note ID: {}", note_root.id));
+        dbg!(format!("Hierarchies in DB: {:?}", hierarchies_in_db_after));
+        let parent_id = hierarchies_in_db
+            .iter()
+            .find(|h| h.child_note_id == Some(note_1.id))
+            .expect("Unable to find hierarchy entry for note 1")
+            .parent_note_id
+            .expect("Parent ID should not be null");
+        assert_eq!(parent_id, note_root.id);
+
+        // Check the notes have been added
+        let notes_in_db_after = notes.load::<Note>(&mut conn).unwrap();
+        assert_eq!(notes_in_db_after.len(), notes_in_db.len() + 2);
 
         // Check that the hierarchy mappings have been added
-        use crate::schema::note_hierarchy::dsl::*;
         let hierarchies_in_db = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
-        assert_eq!(hierarchies_in_db.len(), 2);
+        assert_eq!(hierarchies_in_db.len(), hierarchies_in_db_after.len() - 2);
+
+        // Clean up by removing these
+        vec![note_1, note_2, note_root].iter().for_each(|note| {
+            diesel::delete(note_hierarchy.filter(child_note_id.eq(note.id)))
+                .execute(&mut conn)
+                .unwrap();
+        });
     }
 }
