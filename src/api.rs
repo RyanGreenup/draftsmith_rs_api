@@ -477,7 +477,7 @@ pub async fn update_database_from_notetreenode(
     ) -> Result<i32, DieselError> {
         eprintln!("Processing node: id={}, title={}", node.id, node.title);
         use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
-        use crate::schema::notes::dsl::{id as notes_id, modified_at, notes, title};
+        use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
             // Insert new note
@@ -507,6 +507,7 @@ pub async fn update_database_from_notetreenode(
             diesel::update(notes.filter(notes_id.eq(node.id)))
                 .set((
                     title.eq(&node.title),
+                    content.eq(&node.content),
                     modified_at.eq(Some(chrono::Utc::now().naive_utc())),
                 ))
                 .execute(conn)?;
@@ -806,8 +807,6 @@ mod tests {
 
         // Verify the new hierarchy structure
         // Verify the new hierarchy structure
-        use crate::schema::note_hierarchy::dsl::*;
-
         // Check child2 is now directly under root
         let root_children = note_hierarchy
             .filter(parent_note_id.eq(root_id))
