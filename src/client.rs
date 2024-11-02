@@ -1,7 +1,7 @@
+pub use crate::api::NoteTreeNode;
 use crate::{api::NoteResponse, FLAT_API};
 use reqwest::Error as ReqwestError;
 use serde::{Deserialize, Serialize};
-use crate::api::NoteTreeNode;
 use std::fmt;
 
 #[derive(Debug)]
@@ -52,7 +52,6 @@ pub struct AttachChildRequest {
     pub parent_note_id: Option<i32>,
     pub hierarchy_type: Option<String>,
 }
-
 
 pub async fn fetch_note(
     base_url: &str,

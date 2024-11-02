@@ -67,7 +67,7 @@ pub struct HierarchyMapping {
     pub hierarchy_type: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: String,
