@@ -267,10 +267,17 @@ fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize)
     for node in nodes {
         // Print indentation
         print!("{}", "  ".repeat(depth));
-        // Print node info in YAML format
-        println!("- {}{} {}", node.id, if node.children.is_empty() { "" } else { ":" }, node.title);
-        // Recursively print children
-        print_simple_tree(&node.children, depth + 1);
+        // Print node info in valid YAML format
+        println!("{}:", node.id);
+        // Print title with proper indentation
+        print!("{}", "  ".repeat(depth + 1));
+        println!("title: \"{}\"", node.title.replace("\"", "\\\""));
+        // If there are children, print them as a nested list
+        if !node.children.is_empty() {
+            print!("{}", "  ".repeat(depth + 1));
+            println!("children:");
+            print_simple_tree(&node.children, depth + 2);
+        }
     }
 }
 
