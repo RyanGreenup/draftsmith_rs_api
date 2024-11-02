@@ -175,6 +175,19 @@ pub async fn fetch_note_tree(base_url: &str) -> Result<Vec<NoteTreeNode>, NoteEr
     Ok(note_tree)
 }
 
+pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/notes/tree", base_url);
+    client
+        .put(url)
+        .json(&tree)
+        .send()
+        .await?
+        .error_for_status()
+        .map_err(NoteError::from)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,6 +380,110 @@ mod tests {
             find_node(&parent_node.children, child_note.id).is_none(),
             "Child note still attached after detachment"
         );
+    }
+
+    #[tokio::test]
+    async fn test_update_note_tree() {
+        let base_url = BASE_URL;
+
+        // Create root note
+        let root_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Root Note".to_string(),
+                content: "Root content".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create child notes
+        let child1_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Child 1".to_string(),
+                content: "Child 1 content".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let child2_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Child 2".to_string(),
+                content: "Child 2 content".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create a tree structure
+        let tree = NoteTreeNode {
+            id: root_note.id,
+            title: "Updated Root".to_string(),
+            content: "Updated root content".to_string(),
+            created_at: None,
+            modified_at: None,
+            hierarchy_type: None,
+            children: vec![
+                NoteTreeNode {
+                    id: child1_note.id,
+                    title: "Updated Child 1".to_string(),
+                    content: "Updated child 1 content".to_string(),
+                    created_at: None,
+                    modified_at: None,
+                    hierarchy_type: Some("block".to_string()),
+                    children: vec![],
+                },
+                NoteTreeNode {
+                    id: child2_note.id,
+                    title: "Updated Child 2".to_string(),
+                    content: "Updated child 2 content".to_string(),
+                    created_at: None,
+                    modified_at: None,
+                    hierarchy_type: Some("block".to_string()),
+                    children: vec![],
+                },
+            ],
+        };
+
+        // Update the tree structure
+        let update_result = update_note_tree(base_url, tree.clone()).await;
+        assert!(update_result.is_ok(), "Failed to update note tree");
+
+        // Fetch the updated tree
+        let fetched_tree = fetch_note_tree(base_url).await.unwrap();
+
+        // Find our test tree in the fetched trees
+        let updated_tree = fetched_tree
+            .iter()
+            .find(|n| n.id == root_note.id)
+            .expect("Could not find updated tree");
+
+        // Verify the structure
+        assert_eq!(updated_tree.title, "Updated Root");
+        assert_eq!(updated_tree.content, "Updated root content");
+        assert_eq!(updated_tree.children.len(), 2);
+
+        // Verify children
+        let child1 = updated_tree
+            .children
+            .iter()
+            .find(|n| n.id == child1_note.id)
+            .expect("Could not find child1");
+        assert_eq!(child1.title, "Updated Child 1");
+        assert_eq!(child1.content, "Updated child 1 content");
+        assert_eq!(child1.hierarchy_type, Some("block".to_string()));
+
+        let child2 = updated_tree
+            .children
+            .iter()
+            .find(|n| n.id == child2_note.id)
+            .expect("Could not find child2");
+        assert_eq!(child2.title, "Updated Child 2");
+        assert_eq!(child2.content, "Updated child 2 content");
+        assert_eq!(child2.hierarchy_type, Some("block".to_string()));
     }
 
     #[tokio::test]
