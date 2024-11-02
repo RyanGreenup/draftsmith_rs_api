@@ -541,10 +541,13 @@ mod tests {
     use diesel::prelude::*;
     use diesel::r2d2::{ConnectionManager, Pool};
     use std::sync::Arc;
+    use dotenv::dotenv;
 
     fn setup_test_state() -> AppState {
-        let database_url = "postgres://user:password@localhost/test_database";
-        let manager = ConnectionManager::<PgConnection>::new(database_url);
+        dotenv().ok();
+        let database_url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set in .env file");
+        let manager = ConnectionManager::<PgConnection>::new(&database_url);
         let pool = Pool::builder()
             .build(manager)
             .expect("Failed to create pool.");
