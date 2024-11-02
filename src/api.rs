@@ -707,12 +707,20 @@ mod tests {
         let child1_title = format!("test_existing_child1_{}", now);
         let child2_title = format!("test_existing_child2_{}", now);
 
+        // Note Content
+        let note_root_content_original = "root content";
+        let note_root_content_updated = "updated root content";
+        let note_1_content_original = "Original content for child1";
+        let note_2_content_original = "Original content for child2";
+        let note_1_content_updated = "Updated content for child1";
+        let note_2_content_updated = "Updated content for child2";
+
         // Create three notes
         use crate::schema::notes::dsl::*;
         let root_note = diesel::insert_into(notes)
             .values(NewNote {
                 title: &root_title,
-                content: "root content",
+                content: note_root_content_original,
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
@@ -722,7 +730,7 @@ mod tests {
         let child1_note = diesel::insert_into(notes)
             .values(NewNote {
                 title: &child1_title,
-                content: "child1 content",
+                content: note_1_content_original,
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
@@ -732,7 +740,7 @@ mod tests {
         let child2_note = diesel::insert_into(notes)
             .values(NewNote {
                 title: &child2_title,
-                content: "child2 content",
+                content: note_2_content_original,
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
@@ -767,21 +775,21 @@ mod tests {
         let modified_tree = NoteTreeNode {
             id: root_id,
             title: root_title,
-            content: "root content".to_string(),
+            content: note_root_content_updated.to_string(),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![NoteTreeNode {
                 id: child2_id,
                 title: child2_title,
-                content: "child2 content".to_string(),
+                content: note_2_content_updated.to_string(),
                 created_at: None,
                 modified_at: None,
                 hierarchy_type: Some("block".to_string()),
                 children: vec![NoteTreeNode {
                     id: child1_id,
                     title: child1_title,
-                    content: "child1 content".to_string(),
+                    content: note_1_content_updated.to_string(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -824,6 +832,31 @@ mod tests {
             .load::<NoteHierarchy>(&mut conn)
             .expect("Failed to load child1 children");
         assert_eq!(child1_children.len(), 0);
+
+        // check that the note content has been updated
+        let updated_notes = notes
+            .filter(id.eq_any(vec![root_id, child1_id, child2_id]))
+            .load::<Note>(&mut conn)
+            .expect("Failed to load notes from database");
+
+        assert_eq!(updated_notes.len(), 3);
+
+        let updated_root = updated_notes
+            .iter()
+            .find(|note| note.id == root_id)
+            .expect("Root note not found");
+        let updated_child1 = updated_notes
+            .iter()
+            .find(|note| note.id == child1_id)
+            .expect("Child note 1 not found");
+        let updated_child2 = updated_notes
+            .iter()
+            .find(|note| note.id == child2_id)
+            .expect("Child note 2 not found");
+
+        assert_eq!(updated_root.content, note_root_content_updated);
+        assert_eq!(updated_child1.content, note_1_content_updated);
+        assert_eq!(updated_child2.content, note_2_content_updated);
 
         // Clean up test data
         use crate::schema::notes::dsl::id as notes_id;
