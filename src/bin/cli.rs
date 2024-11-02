@@ -2,7 +2,6 @@ use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::api;
-use serde_json::json;
 use std::net::SocketAddr;
 
 #[derive(Parser)]
@@ -269,7 +268,7 @@ fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize)
         // Print indentation
         print!("{}", "  ".repeat(depth));
         // Print node info in YAML format
-        println!("- {}:{} {}", node.id, if node.children.is_empty() { "" : " "}, node.title);
+        println!("- {}{} {}", node.id, if node.children.is_empty() { "" } else { ":" }, node.title);
         // Recursively print children
         print_simple_tree(&node.children, depth + 1);
     }
