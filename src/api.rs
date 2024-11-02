@@ -462,13 +462,10 @@ pub async fn update_database_from_notetreenode(
     State(state): State<AppState>,
     Json(note_tree_node): Json<NoteTreeNode>,
 ) -> Result<StatusCode, StatusCode> {
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|e| {
-            eprintln!("Failed to get connection: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let mut conn = state.pool.get().map_err(|e| {
+        eprintln!("Failed to get connection: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Recursive function to process each node
     fn process_node(
@@ -492,7 +489,7 @@ pub async fn update_database_from_notetreenode(
                 .values(&new_note)
                 .returning(notes_id)
                 .get_result::<i32>(conn);
-            
+
             match result {
                 Ok(id) => {
                     eprintln!("Inserted new note with id: {}", id);
@@ -779,7 +776,7 @@ mod tests {
                     title: child1_title,
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("reference".to_string()), // Changed type
+                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 }],
             }],
@@ -811,10 +808,7 @@ mod tests {
             .expect("Failed to load child2 children");
         assert_eq!(child2_children.len(), 1);
         assert_eq!(child2_children[0].child_note_id, Some(child1_id));
-        assert_eq!(
-            child2_children[0].hierarchy_type,
-            Some("reference".to_string())
-        );
+        assert_eq!(child2_children[0].hierarchy_type, Some("block".to_string()));
 
         // Check child1 has no children
         let child1_children = note_hierarchy
@@ -825,10 +819,11 @@ mod tests {
 
         // Clean up test data
         use crate::schema::notes::dsl::id as notes_id;
-        
+
         diesel::delete(note_hierarchy)
             .filter(
-                child_note_id.eq_any(vec![child1_id, child2_id])
+                child_note_id
+                    .eq_any(vec![child1_id, child2_id])
                     .or(parent_note_id.eq_any(vec![root_id, child1_id, child2_id])),
             )
             .execute(&mut conn)
