@@ -108,6 +108,7 @@ pub fn create_router(pool: Pool) -> Router {
             "/notes/hierarchy/detach/:child_id",
             delete(detach_child_note),
         )
+        .route("/notes/tree", put(update_note_tree))
         .with_state(state)
 }
 
@@ -460,7 +461,15 @@ async fn create_note(
     Ok((StatusCode::CREATED, Json(note.into())))
 }
 
-pub async fn update_database_from_notetreenode(
+// Handler for the PUT /notes/tree endpoint
+pub async fn update_note_tree(
+    State(state): State<AppState>,
+    Json(note_tree): Json<NoteTreeNode>,
+) -> Result<StatusCode, StatusCode> {
+    update_database_from_notetreenode(State(state), Json(note_tree)).await
+}
+
+async fn update_database_from_notetreenode(
     State(state): State<AppState>,
     Json(note_tree_node): Json<NoteTreeNode>,
 ) -> Result<StatusCode, StatusCode> {
