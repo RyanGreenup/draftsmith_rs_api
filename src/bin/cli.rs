@@ -55,11 +55,7 @@ enum NotesCommands {
         command: HierarchyCommands,
     },
     /// Display note tree
-    Tree {
-        /// Only show ID and title
-        #[arg(long)]
-        simple: bool,
-    },
+    Tree,
 }
 
 #[derive(Subcommand)]
@@ -270,24 +266,10 @@ async fn main() {
                         std::process::exit(1);
                     }
                 }
-                NotesCommands::Tree { simple } => {
+                NotesCommands::Tree => {
                     match rust_cli_app::client::fetch_note_tree(&url).await {
                         Ok(tree) => {
-                            if simple {
-                                // Create simplified tree with only id and title
-                                let simple_tree: Vec<serde_json::Value> = tree
-                                    .into_iter()
-                                    .map(|node| {
-                                        let mut map = serde_json::Map::new();
-                                        map.insert("id".to_string(), json!(node.id));
-                                        map.insert("title".to_string(), json!(node.title));
-                                        json!(map)
-                                    })
-                                    .collect();
-                                println!("{}", serde_json::to_string_pretty(&simple_tree).unwrap());
-                            } else {
-                                println!("{}", serde_json::to_string_pretty(&tree).unwrap());
-                            }
+                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
                         }
                         Err(e) => {
                             eprintln!("Error: {}", e);
