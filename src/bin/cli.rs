@@ -55,7 +55,11 @@ enum NotesCommands {
         command: HierarchyCommands,
     },
     /// Display note tree
-    Tree,
+    Tree {
+        /// Display simplified tree with only IDs and titles
+        #[arg(long)]
+        simple: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -242,9 +246,13 @@ async fn main() {
                         std::process::exit(1);
                     }
                 }
-                NotesCommands::Tree => match rust_cli_app::client::fetch_note_tree(&url).await {
+                NotesCommands::Tree { simple } => match rust_cli_app::client::fetch_note_tree(&url).await {
                     Ok(tree) => {
-                        println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                        if simple {
+                            print_simple_tree(&tree, 0);
+                        } else {
+                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                        }
                     }
                     Err(e) => {
                         eprintln!("Error: {}", e);
@@ -253,6 +261,17 @@ async fn main() {
                 },
             },
         },
+    }
+}
+
+fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize) {
+    for node in nodes {
+        // Print indentation
+        print!("{}", "  ".repeat(depth));
+        // Print node info in YAML format
+        println!("- {}:{} {}", node.id, if node.children.is_empty() { "" : " "}, node.title);
+        // Recursively print children
+        print_simple_tree(&node.children, depth + 1);
     }
 }
 
