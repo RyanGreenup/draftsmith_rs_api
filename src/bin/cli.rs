@@ -59,6 +59,11 @@ enum NotesCommands {
         #[arg(long)]
         simple: bool,
     },
+    /// Upload a new tree structure from JSON file
+    Upload {
+        /// Path to JSON file containing the tree structure
+        file: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -271,6 +276,48 @@ async fn main() {
                         }
                         Err(e) => {
                             eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                NotesCommands::Upload { file } => {
+                    // Read the JSON file
+                    let content = match std::fs::read_to_string(&file) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            eprintln!("Error reading file {}: {}", file, e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Parse the JSON into a NoteTreeNode, wrapping in Vec if needed
+                    let tree: rust_cli_app::client::NoteTreeNode = match serde_json::from_str(
+                        &content,
+                    ) {
+                        Ok(tree) => tree,
+                        Err(e) => {
+                            // Try parsing as array and take first element
+                            match serde_json::from_str::<Vec<rust_cli_app::client::NoteTreeNode>>(
+                                &content,
+                            ) {
+                                Ok(mut trees) if !trees.is_empty() => trees.remove(0),
+                                Ok(_) => {
+                                    eprintln!("Error: JSON file contains empty array");
+                                    std::process::exit(1);
+                                }
+                                Err(_) => {
+                                    eprintln!("Error parsing JSON: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                    };
+
+                    // Upload the tree
+                    match rust_cli_app::client::update_note_tree(&url, tree).await {
+                        Ok(_) => println!("Tree structure updated successfully"),
+                        Err(e) => {
+                            eprintln!("Error updating tree: {}", e);
                             std::process::exit(1);
                         }
                     }
