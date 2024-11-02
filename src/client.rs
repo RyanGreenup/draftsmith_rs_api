@@ -38,6 +38,13 @@ pub struct UpdateNoteRequest {
     pub content: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct HierarchyMapping {
+    pub child_id: i32,
+    pub parent_id: Option<i32>,
+    pub hierarchy_type: Option<String>,
+}
+
 #[derive(Serialize)]
 pub struct AttachChildRequest {
     pub child_note_id: i32,
@@ -185,6 +192,13 @@ pub async fn detach_child_note(base_url: &str, child_note_id: i32) -> Result<(),
         .error_for_status()
         .map_err(NoteError::from)?;
     Ok(())
+}
+
+pub async fn fetch_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMapping>, NoteError> {
+    let url = format!("{}/notes/hierarchy", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let mappings = response.json::<Vec<HierarchyMapping>>().await?;
+    Ok(mappings)
 }
 
 pub async fn fetch_note_tree(base_url: &str) -> Result<Vec<NoteTreeNode>, NoteError> {
