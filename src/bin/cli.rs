@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
-use serde_json::json;
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::api;
+use serde_json::json;
 use std::net::SocketAddr;
 
 #[derive(Parser)]
@@ -242,17 +242,15 @@ async fn main() {
                         std::process::exit(1);
                     }
                 }
-                NotesCommands::Tree => {
-                    match rust_cli_app::client::fetch_note_tree(&url).await {
-                        Ok(tree) => {
-                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
-                        }
+                NotesCommands::Tree => match rust_cli_app::client::fetch_note_tree(&url).await {
+                    Ok(tree) => {
+                        println!("{}", serde_json::to_string_pretty(&tree).unwrap());
                     }
-                }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
             },
         },
     }
