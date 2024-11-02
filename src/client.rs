@@ -1,7 +1,9 @@
-pub use crate::api::NoteTreeNode;
-use crate::{api::NoteResponse, FLAT_API};
+pub use crate::api::{
+    AttachChildRequest, CreateNoteRequest, HierarchyMapping, NoteResponse, NoteTreeNode,
+    UpdateNoteRequest,
+};
+use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug)]
@@ -25,32 +27,6 @@ impl From<ReqwestError> for NoteError {
     fn from(err: ReqwestError) -> Self {
         NoteError::RequestError(err)
     }
-}
-
-#[derive(Serialize)]
-pub struct CreateNoteRequest {
-    pub title: String,
-    pub content: String,
-}
-
-#[derive(Serialize)]
-pub struct UpdateNoteRequest {
-    pub title: String,
-    pub content: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct HierarchyMapping {
-    pub child_id: i32,
-    pub parent_id: Option<i32>,
-    pub hierarchy_type: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct AttachChildRequest {
-    pub child_note_id: i32,
-    pub parent_note_id: Option<i32>,
-    pub hierarchy_type: Option<String>,
 }
 
 pub async fn fetch_note(

@@ -24,16 +24,16 @@ pub struct AppState {
 }
 
 // Request/Response types
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CreateNoteRequest {
-    title: String,
-    content: String,
+    pub title: String,
+    pub content: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct UpdateNoteRequest {
-    title: String,
-    content: String,
+    pub title: String,
+    pub content: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -53,14 +53,14 @@ pub struct NoteMetadataResponse {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct AttachChildRequest {
     pub child_note_id: i32,
     pub parent_note_id: Option<i32>,
     pub hierarchy_type: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct HierarchyMapping {
     pub child_id: i32,
     pub parent_id: Option<i32>,
@@ -111,7 +111,7 @@ pub fn create_router(pool: Pool) -> Router {
         .with_state(state)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ListNotesParams {
     #[serde(default)]
     exclude_content: bool,
@@ -192,7 +192,7 @@ async fn update_note(
     Ok((StatusCode::OK, Json(updated_note.into())))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct DeleteResponse {
     message: String,
     deleted_id: i32,
