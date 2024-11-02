@@ -38,7 +38,7 @@ pub struct UpdateNoteRequest {
     pub content: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct HierarchyMapping {
     pub child_id: i32,
     pub parent_id: Option<i32>,

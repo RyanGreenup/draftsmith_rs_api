@@ -70,6 +70,8 @@ enum HierarchyCommands {
     },
     /// Detach a note from its parent
     Detach,
+    /// Show hierarchy mappings
+    Mappings,
 }
 
 #[derive(Subcommand)]
@@ -209,55 +211,70 @@ async fn main() {
                         }
                     }
                 },
-                NotesCommands::Hierarchy { command } => {
-                    if let Some(child_id) = id {
-                        match command {
-                            HierarchyCommands::Attach { parent_id } => {
-                                let request = rust_cli_app::client::AttachChildRequest {
-                                    child_note_id: child_id,
-                                    parent_note_id: Some(parent_id),
-                                    hierarchy_type: Some("block".to_string()),
-                                };
-                                match rust_cli_app::client::attach_child_note(&url, request).await {
-                                    Ok(_) => println!(
-                                        "Successfully attached note {} to parent {}",
-                                        child_id, parent_id
-                                    ),
-                                    Err(e) => {
-                                        eprintln!("Error: {}", e);
-                                        std::process::exit(1);
-                                    }
+                NotesCommands::Hierarchy { command } => match command {
+                    HierarchyCommands::Attach { parent_id } => {
+                        if let Some(child_id) = id {
+                            let request = rust_cli_app::client::AttachChildRequest {
+                                child_note_id: child_id,
+                                parent_note_id: Some(parent_id),
+                                hierarchy_type: Some("block".to_string()),
+                            };
+                            match rust_cli_app::client::attach_child_note(&url, request).await {
+                                Ok(_) => println!(
+                                    "Successfully attached note {} to parent {}",
+                                    child_id, parent_id
+                                ),
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                    std::process::exit(1);
                                 }
                             }
-                            HierarchyCommands::Detach => {
-                                match rust_cli_app::client::detach_child_note(&url, child_id).await
-                                {
-                                    Ok(_) => println!("Successfully detached note {}", child_id),
-                                    Err(e) => {
-                                        eprintln!("Error: {}", e);
-                                        std::process::exit(1);
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        eprintln!("Error: --id is required for hierarchy commands");
-                        std::process::exit(1);
-                    }
-                }
-                NotesCommands::Tree { simple } => match rust_cli_app::client::fetch_note_tree(&url).await {
-                    Ok(tree) => {
-                        if simple {
-                            print_simple_tree(&tree, 0);
                         } else {
-                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                            eprintln!("Error: --id is required for attach command");
+                            std::process::exit(1);
                         }
                     }
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
+                    HierarchyCommands::Detach => {
+                        if let Some(child_id) = id {
+                            match rust_cli_app::client::detach_child_note(&url, child_id).await {
+                                Ok(_) => println!("Successfully detached note {}", child_id),
+                                Err(e) => {
+                                    eprintln!("Error: {}", e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            eprintln!("Error: --id is required for detach command");
+                            std::process::exit(1);
+                        }
+                    }
+                    HierarchyCommands::Mappings => {
+                        match rust_cli_app::client::fetch_hierarchy_mappings(&url).await {
+                            Ok(mappings) => {
+                                println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
                     }
                 },
+                NotesCommands::Tree { simple } => {
+                    match rust_cli_app::client::fetch_note_tree(&url).await {
+                        Ok(tree) => {
+                            if simple {
+                                print_simple_tree(&tree, 0);
+                            } else {
+                                println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
             },
         },
     }
