@@ -562,23 +562,14 @@ mod tests {
         // Set up the test state
         let state = setup_test_state();
 
-        // Verify the database state
-        let mut conn = state.pool.get().unwrap();
+        // Prepare unique titles for notes to avoid conflicts
+        let id_root = "test_root_node";
+        let id_1 = "test_child_node_1";
+        let id_2 = "test_child_node_2";
 
-        // Hierarchies before
-        let hierarchies_in_db = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
-
-        // Drop the connection
-        drop(conn);
-
-        // Probably safe to assume that these IDs are unique
-        let id_root = "root--lklkklklkljdkdkdkdieieieieiwiwk329032903290329032903290";
-        let id_1 = "001--111idkdkcci382902192j2kj2adidsidsikk218cke91";
-        let id_2 = "002--2222idskldkdkl21908210921092109219021903210921";
-
-        // Create an input NoteTreeNode with new and existing notes
+        // Create an input NoteTreeNode with new notes
         let input_tree = NoteTreeNode {
-            id: 0, // Zero or any negative number indicates a new note
+            id: 0, // Indicates a new note
             title: id_root.to_string(),
             created_at: None,
             modified_at: None,
@@ -604,67 +595,67 @@ mod tests {
         };
 
         // Call the function to update the database
-        let response =
-            update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
-
-        // Give the database a moment to process this
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        let response = update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
 
         // Assert that the operation was successful
-        assert_eq!(response.unwrap(), StatusCode::OK);
+        assert_eq!(
+            response.expect("Update failed"),
+            StatusCode::OK,
+            "Expected status code OK"
+        );
+
+        // Obtain a connection from the pool
+        let mut conn = state
+            .pool
+            .get()
+            .expect("Failed to get a connection from the pool");
 
         // Check that the notes have been added
         use crate::schema::notes::dsl::*;
-        // Reset the connection
-        let mut conn = state.pool.get().expect("Failed to get DB connection");
-        let notes_in_db = notes.load::<Note>(&mut conn).unwrap();
-        drop(conn);
-        // Look through the notes for those ids
-        let note_1 = notes_in_db
-            .iter()
-            .find(|note| note.title == id_1)
-            .expect("Unable to find note 1");
-        let note_2 = notes_in_db
-            .iter()
-            .find(|note| note.title == id_2)
-            .expect("Unable to find note 2");
-        assert_eq!(note_1.title, id_1);
-        assert_eq!(note_2.title, id_2);
+        let notes_in_db = notes
+            .filter(title.eq_any(vec![id_root, id_1, id_2]))
+            .load::<Note>(&mut conn)
+            .expect("Failed to load notes from database");
+
+        assert_eq!(notes_in_db.len(), 3, "Expected 3 notes in the database");
+
+        // Find the notes by title
         let note_root = notes_in_db
             .iter()
             .find(|note| note.title == id_root)
-            .expect("Unable to find root note");
-
-        // Verify that the parent_id of note_1 is the root note
-        use crate::schema::note_hierarchy::dsl::*;
-        let mut conn = state.pool.get().expect("Failed to get DB connection");
-        let hierarchies_in_db_after = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
-        // Find the parent id with a child id of note_1.id
-        dbg!(format!("Note 1 ID: {}", note_1.id));
-        dbg!(format!("Note 2 ID: {}", note_2.id));
-        dbg!(format!("Root Note ID: {}", note_root.id));
-        dbg!(format!("Hierarchies in DB: {:?}", hierarchies_in_db_after));
-        let parent_id = hierarchies_in_db
+            .expect("Root note not found");
+        let note_child_1 = notes_in_db
             .iter()
-            .find(|h| h.child_note_id == Some(note_1.id))
-            .expect("Unable to find hierarchy entry for note 1")
-            .parent_note_id
-            .expect("Parent ID should not be null");
-        assert_eq!(parent_id, note_root.id);
+            .find(|note| note.title == id_1)
+            .expect("Child note 1 not found");
+        let note_child_2 = notes_in_db
+            .iter()
+            .find(|note| note.title == id_2)
+            .expect("Child note 2 not found");
 
-        // Check the notes have been added
-        let notes_in_db_after = notes.load::<Note>(&mut conn).unwrap();
-        assert_eq!(notes_in_db_after.len(), notes_in_db.len() + 2);
+        // Verify hierarchy
+        use crate::schema::note_hierarchy::dsl::*;
+        let hierarchies_in_db = note_hierarchy
+            .filter(child_note_id.eq_any(vec![note_child_1.id, note_child_2.id]))
+            .load::<NoteHierarchy>(&mut conn)
+            .expect("Failed to load hierarchy from database");
 
-        // Check that the hierarchy mappings have been added
-        let hierarchies_in_db = note_hierarchy.load::<NoteHierarchy>(&mut conn).unwrap();
-        assert_eq!(hierarchies_in_db.len(), hierarchies_in_db_after.len() - 2);
+        assert_eq!(
+            hierarchies_in_db.len(),
+            2,
+            "Expected 2 hierarchy entries in the database"
+        );
 
-        // Clean up by removing these
-        vec![note_1, note_2, note_root].iter().for_each(|note| {
-            diesel::delete(note_hierarchy.filter(child_note_id.eq(note.id)))
-                .execute(&mut conn)
-                .unwrap();
-        });
+        // Verify parent IDs
+        for hierarchy in hierarchies_in_db {
+            assert_eq!(
+                hierarchy.parent_note_id,
+                Some(note_root.id),
+                "Hierarchy parent ID does not match root note ID"
+            );
+        }
+
+        // Optionally, clean up by deleting the test data if necessary
+        // Since this is a test, consider running the test in a transaction that rolls back
     }
 }
