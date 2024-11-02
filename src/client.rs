@@ -56,6 +56,7 @@ pub struct AttachChildRequest {
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: String,
+    pub content: String,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub hierarchy_type: Option<String>,
