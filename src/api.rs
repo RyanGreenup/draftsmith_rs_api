@@ -61,6 +61,13 @@ pub struct AttachChildRequest {
 }
 
 #[derive(Serialize)]
+pub struct HierarchyMapping {
+    pub child_id: i32,
+    pub parent_id: Option<i32>,
+    pub hierarchy_type: Option<String>,
+}
+
+#[derive(Serialize)]
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: String,
@@ -94,6 +101,7 @@ pub fn create_router(pool: Pool) -> Router {
             get(get_note).put(update_note).delete(delete_note),
         )
         .route("/notes/tree", get(get_note_tree))
+        .route("/notes/hierarchy", get(get_hierarchy_mappings))
         .route("/notes/hierarchy/attach", post(attach_child_note))
         .route(
             "/notes/hierarchy/detach/:child_id",
@@ -393,6 +401,35 @@ async fn get_note_tree(
     tree.sort_by_key(|node| node.id);
 
     Ok(Json(tree))
+}
+
+async fn get_hierarchy_mappings(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<HierarchyMapping>>, StatusCode> {
+    use crate::schema::note_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mappings = note_hierarchy
+        .select((child_note_id, parent_note_id, hierarchy_type))
+        .load::<(Option<i32>, Option<i32>, Option<String>)>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let response: Vec<HierarchyMapping> = mappings
+        .into_iter()
+        .filter_map(|(child, parent, h_type)| {
+            child.map(|c| HierarchyMapping {
+                child_id: c,
+                parent_id: parent,
+                hierarchy_type: h_type,
+            })
+        })
+        .collect();
+
+    Ok(Json(response))
 }
 
 async fn create_note(
