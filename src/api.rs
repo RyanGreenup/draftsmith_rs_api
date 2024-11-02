@@ -562,10 +562,13 @@ mod tests {
         // Set up the test state
         let state = setup_test_state();
 
+        // Get posix timestamp
+        let now = format!("{}", chrono::Utc::now());
+
         // Prepare unique titles for notes to avoid conflicts
-        let id_root = "test_root_node";
-        let id_1 = "test_child_node_1";
-        let id_2 = "test_child_node_2";
+        let id_root = format!("test_root_node_{}", now);
+        let id_1 = format!("test_child_node_1_{}", now);
+        let id_2 = format!("test_child_node_2_{}", now);
 
         // Create an input NoteTreeNode with new notes
         let input_tree = NoteTreeNode {
@@ -595,7 +598,8 @@ mod tests {
         };
 
         // Call the function to update the database
-        let response = update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
+        let response =
+            update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
 
         // Assert that the operation was successful
         assert_eq!(
@@ -610,52 +614,57 @@ mod tests {
             .get()
             .expect("Failed to get a connection from the pool");
 
-        // Check that the notes have been added
-        use crate::schema::notes::dsl::*;
-        let notes_in_db = notes
-            .filter(title.eq_any(vec![id_root, id_1, id_2]))
-            .load::<Note>(&mut conn)
-            .expect("Failed to load notes from database");
+        conn.test_transaction::<_, DieselError, _>(|conn| {
+            // Check that the notes have been added
+            use crate::schema::notes::dsl::*;
+            let notes_in_db = notes
+                .filter(title.eq_any(vec![id_root.clone(), id_1.clone(), id_2.clone()]))
+                .load::<Note>(conn)
+                .expect("Failed to load notes from database");
 
-        assert_eq!(notes_in_db.len(), 3, "Expected 3 notes in the database");
-
-        // Find the notes by title
-        let note_root = notes_in_db
-            .iter()
-            .find(|note| note.title == id_root)
-            .expect("Root note not found");
-        let note_child_1 = notes_in_db
-            .iter()
-            .find(|note| note.title == id_1)
-            .expect("Child note 1 not found");
-        let note_child_2 = notes_in_db
-            .iter()
-            .find(|note| note.title == id_2)
-            .expect("Child note 2 not found");
-
-        // Verify hierarchy
-        use crate::schema::note_hierarchy::dsl::*;
-        let hierarchies_in_db = note_hierarchy
-            .filter(child_note_id.eq_any(vec![note_child_1.id, note_child_2.id]))
-            .load::<NoteHierarchy>(&mut conn)
-            .expect("Failed to load hierarchy from database");
-
-        assert_eq!(
-            hierarchies_in_db.len(),
-            2,
-            "Expected 2 hierarchy entries in the database"
-        );
-
-        // Verify parent IDs
-        for hierarchy in hierarchies_in_db {
             assert_eq!(
-                hierarchy.parent_note_id,
-                Some(note_root.id),
-                "Hierarchy parent ID does not match root note ID"
+                notes_in_db.len(),
+                3,
+                "Expected 3 matching notes in the database"
             );
-        }
 
-        // Optionally, clean up by deleting the test data if necessary
-        // Since this is a test, consider running the test in a transaction that rolls back
+            // Find the notes by title
+            let note_root = notes_in_db
+                .iter()
+                .find(|note| note.title == id_root)
+                .expect("Root note not found");
+            let note_child_1 = notes_in_db
+                .iter()
+                .find(|note| note.title == id_1)
+                .expect("Child note 1 not found");
+            let note_child_2 = notes_in_db
+                .iter()
+                .find(|note| note.title == id_2)
+                .expect("Child note 2 not found");
+
+            // Verify hierarchy
+            use crate::schema::note_hierarchy::dsl::*;
+            let hierarchies_in_db = note_hierarchy
+                .filter(child_note_id.eq_any(vec![note_child_1.id, note_child_2.id]))
+                .load::<NoteHierarchy>(conn)
+                .expect("Failed to load hierarchy from database");
+
+            assert_eq!(
+                hierarchies_in_db.len(),
+                2,
+                "Expected 2 hierarchy entries in the database"
+            );
+
+            // Verify parent IDs
+            for hierarchy in hierarchies_in_db {
+                assert_eq!(
+                    hierarchy.parent_note_id,
+                    Some(note_root.id),
+                    "Hierarchy parent ID does not match root note ID"
+                );
+            }
+
+            Ok(())
+        })
     }
 }
