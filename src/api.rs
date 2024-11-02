@@ -473,12 +473,8 @@ pub async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
-        use crate::schema::note_hierarchy::dsl::{
-            child_note_id, note_hierarchy,
-        };
-        use crate::schema::notes::dsl::{
-            id as notes_id, modified_at, notes, title,
-        };
+        use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
+        use crate::schema::notes::dsl::{id as notes_id, modified_at, notes, title};
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
             // Insert new note
@@ -682,58 +678,56 @@ mod tests {
         let child2_title = format!("test_existing_child2_{}", now);
 
         // Create initial notes and hierarchy within a transaction
-        let (root_id, child1_id, child2_id) = conn
-            .test_transaction::<_, DieselError, _>(|conn| {
-                // Create three notes
-                use crate::schema::notes::dsl::*;
-                let root_note = diesel::insert_into(notes)
-                    .values(NewNote {
-                        title: &root_title,
-                        content: "root content",
-                        created_at: Some(chrono::Utc::now().naive_utc()),
-                        modified_at: Some(chrono::Utc::now().naive_utc()),
-                    })
-                    .get_result::<Note>(conn)?;
+        let (root_id, child1_id, child2_id) = conn.test_transaction::<_, DieselError, _>(|conn| {
+            // Create three notes
+            use crate::schema::notes::dsl::*;
+            let root_note = diesel::insert_into(notes)
+                .values(NewNote {
+                    title: &root_title,
+                    content: "root content",
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                })
+                .get_result::<Note>(conn)?;
 
-                let child1_note = diesel::insert_into(notes)
-                    .values(NewNote {
-                        title: &child1_title,
-                        content: "child1 content",
-                        created_at: Some(chrono::Utc::now().naive_utc()),
-                        modified_at: Some(chrono::Utc::now().naive_utc()),
-                    })
-                    .get_result::<Note>(conn)?;
+            let child1_note = diesel::insert_into(notes)
+                .values(NewNote {
+                    title: &child1_title,
+                    content: "child1 content",
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                })
+                .get_result::<Note>(conn)?;
 
-                let child2_note = diesel::insert_into(notes)
-                    .values(NewNote {
-                        title: &child2_title,
-                        content: "child2 content",
-                        created_at: Some(chrono::Utc::now().naive_utc()),
-                        modified_at: Some(chrono::Utc::now().naive_utc()),
-                    })
-                    .get_result::<Note>(conn)?;
+            let child2_note = diesel::insert_into(notes)
+                .values(NewNote {
+                    title: &child2_title,
+                    content: "child2 content",
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                })
+                .get_result::<Note>(conn)?;
 
-                // Create initial hierarchy: root -> child1 -> child2
-                use crate::schema::note_hierarchy::dsl::*;
-                diesel::insert_into(note_hierarchy)
-                    .values(&NewNoteHierarchy {
-                        child_note_id: Some(child1_note.id),
-                        parent_note_id: Some(root_note.id),
-                        hierarchy_type: Some("block"),
-                    })
-                    .execute(conn)?;
+            // Create initial hierarchy: root -> child1 -> child2
+            use crate::schema::note_hierarchy::dsl::*;
+            diesel::insert_into(note_hierarchy)
+                .values(&NewNoteHierarchy {
+                    child_note_id: Some(child1_note.id),
+                    parent_note_id: Some(root_note.id),
+                    hierarchy_type: Some("block"),
+                })
+                .execute(conn)?;
 
-                diesel::insert_into(note_hierarchy)
-                    .values(&NewNoteHierarchy {
-                        child_note_id: Some(child2_note.id),
-                        parent_note_id: Some(child1_note.id),
-                        hierarchy_type: Some("block"),
-                    })
-                    .execute(conn)?;
+            diesel::insert_into(note_hierarchy)
+                .values(&NewNoteHierarchy {
+                    child_note_id: Some(child2_note.id),
+                    parent_note_id: Some(child1_note.id),
+                    hierarchy_type: Some("block"),
+                })
+                .execute(conn)?;
 
-                Ok((root_note.id, child1_note.id, child2_note.id))
-            })
-            .unwrap();
+            Ok((root_note.id, child1_note.id, child2_note.id))
+        });
 
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
