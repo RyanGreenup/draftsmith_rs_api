@@ -125,7 +125,9 @@ async fn main() {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::Get { metadata_only } => {
                         if let Some(note_id) = id {
-                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only).await {
+                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
+                                .await
+                            {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
                                 }
@@ -235,7 +237,10 @@ async fn main() {
                                     hierarchy_type: Some("block".to_string()),
                                 };
                                 match rust_cli_app::client::attach_child_note(&url, request).await {
-                                    Ok(_) => println!("Successfully attached note {} to parent {}", child_id, parent_id),
+                                    Ok(_) => println!(
+                                        "Successfully attached note {} to parent {}",
+                                        child_id, parent_id
+                                    ),
                                     Err(e) => {
                                         eprintln!("Error: {}", e);
                                         std::process::exit(1);
@@ -243,7 +248,8 @@ async fn main() {
                                 }
                             }
                             HierarchyCommands::Detach => {
-                                match rust_cli_app::client::detach_child_note(&url, child_id).await {
+                                match rust_cli_app::client::detach_child_note(&url, child_id).await
+                                {
                                     Ok(_) => println!("Successfully detached note {}", child_id),
                                     Err(e) => {
                                         eprintln!("Error: {}", e);
