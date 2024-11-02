@@ -465,7 +465,10 @@ pub async fn update_database_from_notetreenode(
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            eprintln!("Failed to get connection: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Recursive function to process each node
     fn process_node(
@@ -473,6 +476,7 @@ pub async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
+        eprintln!("Processing node: id={}, title={}", node.id, node.title);
         use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
         use crate::schema::notes::dsl::{id as notes_id, modified_at, notes, title};
         // Determine if the note is new or existing
@@ -484,10 +488,21 @@ pub async fn update_database_from_notetreenode(
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             };
-            diesel::insert_into(notes)
+            let result = diesel::insert_into(notes)
                 .values(&new_note)
                 .returning(notes_id)
-                .get_result::<i32>(conn)?
+                .get_result::<i32>(conn);
+            
+            match result {
+                Ok(id) => {
+                    eprintln!("Inserted new note with id: {}", id);
+                    id
+                }
+                Err(e) => {
+                    eprintln!("Failed to insert new note: {:?}", e);
+                    return Err(e);
+                }
+            }
         } else {
             // Update existing note
             diesel::update(notes.filter(notes_id.eq(node.id)))
@@ -501,7 +516,13 @@ pub async fn update_database_from_notetreenode(
 
         // Update hierarchy
         // Remove existing hierarchy entry for this node
-        diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn)?;
+        match diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn) {
+            Ok(_) => eprintln!("Deleted existing hierarchy for node: {}", node_id),
+            Err(e) => {
+                eprintln!("Failed to delete hierarchy for node {}: {:?}", node_id, e);
+                return Err(e);
+            }
+        }
 
         // Insert new hierarchy entry if there is a parent
         if let Some(p_id) = parent_id {
@@ -510,9 +531,16 @@ pub async fn update_database_from_notetreenode(
                 parent_note_id: Some(p_id),
                 hierarchy_type: node.hierarchy_type.as_deref(),
             };
-            diesel::insert_into(note_hierarchy)
+            match diesel::insert_into(note_hierarchy)
                 .values(&new_hierarchy)
-                .execute(conn)?;
+                .execute(conn)
+            {
+                Ok(_) => eprintln!("Inserted new hierarchy: child={}, parent={}", node_id, p_id),
+                Err(e) => {
+                    eprintln!("Failed to insert hierarchy: {:?}", e);
+                    return Err(e);
+                }
+            }
         }
 
         // Process child nodes recursively
