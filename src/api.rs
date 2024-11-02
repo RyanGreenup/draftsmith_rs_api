@@ -824,6 +824,8 @@ mod tests {
         assert_eq!(child1_children.len(), 0);
 
         // Clean up test data
+        use crate::schema::notes::dsl::id as notes_id;
+        
         diesel::delete(note_hierarchy)
             .filter(
                 child_note_id.eq_any(vec![child1_id, child2_id])
@@ -833,7 +835,7 @@ mod tests {
             .expect("Failed to clean up hierarchy");
 
         diesel::delete(notes)
-            .filter(id.eq_any(vec![root_id, child1_id, child2_id]))
+            .filter(notes_id.eq_any(vec![root_id, child1_id, child2_id]))
             .execute(&mut conn)
             .expect("Failed to clean up notes");
     }
