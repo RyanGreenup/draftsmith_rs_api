@@ -178,6 +178,17 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
+#[derive(Debug, Queryable)]
+#[diesel(table_name = crate::schema::notes)]
+pub struct NoteWithoutFts {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    // Exclude the 'fts' field to prevent deserialization issues
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NewNote<'a> {
