@@ -197,20 +197,35 @@ pub fn write_hierarchy_to_yaml(
     std::fs::write(path, yaml)
 }
 
-pub fn write_notes_to_disk(
+pub async fn write_notes_to_disk(
     notes: &[NoteResponse],
     tree: &[NoteTreeNode],
     output_dir: &std::path::Path,
 ) -> std::io::Result<()> {
-    // Save each note as a markdown file
-    for note in notes {
-        let file_path = output_dir.join(format!("{}.md", note.id));
-        std::fs::write(&file_path, &note.content)?;
-    }
+    use tokio::fs;
+    use futures::future::join_all;
+
+    // Create a vector of futures for writing note files
+    let write_futures: Vec<_> = notes
+        .iter()
+        .map(|note| {
+            let file_path = output_dir.join(format!("{}.md", note.id));
+            let content = note.content.clone();
+            async move { fs::write(file_path, content).await }
+        })
+        .collect();
+
+    // Write all note files concurrently
+    join_all(write_futures)
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Save the hierarchy as metadata.yaml
     let metadata_path = output_dir.join("metadata.yaml");
-    write_hierarchy_to_yaml(tree, &metadata_path)?;
+    let yaml = serde_yaml::to_string(tree)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    fs::write(metadata_path, yaml).await?;
 
     Ok(())
 }
@@ -600,7 +615,7 @@ mod tests {
         let tree = fetch_note_tree(base_url).await?;
 
         // Write everything to disk
-        write_notes_to_disk(&notes, &tree, temp_dir.path())?;
+        write_notes_to_disk(&notes, &tree, temp_dir.path()).await?;
 
         // Verify the files exist and contain correct content
         for note in &notes {
