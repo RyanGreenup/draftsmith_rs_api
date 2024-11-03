@@ -188,11 +188,31 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
     Ok(())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct SimpleNode {
+    pub id: i32,
+    // The title is simply there for human readability and is not used in the API
+    // Title is automatically set as H1 of content by Database
+    // See commit 12acc9fb1b177b279181c4d15618e60571722ca1
+    #[allow(unused)]
+    pub title: String,
+    pub children: Vec<SimpleNode>,
+}
+
 pub fn write_hierarchy_to_yaml(
     tree: &[NoteTreeNode],
     path: &std::path::Path,
 ) -> std::io::Result<()> {
-    let yaml = serde_yaml::to_string(&tree)
+    fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
+        SimpleNode {
+            id: node.id,
+            title: node.title.clone(),
+            children: node.children.iter().map(simplify_tree).collect(),
+        }
+    }
+
+    let simple_tree: Vec<SimpleNode> = tree.iter().map(simplify_tree).collect();
+    let yaml = serde_yaml::to_string(&simple_tree)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     std::fs::write(path, yaml)
 }
@@ -221,9 +241,19 @@ pub async fn write_notes_to_disk(
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Save the hierarchy as metadata.yaml
+    fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
+        SimpleNode {
+            id: node.id,
+            title: node.title.clone(),
+            children: node.children.iter().map(simplify_tree).collect(),
+        }
+    }
+
+    let simple_tree: Vec<SimpleNode> = tree.iter().map(simplify_tree).collect();
+
+    // Save the simplified hierarchy as metadata.yaml
     let metadata_path = output_dir.join("metadata.yaml");
-    let yaml = serde_yaml::to_string(tree)
+    let yaml = serde_yaml::to_string(&simple_tree)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     fs::write(metadata_path, yaml).await?;
 
@@ -627,14 +657,17 @@ mod tests {
         // Verify metadata.yaml exists and contains valid hierarchy
         let metadata_path = temp_dir.path().join("metadata.yaml");
         let metadata_content = std::fs::read_to_string(&metadata_path)?;
-        let loaded_tree: Vec<NoteTreeNode> = serde_yaml::from_str(&metadata_content)?;
+
+        let loaded_tree: Vec<SimpleNode> = serde_yaml::from_str(&metadata_content)?;
 
         // Find note1 in the tree and verify note2 is its child
         let root = loaded_tree.iter().find(|n| n.id == note1.id).unwrap();
-        assert_eq!(root.content, "Content 1");
+        // Titles are now automatically set as H1 of content by Database
+        // See commit 12acc9fb1b177b279181c4d15618e60571722ca1
+        // assert_eq!(root.title, "Root Note");
         let child = &root.children[0];
         assert_eq!(child.id, note2.id);
-        assert_eq!(child.content, "Content 2");
+        // assert_eq!(child.title, "Child Note");
 
         Ok(())
     }
@@ -680,16 +713,20 @@ mod tests {
 
         // Read back and verify
         let yaml_content = std::fs::read_to_string(&temp_file)?;
-        let loaded_tree: Vec<NoteTreeNode> = serde_yaml::from_str(&yaml_content)?;
 
-        // Verify structure
-        assert!(!loaded_tree.is_empty());
-        let root = loaded_tree.iter().find(|n| n.id == root_note.id).unwrap();
-        assert_eq!(root.content, "Root content");
-        assert!(!root.children.is_empty());
+        let loaded_nodes: Vec<SimpleNode> = serde_yaml::from_str(&yaml_content)?;
+        assert!(!loaded_nodes.is_empty(), "Tree should not be empty");
+
+        // Find and verify root node
+        let root = loaded_nodes
+            .iter()
+            .find(|n| n.id == root_note.id)
+            .expect("Root note should exist in tree");
+        assert!(!root.children.is_empty(), "Root should have children");
+
+        // Verify child node
         let child = &root.children[0];
-        assert_eq!(child.id, child_note.id);
-        assert_eq!(child.content, "Child content");
+        assert_eq!(child.id, child_note.id, "Child ID should match");
 
         // Cleanup
         std::fs::remove_file(temp_file)?;
