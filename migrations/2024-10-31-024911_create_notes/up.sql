@@ -39,6 +39,64 @@ BEFORE UPDATE ON notes
 FOR EACH ROW
 EXECUTE FUNCTION update_modified_at_column_on_notes();
 
+-- **** Title as H1 -----------------------------------------------------------
+-- ***** Function -------------------------------------------------------------
+CREATE OR REPLACE FUNCTION extract_h1_from_content(content TEXT)
+RETURNS TEXT AS $$
+DECLARE
+    line TEXT;
+    title TEXT := 'Untitled';
+BEGIN
+    -- Iterate over each line in the content
+    FOR line IN SELECT * FROM regexp_split_to_table(content, '\n') LOOP
+        -- Trim leading and trailing spaces
+        line := trim(line);
+        -- Check if the line starts with a Markdown H1
+        IF line LIKE '# %' THEN
+            -- Set title and exit the loop
+            title := substr(line, 3); -- Skip '# ' characters
+            EXIT;
+        END IF;
+    END LOOP;
+
+    RETURN title;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ***** Trigger --------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION update_title_from_content()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the title based on extracted H1
+    NEW.title := extract_h1_from_content(NEW.content);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_title_from_content
+BEFORE INSERT OR UPDATE ON notes
+FOR EACH ROW EXECUTE FUNCTION update_title_from_content();
+
+-- ***** Heading Enforcement --------------------------------------------------
+-- This way the title field is simply an endpoint for the H1 in the content
+-- Enforce title as heading
+CREATE OR REPLACE FUNCTION enforce_read_only_title()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.title IS DISTINCT FROM OLD.title THEN
+        -- Prevent manual updates by reverting to the calculated title
+        NEW.title := OLD.title;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER ensure_title_is_read_only
+BEFORE UPDATE ON notes
+FOR EACH ROW EXECUTE FUNCTION enforce_read_only_title();
+
+
 -- *** Hierarchy --------------------------------------------------------------
 CREATE TABLE note_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
