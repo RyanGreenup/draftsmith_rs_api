@@ -295,8 +295,31 @@ async fn main() {
                         }
                     }
 
+                    // Fetch notes and tree
+                    let notes = match rust_cli_app::client::fetch_notes(&url, false).await {
+                        Ok(notes) => notes,
+                        Err(e) => {
+                            eprintln!("Error fetching notes: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let tree = match rust_cli_app::client::fetch_note_tree(&url).await {
+                        Ok(tree) => tree,
+                        Err(e) => {
+                            eprintln!("Error fetching note tree: {}", e);
+                            std::process::exit(1);
+                        }
+                    };
+
                     // Download the notes
-                    match rust_cli_app::client::write_notes_to_disk(&url, std::path::Path::new(&dir)).await {
+                    match rust_cli_app::client::write_notes_to_disk(
+                        &notes,
+                        &tree,
+                        std::path::Path::new(&dir),
+                    )
+                    .await
+                    {
                         Ok(_) => println!("Successfully cloned notes to {}", dir),
                         Err(e) => {
                             eprintln!("Error cloning notes: {}", e);

@@ -202,8 +202,8 @@ pub async fn write_notes_to_disk(
     tree: &[NoteTreeNode],
     output_dir: &std::path::Path,
 ) -> std::io::Result<()> {
-    use tokio::fs;
     use futures::future::join_all;
+    use tokio::fs;
 
     // Create a vector of futures for writing note files
     let write_futures: Vec<_> = notes
