@@ -467,6 +467,7 @@ mod tests {
         // Titles are now automatically set as H1 of content by Database
         // [[file:migrations/2024-10-31-024911_create_notes/up.sql::CREATE OR REPLACE FUNCTION update_title_from_content()][Postgres set title as h1 content]]
         // assert_eq!(updated_tree.title, "Updated Root");
+        // see commit 12acc9fb1b177b279181c4d15618e60571722ca1
         assert_eq!(updated_tree.content, "Updated root content");
         assert_eq!(updated_tree.children.len(), 2);
 
