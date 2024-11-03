@@ -1,4 +1,4 @@
-use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
+use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
@@ -135,7 +135,10 @@ async fn list_notes(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let results = match notes.load::<Note>(&mut conn) {
+    let results = match notes
+        .select((id, title, content, created_at, modified_at))
+        .load::<NoteWithoutFts>(&mut conn)
+    {
         Ok(results) => results,
         Err(_) => {
             println!("An error occurred while loading notes.");
@@ -155,7 +158,16 @@ async fn list_notes(
             .collect();
         Ok(ErasedJson::pretty(response))
     } else {
-        let response: Vec<NoteResponse> = results.into_iter().map(Into::into).collect();
+        let response: Vec<NoteResponse> = results
+            .into_iter()
+            .map(|note| NoteResponse {
+                id: note.id,
+                title: note.title,
+                content: note.content,
+                created_at: note.created_at,
+                modified_at: note.modified_at,
+            })
+            .collect();
         Ok(ErasedJson::pretty(response))
     }
 }
