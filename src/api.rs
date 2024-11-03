@@ -1,6 +1,6 @@
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, DefaultBodyLimit},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post, put},
@@ -96,7 +96,10 @@ pub fn create_router(pool: Pool) -> Router {
         pool: Arc::new(pool),
     };
 
+    let max_body_size = 1024 * 1024 * 1024; // 1 GB
+
     Router::new()
+        .layer(DefaultBodyLimit::max(max_body_size))
         .route("/notes/flat", get(list_notes).post(create_note))
         .route(
             "/notes/flat/:id",
