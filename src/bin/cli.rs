@@ -43,6 +43,11 @@ enum ClientCommands {
 
 #[derive(Subcommand)]
 enum NotesCommands {
+    /// Clone all notes to a local directory
+    Clone {
+        /// Directory to save notes to
+        dir: String,
+    },
     /// Flat API commands
     Flat {
         #[command(subcommand)]
@@ -276,6 +281,25 @@ async fn main() {
                         }
                         Err(e) => {
                             eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                NotesCommands::Clone { dir } => {
+                    // Create the directory if it doesn't exist
+                    match std::fs::create_dir_all(&dir) {
+                        Ok(_) => (),
+                        Err(e) => {
+                            eprintln!("Error creating directory {}: {}", dir, e);
+                            std::process::exit(1);
+                        }
+                    }
+
+                    // Download the notes
+                    match rust_cli_app::client::write_notes_to_disk(&url, std::path::Path::new(&dir)).await {
+                        Ok(_) => println!("Successfully cloned notes to {}", dir),
+                        Err(e) => {
+                            eprintln!("Error cloning notes: {}", e);
                             std::process::exit(1);
                         }
                     }
