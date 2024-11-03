@@ -99,9 +99,6 @@ enum FlatCommands {
     },
     /// Create a new note
     Create {
-        /// The title of the note
-        #[arg(long)]
-        title: String,
         /// The content of the note
         #[arg(long)]
         content: String,
@@ -170,10 +167,13 @@ async fn main() {
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
                     }
-                    FlatCommands::Create { title, content } => {
+                    FlatCommands::Create { content } => {
                         let note = rust_cli_app::client::create_note(
                             &url,
-                            rust_cli_app::client::CreateNoteRequest { title, content },
+                            rust_cli_app::client::CreateNoteRequest {
+                                title: None, // Pass None for the title
+                                content,
+                            },
                         )
                         .await
                         .unwrap();
