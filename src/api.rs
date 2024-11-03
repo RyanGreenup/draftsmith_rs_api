@@ -593,36 +593,34 @@ mod tests {
         // Set up the test state
         let state = setup_test_state();
 
-        // Get posix timestamp
+        // Get unique content identifiers using timestamp
         let now = format!("{}", chrono::Utc::now());
-
-        // Prepare unique titles for notes to avoid conflicts
-        let id_root = format!("test_root_node_{}", now);
-        let id_1 = format!("test_child_node_1_{}", now);
-        let id_2 = format!("test_child_node_2_{}", now);
+        let root_content = format!("root_content_{}", now);
+        let child1_content = format!("child1_content_{}", now);
+        let child2_content = format!("child2_content_{}", now);
 
         // Create an input NoteTreeNode with new notes
         let input_tree = NoteTreeNode {
             id: 0, // Indicates a new note
-            title: id_root.to_string(),
-            content: "root content".to_string(),
+            title: "".to_string(), // Title is read-only
+            content: root_content.clone(),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
-                    id: 0, // New child note
-                    title: id_1.to_string(),
-                    content: "child 1 content".to_string(),
+                    id: 0,
+                    title: "".to_string(),
+                    content: child1_content.clone(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
                 NoteTreeNode {
-                    id: 0, // New child note
-                    title: id_2.to_string(),
-                    content: "child 2 content".to_string(),
+                    id: 0,
+                    title: "".to_string(),
+                    content: child2_content.clone(),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -652,7 +650,11 @@ mod tests {
             // Check that the notes have been added
             use crate::schema::notes::dsl::*;
             let notes_in_db = notes
-                .filter(title.eq_any(vec![id_root.clone(), id_1.clone(), id_2.clone()]))
+                .filter(content.eq_any(vec![
+                    root_content.clone(),
+                    child1_content.clone(),
+                    child2_content.clone(),
+                ]))
                 .load::<Note>(conn)
                 .expect("Failed to load notes from database");
 
@@ -662,18 +664,18 @@ mod tests {
                 "Expected 3 matching notes in the database"
             );
 
-            // Find the notes by title
+            // Find the notes by content
             let note_root = notes_in_db
                 .iter()
-                .find(|note| note.title == id_root)
+                .find(|note| note.content == root_content)
                 .expect("Root note not found");
             let note_child_1 = notes_in_db
                 .iter()
-                .find(|note| note.title == id_1)
+                .find(|note| note.content == child1_content)
                 .expect("Child note 1 not found");
             let note_child_2 = notes_in_db
                 .iter()
-                .find(|note| note.title == id_2)
+                .find(|note| note.content == child2_content)
                 .expect("Child note 2 not found");
 
             // Verify hierarchy
