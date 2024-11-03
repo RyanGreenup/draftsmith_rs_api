@@ -1,6 +1,6 @@
 pub use crate::api::{
-    AttachChildRequest, CreateNoteRequest, HierarchyMapping, NoteResponse, NoteTreeNode,
-    UpdateNoteRequest,
+    AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest,
+    HierarchyMapping, NoteResponse, NoteTreeNode, UpdateNoteRequest,
 };
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
@@ -186,6 +186,23 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
         .error_for_status()
         .map_err(NoteError::from)?;
     Ok(())
+}
+
+pub async fn batch_update_notes(
+    base_url: &str,
+    updates: Vec<(i32, UpdateNoteRequest)>,
+) -> Result<BatchUpdateResponse, NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/{FLAT_API}/batch", base_url);
+    let payload = BatchUpdateRequest { updates };
+    let response = client
+        .put(url)
+        .json(&payload)
+        .send()
+        .await?
+        .error_for_status()?;
+    let result = response.json::<BatchUpdateResponse>().await?;
+    Ok(result)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

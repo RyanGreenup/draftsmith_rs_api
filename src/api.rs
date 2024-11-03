@@ -171,12 +171,12 @@ async fn get_note(
     Ok(Json(note.into()))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct BatchUpdateRequest {
     pub updates: Vec<(i32, UpdateNoteRequest)>,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct BatchUpdateResponse {
     pub updated: Vec<NoteResponse>,
     pub failed: Vec<i32>,
@@ -906,6 +906,82 @@ mod tests {
         assert_eq!(updated_note1.content, "Updated Content 1");
         // assert_eq!(updated_note2.title, "Updated Title 2");
         assert_eq!(updated_note2.content, "Updated Content 2");
+    }
+
+    #[tokio::test]
+    async fn test_batch_update_notes_client() {
+        let state = setup_test_state();
+
+        // Create test notes
+        let note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note 1".to_string(),
+                content: "Original content 1".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+         .0;
+
+        let note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note 2".to_string(),
+                content: "Original content 2".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+         .0;
+
+        // Prepare batch updates
+        let updates = vec![
+            (
+                note1.id,
+                UpdateNoteRequest {
+                    title: Some("Updated Note 1".to_string()),
+                    content: "Updated content 1".to_string(),
+                },
+            ),
+            (
+                note2.id,
+                UpdateNoteRequest {
+                    title: Some("Updated Note 2".to_string()),
+                    content: "Updated content 2".to_string(),
+                },
+            ),
+        ];
+
+        // Perform batch update
+        let result = update_notes(State(state.clone()), Json(BatchUpdateRequest { updates }))
+            .await
+            .unwrap()
+            .0;
+
+        // Verify results
+        assert_eq!(result.updated.len(), 2, "Expected 2 successful updates");
+        assert_eq!(result.failed.len(), 0, "Expected no failed updates");
+
+        // Verify the updates by fetching the notes
+        let updated_note1 = get_note(Path(note1.id), State(state.clone()))
+            .await
+            .unwrap()
+            .0;
+
+        let updated_note2 = get_note(Path(note2.id), State(state.clone()))
+            .await
+            .unwrap()
+            .0;
+
+        assert_eq!(updated_note1.content, "Updated content 1");
+        assert_eq!(updated_note2.content, "Updated content 2");
+
+        // Clean up
+        let _ = delete_note(Path(note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(note2.id), State(state.clone())).await;
     }
 
     #[tokio::test]
