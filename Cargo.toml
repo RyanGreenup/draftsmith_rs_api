@@ -6,6 +6,7 @@ edition = "2021"
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
+tempfile = "3.13.0"
 
 [[bin]]
 name = "cli"
@@ -25,6 +26,7 @@ tower = "0.5.1"
 axum-test = "16.3.0"
 serde_json = "1.0.132"
 reqwest = { version = "0.11", features = ["json"] }
+serde_yaml = "0.9.34"
 
 [dependencies.clap]
 version = "4.5.20"
