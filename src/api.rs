@@ -415,9 +415,7 @@ async fn detach_child_note(
 async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::{
-        child_note_id, hierarchy_type, note_hierarchy, parent_note_id,
-    };
+    use crate::schema::note_hierarchy::dsl::note_hierarchy;
     use crate::schema::notes::dsl::{
         content, created_at, id as note_id_col, modified_at, notes, title,
     };
