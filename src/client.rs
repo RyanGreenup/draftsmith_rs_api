@@ -188,6 +188,15 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
     Ok(())
 }
 
+pub fn write_hierarchy_to_yaml(
+    tree: &[NoteTreeNode],
+    path: &std::path::Path,
+) -> std::io::Result<()> {
+    let yaml = serde_yaml::to_string(&tree)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    std::fs::write(path, yaml)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -529,5 +538,63 @@ mod tests {
             attach_result.is_err(),
             "Attachment should fail with invalid hierarchy type"
         );
+    }
+
+    #[tokio::test]
+    async fn test_save_note_tree_as_yaml() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a test hierarchy
+        let root_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Root Note".to_string(),
+                content: "Root content".to_string(),
+            },
+        )
+        .await?;
+
+        let child_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Child Note".to_string(),
+                content: "Child content".to_string(),
+            },
+        )
+        .await?;
+
+        // Attach child to root
+        let attach_request = AttachChildRequest {
+            child_note_id: child_note.id,
+            parent_note_id: Some(root_note.id),
+            hierarchy_type: Some("block".to_string()),
+        };
+        attach_child_note(base_url, attach_request).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Fetch and save the tree
+        let tree = fetch_note_tree(base_url).await?;
+        let temp_file = std::env::temp_dir().join("note_tree.yaml");
+        write_hierarchy_to_yaml(&tree, &temp_file)?;
+
+        // Read back and verify
+        let yaml_content = std::fs::read_to_string(&temp_file)?;
+        let loaded_tree: Vec<NoteTreeNode> = serde_yaml::from_str(&yaml_content)?;
+
+        // Verify structure
+        assert!(!loaded_tree.is_empty());
+        let root = loaded_tree.iter().find(|n| n.id == root_note.id).unwrap();
+        assert_eq!(root.content, "Root content");
+        assert!(!root.children.is_empty());
+        let child = &root.children[0];
+        assert_eq!(child.id, child_note.id);
+        assert_eq!(child.content, "Child content");
+
+        // Cleanup
+        std::fs::remove_file(temp_file)?;
+
+        Ok(())
     }
 }
