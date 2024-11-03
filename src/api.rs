@@ -416,8 +416,12 @@ async fn detach_child_note(
 async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::*;
-    use crate::schema::notes::dsl::*;
+    use crate::schema::note_hierarchy::dsl::{
+        note_hierarchy, child_note_id, hierarchy_type, parent_note_id,
+    };
+    use crate::schema::notes::dsl::{
+        created_at, id as note_id, modified_at, notes, content, title,
+    };
 
     let mut conn = state
         .pool
@@ -426,7 +430,7 @@ async fn get_note_tree(
 
     // Get all notes
     let all_notes: Vec<NoteWithoutFts> = notes
-        .select((id, title, content, created_at, modified_at))
+        .select((note_id, title, content, created_at, modified_at))
         .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
