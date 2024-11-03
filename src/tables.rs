@@ -311,7 +311,9 @@ mod tests {
                 .expect("Error saving new note");
 
             dbg!(format!("Created Note #: {:?}", created_note.id));
-            assert_eq!(created_note.title, "Test Note");
+            // Title is now a fead only field that is generated from the content
+            // See commit 12acc9f
+            // // assert_eq!(created_note.title, "Test Note");
             assert_eq!(created_note.content, "This is a test note");
 
             // Test Read
@@ -321,7 +323,7 @@ mod tests {
                 .expect("Error loading note");
 
             assert_eq!(read_note.id, created_note.id);
-            assert_eq!(read_note.title, created_note.title);
+            // assert_eq!(read_note.title, created_note.title);
 
             // Test Update
             let updated_note = diesel::update(notes::table.find(created_note.id))
