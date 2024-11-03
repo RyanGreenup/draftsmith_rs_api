@@ -6,6 +6,7 @@ use axum::{
     routing::{delete, get, post, put},
     Json, Router,
 };
+use axum_extra::response::ErasedJson;
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
@@ -148,10 +149,10 @@ async fn list_notes(
                 modified_at: note.modified_at,
             })
             .collect();
-        Ok(Json(json!(response)))
+        Ok(ErasedJson::pretty(response))
     } else {
         let response: Vec<NoteResponse> = results.into_iter().map(Into::into).collect();
-        Ok(Json(json!(response)))
+        Ok(ErasedJson::pretty(response))
     }
 }
 
