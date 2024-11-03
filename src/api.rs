@@ -1,6 +1,6 @@
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy};
 use axum::{
-    extract::{Path, Query, State, DefaultBodyLimit},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post, put},
@@ -135,9 +135,13 @@ async fn list_notes(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let results = notes
-        .load::<Note>(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = match notes.load::<Note>(&mut conn) {
+        Ok(results) => results,
+        Err(_) => {
+            println!("An error occurred while loading notes.");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     if params.exclude_content {
         let response: Vec<NoteMetadataResponse> = results
