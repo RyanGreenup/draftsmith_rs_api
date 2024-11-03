@@ -492,7 +492,7 @@ async fn update_database_from_notetreenode(
             // Insert new note
             let new_note = NewNote {
                 title: &node.title,
-                content: "", // Add content if provided
+                content: &node.content,
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             };
