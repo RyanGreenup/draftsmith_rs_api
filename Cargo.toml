@@ -28,6 +28,7 @@ serde_json = "1.0.132"
 reqwest = { version = "0.11", features = ["json"] }
 serde_yaml = "0.9.34"
 futures = "0.3.31"
+axum-extra = { version = "0.9.4", features = ["erased-json"] }
 
 [dependencies.clap]
 version = "4.5.20"
