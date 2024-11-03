@@ -1025,15 +1025,15 @@ mod tests {
                 .execute(conn)
                 .expect("Error creating mapping 2");
 
-            // Test search by note title and type name
+            // Test search by note content and type name
             let search_results = note_type_mappings::table
                 .inner_join(notes::table)
                 .inner_join(note_types::table)
-                .filter(notes::title.eq("Test Note 1 for Type Mapping Search"))
+                .filter(notes::content.eq("This is test note 1 for type mapping search"))
                 .filter(note_types::name.eq("Test Type 1"))
                 .select((
                     note_type_mappings::all_columns,
-                    notes::title,
+                    notes::content,
                     note_types::name,
                 ))
                 .load::<(NoteTypeMapping, String, String)>(conn)
@@ -1042,7 +1042,10 @@ mod tests {
             assert_eq!(search_results.len(), 1);
             assert_eq!(search_results[0].0.note_id, created_note1.id);
             assert_eq!(search_results[0].0.type_id, created_type1.id);
-            assert_eq!(search_results[0].1, "Test Note 1 for Type Mapping Search");
+            assert_eq!(
+                search_results[0].1,
+                "This is test note 1 for type mapping search"
+            );
             assert_eq!(search_results[0].2, "Test Type 1");
 
             Ok::<(), diesel::result::Error>(())
