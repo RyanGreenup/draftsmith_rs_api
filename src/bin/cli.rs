@@ -171,7 +171,7 @@ async fn main() {
                         let note = rust_cli_app::client::create_note(
                             &url,
                             rust_cli_app::client::CreateNoteRequest {
-                                title: String::new(), // Use an empty String instead of None
+                                title: String::new(),
                                 content,
                             },
                         )
