@@ -425,8 +425,9 @@ async fn get_note_tree(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all notes
-    let all_notes: Vec<Note> = notes
-        .load::<Note>(&mut conn)
+    let all_notes: Vec<NoteWithoutFts> = notes
+        .select((id, title, content, created_at, modified_at))
+        .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all hierarchies
@@ -454,7 +455,7 @@ async fn get_note_tree(
     // Function to recursively build the tree
     fn build_tree(
         note_id: i32,
-        notes_map: &HashMap<i32, &Note>,
+        notes_map: &HashMap<i32, &NoteWithoutFts>,
         parent_to_children: &HashMap<Option<i32>, Vec<(i32, Option<String>)>>,
     ) -> NoteTreeNode {
         let note = notes_map.get(&note_id).unwrap();
