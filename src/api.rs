@@ -101,6 +101,7 @@ pub fn create_router(pool: Pool) -> Router {
             "/notes/flat/:id",
             get(get_note).put(update_note).delete(delete_note),
         )
+        .route("/notes/flat/batch", put(update_notes))
         .route("/notes/tree", get(get_note_tree))
         .route("/notes/hierarchy", get(get_hierarchy_mappings))
         .route("/notes/hierarchy/attach", post(attach_child_note))
@@ -167,6 +168,49 @@ async fn get_note(
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(note.into()))
+}
+
+#[derive(Deserialize)]
+pub struct BatchUpdateRequest {
+    pub updates: Vec<(i32, UpdateNoteRequest)>,
+}
+
+#[derive(Serialize)]
+pub struct BatchUpdateResponse {
+    pub updated: Vec<NoteResponse>,
+    pub failed: Vec<i32>,
+}
+
+async fn update_notes(
+    State(state): State<AppState>,
+    Json(payload): Json<BatchUpdateRequest>,
+) -> Result<Json<BatchUpdateResponse>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut updated = Vec::new();
+    let mut failed = Vec::new();
+
+    for (note_id, update) in payload.updates {
+        let result = diesel::update(notes.find(note_id))
+            .set((
+                title.eq(update.title),
+                content.eq(update.content),
+                modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+            ))
+            .get_result::<Note>(&mut conn);
+
+        match result {
+            Ok(note) => updated.push(note.into()),
+            Err(_) => failed.push(note_id),
+        }
+    }
+
+    Ok(Json(BatchUpdateResponse { updated, failed }))
 }
 
 async fn update_note(
@@ -744,6 +788,95 @@ mod tests {
 
             Ok(())
         })
+    }
+
+    #[tokio::test]
+    async fn test_batch_update_notes() {
+        let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
+        let mut conn = pool.get().expect("Failed to get connection");
+
+        // Create test notes
+        let now = format!("{}", chrono::Utc::now());
+        let note1_title = format!("test_note1_{}", now);
+        let note2_title = format!("test_note2_{}", now);
+
+        let note1 = diesel::insert_into(crate::schema::notes::table)
+            .values(NewNote {
+                title: &note1_title,
+                content: "original content 1",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create note 1");
+
+        let note2 = diesel::insert_into(crate::schema::notes::table)
+            .values(NewNote {
+                title: &note2_title,
+                content: "original content 2",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create note 2");
+
+        let _cleanup = TestCleanup {
+            pool: pool.clone(),
+            note_ids: vec![note1.id, note2.id],
+        };
+
+        // Create batch update request
+        let updates = vec![
+            (
+                note1.id,
+                UpdateNoteRequest {
+                    title: "Updated Title 1".to_string(),
+                    content: "Updated Content 1".to_string(),
+                },
+            ),
+            (
+                note2.id,
+                UpdateNoteRequest {
+                    title: "Updated Title 2".to_string(),
+                    content: "Updated Content 2".to_string(),
+                },
+            ),
+        ];
+
+        let batch_request = BatchUpdateRequest { updates };
+
+        // Perform batch update
+        let response = update_notes(State(state), Json(batch_request))
+            .await
+            .expect("Failed to perform batch update");
+
+        let batch_response = response.0;
+        assert_eq!(
+            batch_response.updated.len(),
+            2,
+            "Expected 2 successful updates"
+        );
+        assert_eq!(batch_response.failed.len(), 0, "Expected no failed updates");
+
+        // Verify updates in database
+        use crate::schema::notes::dsl::*;
+        let updated_notes = notes
+            .filter(id.eq_any(vec![note1.id, note2.id]))
+            .load::<Note>(&mut conn)
+            .expect("Failed to load updated notes");
+
+        assert_eq!(updated_notes.len(), 2, "Expected 2 notes in database");
+
+        let updated_note1 = updated_notes.iter().find(|n| n.id == note1.id).unwrap();
+        let updated_note2 = updated_notes.iter().find(|n| n.id == note2.id).unwrap();
+
+        // Title is automatically set as H1 of content by Database
+        // See commit 12acc9fb1b177b279181c4d15618e60571722ca1
+        // assert_eq!(updated_note1.title, "Updated Title 1");
+        assert_eq!(updated_note1.content, "Updated Content 1");
+        // assert_eq!(updated_note2.title, "Updated Title 2");
+        assert_eq!(updated_note2.content, "Updated Content 2");
     }
 
     #[tokio::test]
