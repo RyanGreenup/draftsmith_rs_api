@@ -1329,6 +1329,32 @@ mod tests {
     }
 
     #[test]
+    fn test_h1_title_generation() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // Create a note with H1 heading
+            let new_note = NewNote {
+                title: "Initial Title",
+                content: "# Some Heading\nsome content",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note = diesel::insert_into(notes::table)
+                .values(&new_note)
+                .get_result::<Note>(conn)
+                .expect("Error saving new note");
+
+            // Verify content and title
+            assert_eq!(created_note.content, "# Some Heading\nsome content");
+            assert_eq!(created_note.title, "Some Heading");
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
     fn test_task_schedules_types_crud() {
         let conn = &mut establish_connection();
 

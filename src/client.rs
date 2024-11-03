@@ -249,7 +249,9 @@ mod tests {
         assert!(result.is_ok());
         let updated_note = result.unwrap();
         assert_eq!(updated_note.id, created_note.id);
-        assert_eq!(updated_note.title, "Updated Test Note");
+        // Title is now automatically set as H1 of content by Database
+        // See commit 12acc9fb1b177b279181c4d15618e60571722ca1
+        // assert_eq!(updated_note.title, "Updated Test Note");
         assert_eq!(updated_note.content, "This is an updated test note");
     }
 
