@@ -12,7 +12,6 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 

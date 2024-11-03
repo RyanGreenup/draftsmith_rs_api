@@ -4,8 +4,36 @@ pub use crate::api::{
 };
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt;
+
+fn compute_hash(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(content.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
+    let mut parent_map = HashMap::new();
+
+    fn process_node(
+        node: &SimpleNode,
+        parent_id: Option<i32>,
+        map: &mut HashMap<i32, Option<i32>>,
+    ) {
+        map.insert(node.id, parent_id);
+        for child in &node.children {
+            process_node(child, Some(node.id), map);
+        }
+    }
+
+    for node in nodes {
+        process_node(node, None, &mut parent_map);
+    }
+
+    parent_map
+}
 
 #[derive(Debug)]
 pub enum NoteError {
@@ -230,12 +258,9 @@ pub async fn batch_update_notes(
     Ok(result)
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct SimpleNode {
     pub id: i32,
-    // The title is simply there for human readability and is not used in the API
-    // Title is automatically set as H1 of content by Database
-    // See commit 12acc9fb1b177b279181c4d15618e60571722ca1
     #[allow(unused)]
     pub title: String,
     pub children: Vec<SimpleNode>,
@@ -259,6 +284,7 @@ pub fn write_hierarchy_to_yaml(
     std::fs::write(path, yaml)
 }
 
+#[allow(dead_code)]
 fn simple_node_to_note_tree_node(
     simple_node: &SimpleNode,
     content_map: &HashMap<i32, String>,
@@ -280,6 +306,17 @@ fn simple_node_to_note_tree_node(
 
 pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
     use std::fs;
+
+    // Fetch existing notes from the server
+    let server_notes = fetch_notes(base_url, false).await?;
+    // Build a mapping from note ID to NoteResponse for easy lookup
+    let server_notes_map: HashMap<i32, NoteResponse> = server_notes
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
+
+    // Fetch existing note hierarchy from the server
+    let server_tree = fetch_note_tree(base_url).await?;
 
     // Read metadata.yaml to get hierarchy information
     let metadata_path = dir_path.join("metadata.yaml");
@@ -312,10 +349,92 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         }
     }
 
-    // Convert SimpleNode to NoteTreeNode and update the tree
-    for root_node in tree {
-        let note_tree_node = simple_node_to_note_tree_node(&root_node, &content_map);
-        update_note_tree(base_url, note_tree_node).await?;
+    // Convert server_tree (Vec<NoteTreeNode>) to Vec<SimpleNode> for comparison
+    fn note_tree_node_to_simple_node(node: &NoteTreeNode) -> SimpleNode {
+        SimpleNode {
+            id: node.id,
+            title: node.title.clone().unwrap_or_default(),
+            children: node
+                .children
+                .iter()
+                .map(note_tree_node_to_simple_node)
+                .collect(),
+        }
+    }
+
+    let server_simple_tree: Vec<SimpleNode> = server_tree
+        .iter()
+        .map(note_tree_node_to_simple_node)
+        .collect();
+
+    // Compare the local and server hierarchies
+    let hierarchy_unchanged = tree == server_simple_tree;
+
+    // Prepare the set of notes that have changed
+    let mut notes_to_update = Vec::new();
+
+    for (&id, local_content) in &content_map {
+        if let Some(server_note) = server_notes_map.get(&id) {
+            // Compare content hashes
+            let local_hash = compute_hash(local_content);
+            let server_hash = compute_hash(&server_note.content);
+
+            if local_hash != server_hash {
+                // Note content has changed
+                notes_to_update.push((
+                    id,
+                    UpdateNoteRequest {
+                        title: None,
+                        content: local_content.clone(),
+                    },
+                ));
+            }
+        } else {
+            // Note exists locally but not on the server; handle as needed
+            // For this case, we might want to create the note on the server
+            // but then the id will change, so it would diverge from the local
+            // For now we'll leave it, one can use the cli and re-clone
+        }
+    }
+
+    if hierarchy_unchanged {
+        if !notes_to_update.is_empty() {
+            batch_update_notes(base_url, notes_to_update).await?;
+        }
+    } else {
+        // Determine hierarchy differences and generate necessary API calls
+        let local_parent_map = extract_parent_mapping(&tree);
+        let server_parent_map = extract_parent_mapping(&server_simple_tree);
+
+        // Identify differences
+        for (&note_id, &local_parent_id) in &local_parent_map {
+            let server_parent_id = server_parent_map.get(&note_id);
+
+            if server_parent_id != Some(&local_parent_id) {
+                // Parent has changed for this note
+                // Detach from old parent if necessary
+                if let Some(&Some(_old_parent_id)) = server_parent_map.get(&note_id) {
+                    detach_child_note(base_url, note_id).await?;
+                }
+                // Attach to new parent if necessary
+                if let Some(new_parent_id) = local_parent_id {
+                    attach_child_note(
+                        base_url,
+                        AttachChildRequest {
+                            child_note_id: note_id,
+                            parent_note_id: Some(new_parent_id),
+                            hierarchy_type: Some("block".to_string()),
+                        },
+                    )
+                    .await?;
+                }
+            }
+        }
+
+        // Update changed notes
+        if !notes_to_update.is_empty() {
+            batch_update_notes(base_url, notes_to_update).await?;
+        }
     }
 
     Ok(())
