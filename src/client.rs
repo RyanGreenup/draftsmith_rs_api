@@ -4,7 +4,7 @@ pub use crate::api::{
 };
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
-use std::fmt;
+use std::{fmt, future::Future, pin::Pin};
 
 #[derive(Debug)]
 pub enum NoteError {
@@ -232,6 +232,108 @@ pub fn write_hierarchy_to_yaml(
     let yaml = serde_yaml::to_string(&simple_tree)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     std::fs::write(path, yaml)
+}
+
+pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) {
+    use std::fs;
+
+    // Read metadata.yaml to get hierarchy information
+    let metadata_path = dir_path.join("metadata.yaml");
+    let metadata_content = fs::read_to_string(metadata_path).expect("Failed to read metadata.yaml");
+    let tree: Vec<SimpleNode> =
+        serde_yaml::from_str(&metadata_content).expect("Failed to parse metadata.yaml");
+
+    // Read all .md files in the directory
+    let mut notes = Vec::new();
+    for entry in fs::read_dir(dir_path).expect("Failed to read directory") {
+        let entry = entry.expect("Failed to read directory entry");
+        let path = entry.path();
+
+        if path.extension().map_or(false, |ext| ext == "md") {
+            // Extract note ID from filename
+            let id = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .and_then(|s| s.parse::<i32>().ok())
+                .expect("Failed to parse note ID from filename");
+
+            // Read note content
+            let content = fs::read_to_string(&path).expect("Failed to read note content");
+
+            notes.push((
+                id,
+                UpdateNoteRequest {
+                    title: None, // Title will be set from content
+                    content,
+                },
+            ));
+        }
+    }
+
+    // Update notes in database
+    let client = reqwest::Client::new();
+    let url = format!("{}/notes/flat/batch", base_url);
+    let payload = BatchUpdateRequest { updates: notes };
+
+    client
+        .put(url)
+        .json(&payload)
+        .send()
+        .await
+        .expect("Failed to send batch update request")
+        .error_for_status()
+        .expect("Batch update request failed");
+
+    // Update hierarchy based on metadata.yaml
+    fn process_tree_node<'a>(
+        base_url: &'a str,
+        node: &'a SimpleNode,
+        parent_id: Option<i32>,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
+        Box::pin(async move {
+            // First detach the note from any existing parent if it has one
+            if parent_id.is_none() {
+                let client = reqwest::Client::new();
+                let url = format!("{}/notes/hierarchy/detach/{}", base_url, node.id);
+                // Ignore 404 errors since the note might not have a parent
+                if let Ok(response) = client.delete(url).send().await {
+                    // Only check other error types
+                    if response.status() != reqwest::StatusCode::NOT_FOUND {
+                        response.error_for_status().expect("Detach request failed");
+                    }
+                }
+            }
+
+            // If there's a parent, attach this note to it
+            if let Some(parent_id) = parent_id {
+                let client = reqwest::Client::new();
+                let url = format!("{}/notes/hierarchy/attach", base_url);
+                let attach_request = AttachChildRequest {
+                    child_note_id: node.id,
+                    parent_note_id: Some(parent_id),
+                    hierarchy_type: Some("block".to_string()),
+                };
+                client
+                    .post(url)
+                    .json(&attach_request)
+                    .send()
+                    .await
+                    .expect("Failed to attach note")
+                    .error_for_status()
+                    .expect("Attach request failed");
+            }
+
+            // Process all children recursively
+            for child in &node.children {
+                process_tree_node(base_url, child, Some(node.id)).await;
+            }
+        })
+    }
+
+    // Process each root node in the tree
+    for node in tree {
+        process_tree_node(base_url, &node, None).await;
+    }
 }
 
 pub async fn write_notes_to_disk(
@@ -685,6 +787,96 @@ mod tests {
         let child = &root.children[0];
         assert_eq!(child.id, note2.id);
         // assert_eq!(child.title, "Child Note");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_read_from_disk() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a temporary directory
+        let temp_dir = tempfile::tempdir()?;
+
+        // Create test notes with specific content
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: "Content 1".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: "Content 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Create hierarchy by attaching note2 as child of note1
+        let attach_request = AttachChildRequest {
+            child_note_id: note2.id,
+            parent_note_id: Some(note1.id),
+            hierarchy_type: Some("block".to_string()),
+        };
+        attach_child_note(base_url, attach_request).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Fetch current state
+        let notes = fetch_notes(base_url, false).await?;
+        let tree = fetch_note_tree(base_url).await?;
+
+        // Write everything to disk
+        write_notes_to_disk(&notes, &tree, temp_dir.path()).await?;
+
+        // Modify the notes directly in database to verify our read_from_disk actually updates them
+        let update1 = UpdateNoteRequest {
+            title: Some("Changed Title 1".to_string()),
+            content: "Changed Content 1".to_string(),
+        };
+        let update2 = UpdateNoteRequest {
+            title: Some("Changed Title 2".to_string()),
+            content: "Changed Content 2".to_string(),
+        };
+        update_note(base_url, note1.id, update1).await?;
+        update_note(base_url, note2.id, update2).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Detach the notes to modify hierarchy
+        detach_child_note(base_url, note2.id).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Now read everything back from disk and update the database
+        read_from_disk(base_url, temp_dir.path()).await;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Verify the notes were restored to their original state
+        let restored_notes = fetch_notes(base_url, false).await?;
+        let restored_tree = fetch_note_tree(base_url).await?;
+
+        // Verify note contents were restored
+        let restored_note1 = restored_notes.iter().find(|n| n.id == note1.id).unwrap();
+        let restored_note2 = restored_notes.iter().find(|n| n.id == note2.id).unwrap();
+        assert_eq!(restored_note1.content, "Content 1");
+        assert_eq!(restored_note2.content, "Content 2");
+
+        // Verify hierarchy was restored
+        let root = restored_tree.iter().find(|n| n.id == note1.id).unwrap();
+        assert_eq!(root.children.len(), 1);
+        assert_eq!(root.children[0].id, note2.id);
+        assert_eq!(root.children[0].hierarchy_type, Some("block".to_string()));
 
         Ok(())
     }
