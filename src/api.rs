@@ -12,6 +12,7 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -105,6 +106,8 @@ pub fn create_router(pool: Pool) -> Router {
             "/notes/flat/:id",
             get(get_note).put(update_note).delete(delete_note),
         )
+        .route("/notes/flat/:id/hash", get(get_note_hash))
+        .route("/notes/flat/hashes", get(get_all_note_hashes))
         .route("/notes/flat/batch", put(update_notes))
         .route("/notes/tree", get(get_note_tree))
         .route("/notes/hierarchy", get(get_hierarchy_mappings))
@@ -289,6 +292,78 @@ async fn update_note(
 struct DeleteResponse {
     message: String,
     deleted_id: i32,
+}
+
+fn compute_note_hash(note: &Note) -> String {
+    // Create a string containing all note properties
+    let note_string = format!(
+        "id:{},title:{},content:{},created_at:{:?},modified_at:{:?}",
+        note.id, note.title, note.content, note.created_at, note.modified_at
+    );
+
+    // Compute hash
+    let mut hasher = Sha256::new();
+    hasher.update(note_string.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+async fn get_note_hash(
+    Path(note_id): Path<i32>,
+    State(state): State<AppState>,
+) -> Result<String, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let note = notes
+        .find(note_id)
+        .first::<Note>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(compute_note_hash(&note))
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct NoteHash {
+    pub id: i32,
+    pub hash: String,
+}
+
+async fn get_all_note_hashes(
+    State(state): State<AppState>,
+) -> Result<Json<HashMap<i32, String>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let all_notes = notes
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Process notes concurrently using tokio's spawn
+    let hash_futures: Vec<_> = all_notes
+        .into_iter()
+        .map(|note| {
+            let note_id = note.id;
+            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+        })
+        .collect();
+
+    // Wait for all hashes to complete and collect into HashMap
+    let mut note_hashes = HashMap::new();
+    for future in hash_futures {
+        if let Ok((note_id, hash)) = future.await {
+            note_hashes.insert(note_id, hash);
+        }
+    }
+
+    Ok(Json(note_hashes))
 }
 
 async fn delete_note(
@@ -1176,5 +1251,57 @@ mod tests {
         assert_eq!(updated_root.content, note_root_content_updated);
         assert_eq!(updated_child1.content, note_1_content_updated);
         assert_eq!(updated_child2.content, note_2_content_updated);
+    }
+    #[tokio::test]
+    async fn test_get_all_note_hashes() {
+        let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
+        let mut conn = pool.get().expect("Failed to get connection");
+
+        // Create test notes with unique titles using timestamp
+        let now = format!("{}", chrono::Utc::now());
+        let note1_title = format!("test_note1_{}", now);
+        let note2_title = format!("test_note2_{}", now);
+
+        // Create two test notes
+        let note1 = diesel::insert_into(crate::schema::notes::table)
+            .values(NewNote {
+                title: &note1_title,
+                content: "test content 1",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create note 1");
+
+        let note2 = diesel::insert_into(crate::schema::notes::table)
+            .values(NewNote {
+                title: &note2_title,
+                content: "test content 2",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create note 2");
+
+        let _cleanup = TestCleanup {
+            pool: pool.clone(),
+            note_ids: vec![note1.id, note2.id],
+        };
+
+        // Get hashes for all notes
+        let response = get_all_note_hashes(State(state))
+            .await
+            .expect("Failed to get note hashes");
+
+        let note_hashes = response.0;
+
+        // Verify both notes are present
+        assert!(note_hashes.contains_key(&note1.id));
+        assert!(note_hashes.contains_key(&note2.id));
+
+        // Verify hash values match expected
+        assert_eq!(note_hashes[&note1.id], compute_note_hash(&note1));
+        assert_eq!(note_hashes[&note2.id], compute_note_hash(&note2));
     }
 }

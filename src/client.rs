@@ -1,6 +1,6 @@
 pub use crate::api::{
     AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest,
-    HierarchyMapping, NoteResponse, NoteTreeNode, UpdateNoteRequest,
+    HierarchyMapping, NoteHash, NoteResponse, NoteTreeNode, UpdateNoteRequest,
 };
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
@@ -239,6 +239,26 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
         .error_for_status()
         .map_err(NoteError::from)?;
     Ok(())
+}
+
+pub async fn get_note_hash(base_url: &str, note_id: i32) -> Result<String, NoteError> {
+    let url = format!("{}/notes/flat/{}/hash", base_url, note_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let hash = response.text().await?;
+    Ok(hash)
+}
+
+pub async fn get_all_note_hashes(base_url: &str) -> Result<Vec<NoteHash>, NoteError> {
+    let url = format!("{}/notes/flat/hashes", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let hashes = response.json::<Vec<NoteHash>>().await?;
+    Ok(hashes)
 }
 
 pub async fn batch_update_notes(
@@ -992,6 +1012,72 @@ mod tests {
         assert_eq!(root.children.len(), 1);
         assert_eq!(root.children[0].id, note2.id);
         assert_eq!(root.children[0].hierarchy_type, Some("block".to_string()));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_note_hash() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a test note
+        let note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note".to_string(),
+                content: "Test content".to_string(),
+            },
+        )
+        .await?;
+
+        // Get its hash
+        let hash = get_note_hash(base_url, note.id).await?;
+        assert!(!hash.is_empty(), "Hash should not be empty");
+
+        // Try getting hash for non-existent note
+        let result = get_note_hash(base_url, -1).await;
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_note_hashes() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some test notes
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: "Content 1".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: "Content 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Get all hashes
+        let hashes = get_all_note_hashes(base_url).await?;
+
+        // Verify our test notes' hashes are present
+        let hash1 = hashes
+            .iter()
+            .find(|h| h.id == note1.id)
+            .expect("Hash for note1 not found");
+        let hash2 = hashes
+            .iter()
+            .find(|h| h.id == note2.id)
+            .expect("Hash for note2 not found");
+        assert!(!hash1.hash.is_empty());
+        assert!(!hash2.hash.is_empty());
 
         Ok(())
     }
