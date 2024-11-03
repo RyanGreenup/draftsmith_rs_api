@@ -197,6 +197,24 @@ pub fn write_hierarchy_to_yaml(
     std::fs::write(path, yaml)
 }
 
+pub fn write_notes_to_disk(
+    notes: &[NoteResponse],
+    tree: &[NoteTreeNode],
+    output_dir: &std::path::Path,
+) -> std::io::Result<()> {
+    // Save each note as a markdown file
+    for note in notes {
+        let file_path = output_dir.join(format!("{}.md", note.id));
+        std::fs::write(&file_path, &note.content)?;
+    }
+
+    // Save the hierarchy as metadata.yaml
+    let metadata_path = output_dir.join("metadata.yaml");
+    write_hierarchy_to_yaml(tree, &metadata_path)?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,6 +556,72 @@ mod tests {
             attach_result.is_err(),
             "Attachment should fail with invalid hierarchy type"
         );
+    }
+
+    #[tokio::test]
+    async fn test_save_notes_to_directory() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a temporary directory for our test
+        let temp_dir = tempfile::tempdir()?;
+
+        // Create some test notes first
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: "Content 1".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: "Content 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Attach note2 as child of note1
+        let attach_request = AttachChildRequest {
+            child_note_id: note2.id,
+            parent_note_id: Some(note1.id),
+            hierarchy_type: Some("block".to_string()),
+        };
+        attach_child_note(base_url, attach_request).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Fetch notes and tree
+        let notes = fetch_notes(base_url, false).await?;
+        let tree = fetch_note_tree(base_url).await?;
+
+        // Write everything to disk
+        write_notes_to_disk(&notes, &tree, temp_dir.path())?;
+
+        // Verify the files exist and contain correct content
+        for note in &notes {
+            let file_path = temp_dir.path().join(format!("{}.md", note.id));
+            let content = std::fs::read_to_string(&file_path)?;
+            assert_eq!(content, note.content);
+        }
+
+        // Verify metadata.yaml exists and contains valid hierarchy
+        let metadata_path = temp_dir.path().join("metadata.yaml");
+        let metadata_content = std::fs::read_to_string(&metadata_path)?;
+        let loaded_tree: Vec<NoteTreeNode> = serde_yaml::from_str(&metadata_content)?;
+
+        // Find note1 in the tree and verify note2 is its child
+        let root = loaded_tree.iter().find(|n| n.id == note1.id).unwrap();
+        assert_eq!(root.content, "Content 1");
+        let child = &root.children[0];
+        assert_eq!(child.id, note2.id);
+        assert_eq!(child.content, "Content 2");
+
+        Ok(())
     }
 
     #[tokio::test]
