@@ -12,7 +12,7 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -127,7 +127,7 @@ pub struct ListNotesParams {
 async fn list_notes(
     State(state): State<AppState>,
     Query(params): Query<ListNotesParams>,
-) -> Result<Json<Value>, StatusCode> {
+) -> Result<ErasedJson, StatusCode> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = state
