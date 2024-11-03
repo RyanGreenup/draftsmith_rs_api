@@ -462,7 +462,9 @@ mod tests {
             .expect("Could not find updated tree");
 
         // Verify the structure
-        assert_eq!(updated_tree.title, "Updated Root");
+        // Titles are now automatically set as H1 of content by Database
+        // [[file:migrations/2024-10-31-024911_create_notes/up.sql::CREATE OR REPLACE FUNCTION update_title_from_content()][Postgres set title as h1 content]]
+        // assert_eq!(updated_tree.title, "Updated Root");
         assert_eq!(updated_tree.content, "Updated root content");
         assert_eq!(updated_tree.children.len(), 2);
 
@@ -472,7 +474,7 @@ mod tests {
             .iter()
             .find(|n| n.id == child1_note.id)
             .expect("Could not find child1");
-        assert_eq!(child1.title, "Updated Child 1");
+        // assert_eq!(child1.title, "Updated Child 1");
         assert_eq!(child1.content, "Updated child 1 content");
         assert_eq!(child1.hierarchy_type, Some("block".to_string()));
 
@@ -481,7 +483,7 @@ mod tests {
             .iter()
             .find(|n| n.id == child2_note.id)
             .expect("Could not find child2");
-        assert_eq!(child2.title, "Updated Child 2");
+        // assert_eq!(child2.title, "Updated Child 2");
         assert_eq!(child2.content, "Updated child 2 content");
         assert_eq!(child2.hierarchy_type, Some("block".to_string()));
     }
