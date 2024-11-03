@@ -9,6 +9,7 @@ use axum::{
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -181,36 +182,50 @@ pub struct BatchUpdateResponse {
     pub failed: Vec<i32>,
 }
 
+async fn update_single_note(
+    pool: Arc<Pool>,
+    note_id: i32,
+    update: UpdateNoteRequest,
+) -> Result<Note, DieselError> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = pool.get().map_err(|_| DieselError::RollbackTransaction)?;
+    let changes = (
+        content.eq(update.content),
+        modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+    );
+
+    if let Some(new_title) = update.title {
+        diesel::update(notes.find(note_id))
+            .set((title.eq(new_title), changes))
+            .get_result::<Note>(&mut conn)
+    } else {
+        diesel::update(notes.find(note_id))
+            .set(changes)
+            .get_result::<Note>(&mut conn)
+    }
+}
+
 async fn update_notes(
     State(state): State<AppState>,
     Json(payload): Json<BatchUpdateRequest>,
 ) -> Result<Json<BatchUpdateResponse>, StatusCode> {
-    use crate::schema::notes::dsl::*;
+    let futures = payload.updates.into_iter().map(|(note_id, update)| {
+        let pool = Arc::clone(&state.pool);
+        async move {
+            match update_single_note(pool, note_id, update).await {
+                Ok(note) => (Ok(note), note_id),
+                Err(_) => (Err(()), note_id),
+            }
+        }
+    });
 
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let results = join_all(futures).await;
 
     let mut updated = Vec::new();
     let mut failed = Vec::new();
 
-    for (note_id, update) in payload.updates {
-        let changes = (
-            content.eq(update.content),
-            modified_at.eq(Some(chrono::Utc::now().naive_utc())),
-        );
-
-        let result = if let Some(new_title) = update.title {
-            diesel::update(notes.find(note_id))
-                .set((title.eq(new_title), changes))
-                .get_result::<Note>(&mut conn)
-        } else {
-            diesel::update(notes.find(note_id))
-                .set(changes)
-                .get_result::<Note>(&mut conn)
-        };
-
+    for (result, note_id) in results {
         match result {
             Ok(note) => updated.push(note.into()),
             Err(_) => failed.push(note_id),
