@@ -588,15 +588,44 @@ mod tests {
         }
     }
 
+    struct TestCleanup {
+        pool: Pool<ConnectionManager<PgConnection>>,
+        note_ids: Vec<i32>,
+    }
+
+    impl Drop for TestCleanup {
+        fn drop(&mut self) {
+            if let Ok(mut conn) = self.pool.get() {
+                use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy, parent_note_id};
+                use crate::schema::notes::dsl::{id as notes_id, notes};
+
+                // Clean up hierarchies first due to foreign key constraints
+                let _ = diesel::delete(note_hierarchy)
+                    .filter(
+                        child_note_id
+                            .eq_any(&self.note_ids)
+                            .or(parent_note_id.eq_any(&self.note_ids)),
+                    )
+                    .execute(&mut conn);
+
+                // Then clean up the notes
+                let _ = diesel::delete(notes)
+                    .filter(notes_id.eq_any(&self.note_ids))
+                    .execute(&mut conn);
+            }
+        }
+    }
+
     #[tokio::test]
     /// Tests the function to update notes from a supplied tree structure
     /// This can't use a conn.test_transaction block because
     /// the tree function is recursive and passing in a connection
     /// will add too much complexity to the test.
-    /// This function should clean up after itself.
+    /// This function automatically cleans up after itself via Drop trait.
     async fn test_update_database_from_notetreenode() {
         // Set up the test state
         let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
 
         // Get unique content identifiers using timestamp
         let now = format!("{}", chrono::Utc::now());
@@ -668,6 +697,12 @@ mod tests {
                 3,
                 "Expected 3 matching notes in the database"
             );
+
+            // Create cleanup struct that will automatically clean up when dropped
+            let _cleanup = TestCleanup {
+                pool: pool.clone(),
+                note_ids: notes_in_db.iter().map(|note| note.id).collect(),
+            };
 
             // Find the notes by content
             let note_root = notes_in_db
