@@ -589,6 +589,11 @@ mod tests {
     }
 
     #[tokio::test]
+    /// Tests the function to update notes from a supplied tree structure
+    /// This can't use a conn.test_transaction block because
+    /// the tree function is recursive and passing in a connection
+    /// will add too much complexity to the test.
+    /// This function should clean up after itself.
     async fn test_update_database_from_notetreenode() {
         // Set up the test state
         let state = setup_test_state();
