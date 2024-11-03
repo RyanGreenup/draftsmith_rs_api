@@ -138,7 +138,7 @@ async fn main() {
 
             // Start server
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-            axum::serve(listener, app).await.unwrap();
+            axum::serve(listener, app).tcp_nodelay(true).await.unwrap();
         }
         Commands::Client { url, command } => match command {
             ClientCommands::Notes { id, command } => match command {
