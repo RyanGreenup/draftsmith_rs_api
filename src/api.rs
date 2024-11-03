@@ -596,7 +596,9 @@ mod tests {
     impl Drop for TestCleanup {
         fn drop(&mut self) {
             if let Ok(mut conn) = self.pool.get() {
-                use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy, parent_note_id};
+                use crate::schema::note_hierarchy::dsl::{
+                    child_note_id, note_hierarchy, parent_note_id,
+                };
                 use crate::schema::notes::dsl::{id as notes_id, notes};
 
                 // Clean up hierarchies first due to foreign key constraints
@@ -635,7 +637,7 @@ mod tests {
 
         // Create an input NoteTreeNode with new notes
         let input_tree = NoteTreeNode {
-            id: 0, // Indicates a new note
+            id: 0,                 // Indicates a new note
             title: "".to_string(), // Title is read-only
             content: root_content.clone(),
             created_at: None,
@@ -823,6 +825,12 @@ mod tests {
         let child1_id = child1_note.id;
         let child2_id = child2_note.id;
 
+        // Create cleanup struct that will automatically clean up when dropped
+        let _cleanup = TestCleanup {
+            pool: state.pool.as_ref().clone(),
+            note_ids: vec![root_id, child1_id, child2_id],
+        };
+
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
             id: root_id,
@@ -884,6 +892,7 @@ mod tests {
         assert_eq!(child1_children.len(), 0);
 
         // check that the note content has been updated
+        use crate::schema::notes::dsl::id as notes_id;
         let updated_notes = notes
             .filter(notes_id.eq_any(vec![root_id, child1_id, child2_id]))
             .load::<Note>(&mut conn)
@@ -907,22 +916,5 @@ mod tests {
         assert_eq!(updated_root.content, note_root_content_updated);
         assert_eq!(updated_child1.content, note_1_content_updated);
         assert_eq!(updated_child2.content, note_2_content_updated);
-
-        // Clean up test data
-        use crate::schema::notes::dsl::id as notes_id;
-
-        diesel::delete(note_hierarchy)
-            .filter(
-                child_note_id
-                    .eq_any(vec![child1_id, child2_id])
-                    .or(parent_note_id.eq_any(vec![root_id, child1_id, child2_id])),
-            )
-            .execute(&mut conn)
-            .expect("Failed to clean up hierarchy");
-
-        diesel::delete(notes)
-            .filter(notes_id.eq_any(vec![root_id, child1_id, child2_id]))
-            .execute(&mut conn)
-            .expect("Failed to clean up notes");
     }
 }
