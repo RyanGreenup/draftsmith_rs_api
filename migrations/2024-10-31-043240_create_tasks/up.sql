@@ -27,7 +27,7 @@ CREATE TABLE tasks (
 );
 
 -- Auto update the modified_at column
-CREATE OR REPLACE FUNCTION update_modified_at_column_on_tasks()
+CREATE OR REPLACE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_TASKS()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.modified_at = CURRENT_TIMESTAMP;
@@ -38,7 +38,7 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER set_modified_at
 BEFORE UPDATE ON tasks
 FOR EACH ROW
-EXECUTE FUNCTION update_modified_at_column_on_tasks();
+EXECUTE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_TASKS();
 
 -- Schedule tasks over certain days
 CREATE TABLE task_schedules (

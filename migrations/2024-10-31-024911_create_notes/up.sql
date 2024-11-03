@@ -26,7 +26,7 @@ FOR EACH ROW EXECUTE PROCEDURE TSVECTOR_UPDATE_TRIGGER(
 );
 
 -- *** Auto update modified_at ------------------------------------------------
-CREATE OR REPLACE FUNCTION update_modified_at_column_on_notes()
+CREATE OR REPLACE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_NOTES()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.modified_at = CURRENT_TIMESTAMP;
@@ -37,11 +37,11 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER set_modified_at
 BEFORE UPDATE ON notes
 FOR EACH ROW
-EXECUTE FUNCTION update_modified_at_column_on_notes();
+EXECUTE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_NOTES();
 
 -- **** Title as H1 -----------------------------------------------------------
 -- ***** Function -------------------------------------------------------------
-CREATE OR REPLACE FUNCTION extract_h1_from_content(content TEXT)
+CREATE OR REPLACE FUNCTION EXTRACT_H1_FROM_CONTENT(content TEXT)
 RETURNS TEXT AS $$
 DECLARE
     line TEXT;
@@ -65,7 +65,7 @@ $$ LANGUAGE plpgsql;
 
 -- ***** Trigger --------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION update_title_from_content()
+CREATE OR REPLACE FUNCTION UPDATE_TITLE_FROM_CONTENT()
 RETURNS TRIGGER AS $$
 BEGIN
     -- Update the title based on extracted H1
@@ -76,12 +76,12 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER set_title_from_content
 BEFORE INSERT OR UPDATE ON notes
-FOR EACH ROW EXECUTE FUNCTION update_title_from_content();
+FOR EACH ROW EXECUTE FUNCTION UPDATE_TITLE_FROM_CONTENT();
 
 -- ***** Heading Enforcement --------------------------------------------------
 -- This way the title field is simply an endpoint for the H1 in the content
 -- Enforce title as heading
-CREATE OR REPLACE FUNCTION enforce_read_only_title()
+CREATE OR REPLACE FUNCTION ENFORCE_READ_ONLY_TITLE()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.title IS DISTINCT FROM OLD.title THEN
@@ -94,7 +94,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER ensure_title_is_read_only
 BEFORE UPDATE ON notes
-FOR EACH ROW EXECUTE FUNCTION enforce_read_only_title();
+FOR EACH ROW EXECUTE FUNCTION ENFORCE_READ_ONLY_TITLE();
 
 
 -- *** Hierarchy --------------------------------------------------------------

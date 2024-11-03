@@ -24,60 +24,121 @@ INSERT INTO notes (title, content)
 VALUES
 (
     'Welcome to DraftSmith',
-    E'Welcome to your new note-taking system!\n\n'
+    E'Welcome to your new note-taking system!
+
+'
     || 'DraftSmith helps you organize your thoughts, tasks, and knowledge. '
-    || 'This note will show you the basic features available.\n\n'
-    || 'Key Features:\n'
-    || '- Hierarchical notes\n'
-    || '- Tags and categories\n'
-    || '- Task management\n'
-    || '- Full-text search\n'
+    || 'This note will show you the basic features available.
+
+'
+    || 'Key Features:
+'
+    || '- Hierarchical notes
+'
+    || '- Tags and categories
+'
+    || '- Task management
+'
+    || '- Full-text search
+'
     || '- Asset attachments'
 ),
 (
     'Getting Started Guide',
-    E'# Quick Start Guide\n\n'
-    || '1. **Creating Notes**\n'
-    || '   - Use the CLI to create new notes\n'
-    || '   - Notes support markdown formatting\n\n'
-    || '2. **Organization**\n'
-    || '   - Tag notes for easy finding\n'
-    || '   - Create hierarchies with parent/child relationships\n\n'
-    || '3. **Tasks**\n'
-    || '   - Convert any note to a task\n'
-    || '   - Set priorities and deadlines\n'
-    || '   - Track time spent\n\n'
-    || '4. **Search**\n'
-    || '   - Full-text search across all notes\n'
+    E'# Quick Start Guide
+
+'
+    || '1. **Creating Notes**
+'
+    || '   - Use the CLI to create new notes
+'
+    || '   - Notes support markdown formatting
+
+'
+    || '2. **Organization**
+'
+    || '   - Tag notes for easy finding
+'
+    || '   - Create hierarchies with parent/child relationships
+
+'
+    || '3. **Tasks**
+'
+    || '   - Convert any note to a task
+'
+    || '   - Set priorities and deadlines
+'
+    || '   - Track time spent
+
+'
+    || '4. **Search**
+'
+    || '   - Full-text search across all notes
+'
     || '   - Filter by tags or attributes'
 ),
 (
     'Meeting Note Template',
-    E'# Meeting: [Title]\n'
-    || 'Date: [Date]\n'
-    || 'Participants: [Names]\n\n'
-    || '## Agenda\n'
-    || '1. \n2. \n3. \n\n'
-    || '## Discussion\n\n'
-    || '## Action Items\n'
-    || '- [ ] \n'
-    || '- [ ] \n\n'
-    || '## Next Steps\n\n'
+    E'# Meeting: [Title]
+'
+    || 'Date: [Date]
+'
+    || 'Participants: [Names]
+
+'
+    || '## Agenda
+'
+    || '1.
+    2.
+    3.
+
+'
+    || '## Discussion
+
+'
+    || '## Action Items
+'
+    || '- [ ]
+'
+    || '- [ ]
+
+'
+    || '## Next Steps
+
+'
     || '## Notes'
 ),
 (
     'Project Planning Template',
-    E'# Project: [Name]\n\n'
-    || '## Overview\n'
-    || '[Brief description]\n\n'
-    || '## Objectives\n'
-    || '1. \n2. \n\n'
-    || '## Timeline\n'
-    || '- Start: \n'
-    || '- Milestones:\n'
-    || '- Deadline: \n\n'
-    || '## Resources\n\n'
-    || '## Risks\n\n'
+    E'# Project: [Name]
+
+'
+    || '## Overview
+'
+    || '[Brief description]
+
+'
+    || '## Objectives
+'
+    || '1.
+    2.
+
+'
+    || '## Timeline
+'
+    || '- Start:
+'
+    || '- Milestones:
+'
+    || '- Deadline:
+
+'
+    || '## Resources
+
+'
+    || '## Risks
+
+'
     || '## Status Updates'
 );
 
