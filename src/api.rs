@@ -71,8 +71,8 @@ pub struct HierarchyMapping {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NoteTreeNode {
     pub id: i32,
-    pub title: String,
-    pub content: String,
+    pub title: Option<String>,
+    pub content: Option<String>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub hierarchy_type: Option<String>,
@@ -454,8 +454,8 @@ async fn get_note_tree(
 
         NoteTreeNode {
             id: note.id,
-            title: note.title.clone(),
-            content: note.content.clone(),
+            title: Some(note.title.clone()),
+            content: Some(note.content.clone()),
             created_at: note.created_at,
             modified_at: note.modified_at,
             hierarchy_type: None,
@@ -557,15 +557,15 @@ async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
-        eprintln!("Processing node: id={}, title={}", node.id, node.title);
+        eprintln!("Processing node: id={}, title={:?}", node.id, node.title);
         use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
         use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
             // Insert new note
             let new_note = NewNote {
-                title: &node.title,
-                content: &node.content,
+                title: &node.title.unwrap_or_default(),
+                content: &node.content.unwrap_or_default(),
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             };
@@ -588,8 +588,8 @@ async fn update_database_from_notetreenode(
             // Update existing note
             diesel::update(notes.filter(notes_id.eq(node.id)))
                 .set((
-                    title.eq(&node.title),
-                    content.eq(&node.content),
+                    title.eq(&node.title.unwrap_or_default()),
+                    content.eq(&node.content.unwrap_or_default()),
                     modified_at.eq(Some(chrono::Utc::now().naive_utc())),
                 ))
                 .execute(conn)?;
@@ -710,17 +710,17 @@ mod tests {
 
         // Create an input NoteTreeNode with new notes
         let input_tree = NoteTreeNode {
-            id: 0,                 // Indicates a new note
-            title: "".to_string(), // Title is read-only
-            content: root_content.clone(),
+            id: 0,                       // Indicates a new note
+            title: Some("".to_string()), // Title is read-only
+            content: Some(root_content.clone()),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
                     id: 0,
-                    title: "".to_string(),
-                    content: child1_content.clone(),
+                    title: Some("".to_string()),
+                    content: Some(child1_content.clone()),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -728,8 +728,8 @@ mod tests {
                 },
                 NoteTreeNode {
                     id: 0,
-                    title: "".to_string(),
-                    content: child2_content.clone(),
+                    title: Some("".to_string()),
+                    content: Some(child2_content.clone()),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -1072,22 +1072,22 @@ mod tests {
         // Create a new tree structure where child2 is directly under root, and child1 is under child2
         let modified_tree = NoteTreeNode {
             id: root_id,
-            title: root_title,
-            content: note_root_content_updated.to_string(),
+            title: Some(root_title),
+            content: Some(note_root_content_updated.to_string()),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![NoteTreeNode {
                 id: child2_id,
-                title: child2_title,
-                content: note_2_content_updated.to_string(),
+                title: Some(child2_title),
+                content: Some(note_2_content_updated.to_string()),
                 created_at: None,
                 modified_at: None,
                 hierarchy_type: Some("block".to_string()),
                 children: vec![NoteTreeNode {
                     id: child1_id,
-                    title: child1_title,
-                    content: note_1_content_updated.to_string(),
+                    title: Some(child1_title),
+                    content: Some(note_1_content_updated.to_string()),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),

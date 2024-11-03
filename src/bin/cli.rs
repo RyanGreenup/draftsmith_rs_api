@@ -69,6 +69,11 @@ enum NotesCommands {
         /// Path to JSON file containing the tree structure
         file: String,
     },
+    /// Push notes from a local directory to the server
+    Push {
+        /// Directory containing notes to push
+        dir: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -372,6 +377,16 @@ async fn main() {
                         }
                     }
                 }
+                NotesCommands::Push { dir } => {
+                    let dir_path = std::path::Path::new(&dir);
+                    match rust_cli_app::client::read_from_disk(&url, dir_path).await {
+                        Ok(_) => println!("Successfully pushed notes from {}", dir),
+                        Err(e) => {
+                            eprintln!("Error pushing notes: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
             },
         },
     }
@@ -385,7 +400,10 @@ fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize)
         println!("{}:", node.id);
         // Print title with proper indentation
         print!("{}", "  ".repeat(depth + 1));
-        println!("title: {}", node.title);
+        println!(
+            "title: {}",
+            node.title.clone().expect("Node title should not be None")
+        );
         // If there are children, print them as a nested list
         if !node.children.is_empty() {
             print!("{}", "  ".repeat(depth + 1));

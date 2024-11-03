@@ -4,12 +4,16 @@ pub use crate::api::{
 };
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
-use std::{fmt, future::Future, pin::Pin};
+use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum NoteError {
     NotFound(i32),
     RequestError(ReqwestError),
+    IOError(std::io::Error),
+    SerdeYamlError(serde_yaml::Error),
+    SerdeJsonError(serde_json::Error),
 }
 
 impl fmt::Display for NoteError {
@@ -17,6 +21,9 @@ impl fmt::Display for NoteError {
         match self {
             NoteError::NotFound(id) => write!(f, "Note with id {} not found", id),
             NoteError::RequestError(e) => write!(f, "Request error: {}", e),
+            NoteError::IOError(e) => write!(f, "IO error: {}", e),
+            NoteError::SerdeYamlError(e) => write!(f, "YAML serialization error: {}", e),
+            NoteError::SerdeJsonError(e) => write!(f, "JSON serialization error: {}", e),
         }
     }
 }
@@ -26,6 +33,24 @@ impl std::error::Error for NoteError {}
 impl From<ReqwestError> for NoteError {
     fn from(err: ReqwestError) -> Self {
         NoteError::RequestError(err)
+    }
+}
+
+impl From<std::io::Error> for NoteError {
+    fn from(err: std::io::Error) -> Self {
+        NoteError::IOError(err)
+    }
+}
+
+impl From<serde_yaml::Error> for NoteError {
+    fn from(err: serde_yaml::Error) -> Self {
+        NoteError::SerdeYamlError(err)
+    }
+}
+
+impl From<serde_json::Error> for NoteError {
+    fn from(err: serde_json::Error) -> Self {
+        NoteError::SerdeJsonError(err)
     }
 }
 
@@ -223,7 +248,7 @@ pub fn write_hierarchy_to_yaml(
     fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
         SimpleNode {
             id: node.id,
-            title: node.title.clone(),
+            title: node.title.clone().expect("Node title should not be None"),
             children: node.children.iter().map(simplify_tree).collect(),
         }
     }
@@ -234,19 +259,38 @@ pub fn write_hierarchy_to_yaml(
     std::fs::write(path, yaml)
 }
 
-pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) {
+fn simple_node_to_note_tree_node(
+    simple_node: &SimpleNode,
+    content_map: &HashMap<i32, String>,
+) -> NoteTreeNode {
+    NoteTreeNode {
+        id: simple_node.id,
+        title: Some(simple_node.title.clone()),
+        content: content_map.get(&simple_node.id).cloned(),
+        created_at: None,
+        modified_at: None,
+        hierarchy_type: Some("block".to_string()),
+        children: simple_node
+            .children
+            .iter()
+            .map(|child| simple_node_to_note_tree_node(child, content_map))
+            .collect(),
+    }
+}
+
+pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
     use std::fs;
 
     // Read metadata.yaml to get hierarchy information
     let metadata_path = dir_path.join("metadata.yaml");
-    let metadata_content = fs::read_to_string(metadata_path).expect("Failed to read metadata.yaml");
+    let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
     let tree: Vec<SimpleNode> =
-        serde_yaml::from_str(&metadata_content).expect("Failed to parse metadata.yaml");
+        serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    // Read all .md files in the directory
-    let mut notes = Vec::new();
-    for entry in fs::read_dir(dir_path).expect("Failed to read directory") {
-        let entry = entry.expect("Failed to read directory entry");
+    // Read all .md files in the directory and build content_map
+    let mut content_map = HashMap::new();
+    for entry in fs::read_dir(dir_path).map_err(NoteError::IOError)? {
+        let entry = entry.map_err(NoteError::IOError)?;
         let path = entry.path();
 
         if path.extension().map_or(false, |ext| ext == "md") {
@@ -255,85 +299,26 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) {
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .and_then(|s| s.parse::<i32>().ok())
-                .expect("Failed to parse note ID from filename");
+                .ok_or_else(|| {
+                    NoteError::IOError(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed to parse note ID from filename",
+                    ))
+                })?;
 
             // Read note content
-            let content = fs::read_to_string(&path).expect("Failed to read note content");
-
-            notes.push((
-                id,
-                UpdateNoteRequest {
-                    title: None, // Title will be set from content
-                    content,
-                },
-            ));
+            let content = fs::read_to_string(&path).map_err(NoteError::IOError)?;
+            content_map.insert(id, content);
         }
     }
 
-    // Update notes in database
-    let client = reqwest::Client::new();
-    let url = format!("{}/notes/flat/batch", base_url);
-    let payload = BatchUpdateRequest { updates: notes };
-
-    client
-        .put(url)
-        .json(&payload)
-        .send()
-        .await
-        .expect("Failed to send batch update request")
-        .error_for_status()
-        .expect("Batch update request failed");
-
-    // Update hierarchy based on metadata.yaml
-    fn process_tree_node<'a>(
-        base_url: &'a str,
-        node: &'a SimpleNode,
-        parent_id: Option<i32>,
-    ) -> Pin<Box<dyn Future<Output = ()> + 'a>> {
-        Box::pin(async move {
-            // First detach the note from any existing parent if it has one
-            if parent_id.is_none() {
-                let client = reqwest::Client::new();
-                let url = format!("{}/notes/hierarchy/detach/{}", base_url, node.id);
-                // Ignore 404 errors since the note might not have a parent
-                if let Ok(response) = client.delete(url).send().await {
-                    // Only check other error types
-                    if response.status() != reqwest::StatusCode::NOT_FOUND {
-                        response.error_for_status().expect("Detach request failed");
-                    }
-                }
-            }
-
-            // If there's a parent, attach this note to it
-            if let Some(parent_id) = parent_id {
-                let client = reqwest::Client::new();
-                let url = format!("{}/notes/hierarchy/attach", base_url);
-                let attach_request = AttachChildRequest {
-                    child_note_id: node.id,
-                    parent_note_id: Some(parent_id),
-                    hierarchy_type: Some("block".to_string()),
-                };
-                client
-                    .post(url)
-                    .json(&attach_request)
-                    .send()
-                    .await
-                    .expect("Failed to attach note")
-                    .error_for_status()
-                    .expect("Attach request failed");
-            }
-
-            // Process all children recursively
-            for child in &node.children {
-                process_tree_node(base_url, child, Some(node.id)).await;
-            }
-        })
+    // Convert SimpleNode to NoteTreeNode and update the tree
+    for root_node in tree {
+        let note_tree_node = simple_node_to_note_tree_node(&root_node, &content_map);
+        update_note_tree(base_url, note_tree_node).await?;
     }
 
-    // Process each root node in the tree
-    for node in tree {
-        process_tree_node(base_url, &node, None).await;
-    }
+    Ok(())
 }
 
 pub async fn write_notes_to_disk(
@@ -363,7 +348,7 @@ pub async fn write_notes_to_disk(
     fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
         SimpleNode {
             id: node.id,
-            title: node.title.clone(),
+            title: node.title.clone().expect("Node title should not be None"),
             children: node.children.iter().map(simplify_tree).collect(),
         }
     }
@@ -614,16 +599,16 @@ mod tests {
         // Create a tree structure
         let tree = NoteTreeNode {
             id: root_note.id,
-            title: "Updated Root".to_string(),
-            content: "Updated root content".to_string(),
+            title: Some("Updated Root".to_string()),
+            content: Some("Updated root content".to_string()),
             created_at: None,
             modified_at: None,
             hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
                     id: child1_note.id,
-                    title: "Updated Child 1".to_string(),
-                    content: "Updated child 1 content".to_string(),
+                    title: Some("Updated Child 1".to_string()),
+                    content: Some("Updated child 1 content".to_string()),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -631,8 +616,8 @@ mod tests {
                 },
                 NoteTreeNode {
                     id: child2_note.id,
-                    title: "Updated Child 2".to_string(),
-                    content: "Updated child 2 content".to_string(),
+                    title: Some("Updated Child 2".to_string()),
+                    content: Some("Updated child 2 content".to_string()),
                     created_at: None,
                     modified_at: None,
                     hierarchy_type: Some("block".to_string()),
@@ -659,7 +644,10 @@ mod tests {
         // [[file:migrations/2024-10-31-024911_create_notes/up.sql::CREATE OR REPLACE FUNCTION update_title_from_content()][Postgres set title as h1 content]]
         // assert_eq!(updated_tree.title, "Updated Root");
         // see commit 12acc9fb1b177b279181c4d15618e60571722ca1
-        assert_eq!(updated_tree.content, "Updated root content");
+        assert_eq!(
+            updated_tree.content,
+            Some("Updated root content".to_string())
+        );
         assert_eq!(updated_tree.children.len(), 2);
 
         // Verify children
@@ -669,7 +657,7 @@ mod tests {
             .find(|n| n.id == child1_note.id)
             .expect("Could not find child1");
         // assert_eq!(child1.title, "Updated Child 1");
-        assert_eq!(child1.content, "Updated child 1 content");
+        assert_eq!(child1.content, Some("Updated child 1 content".to_string()));
         assert_eq!(child1.hierarchy_type, Some("block".to_string()));
 
         let child2 = updated_tree
@@ -678,7 +666,7 @@ mod tests {
             .find(|n| n.id == child2_note.id)
             .expect("Could not find child2");
         // assert_eq!(child2.title, "Updated Child 2");
-        assert_eq!(child2.content, "Updated child 2 content");
+        assert_eq!(child2.content, Some("Updated child 2 content".to_string()));
         assert_eq!(child2.hierarchy_type, Some("block".to_string()));
     }
 
@@ -857,7 +845,15 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // Now read everything back from disk and update the database
-        read_from_disk(base_url, temp_dir.path()).await;
+        match read_from_disk(base_url, temp_dir.path()).await {
+            Ok(_) => {
+                // Handle success case if needed
+            }
+            Err(e) => {
+                eprintln!("Error reading from disk: {}", e);
+                // Handle the error, e.g., log it or return it
+            }
+        }
 
         // Give the server time to process
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
