@@ -179,7 +179,10 @@ async fn main() {
                             match rust_cli_app::client::update_note(
                                 &url,
                                 note_id,
-                                rust_cli_app::client::UpdateNoteRequest { title, content },
+                                rust_cli_app::client::UpdateNoteRequest {
+                                    title: Some(title),
+                                    content,
+                                },
                             )
                             .await
                             {

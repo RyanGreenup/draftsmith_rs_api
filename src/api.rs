@@ -32,7 +32,7 @@ pub struct CreateNoteRequest {
 
 #[derive(Deserialize, Serialize)]
 pub struct UpdateNoteRequest {
-    pub title: String,
+    pub title: Option<String>,
     pub content: String,
 }
 
@@ -196,13 +196,20 @@ async fn update_notes(
     let mut failed = Vec::new();
 
     for (note_id, update) in payload.updates {
-        let result = diesel::update(notes.find(note_id))
-            .set((
-                title.eq(update.title),
-                content.eq(update.content),
-                modified_at.eq(Some(chrono::Utc::now().naive_utc())),
-            ))
-            .get_result::<Note>(&mut conn);
+        let changes = (
+            content.eq(update.content),
+            modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+        );
+
+        let result = if let Some(new_title) = update.title {
+            diesel::update(notes.find(note_id))
+                .set((title.eq(new_title), changes))
+                .get_result::<Note>(&mut conn)
+        } else {
+            diesel::update(notes.find(note_id))
+                .set(changes)
+                .get_result::<Note>(&mut conn)
+        };
 
         match result {
             Ok(note) => updated.push(note.into()),
@@ -225,14 +232,21 @@ async fn update_note(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let updated_note = diesel::update(notes.find(note_id))
-        .set((
-            title.eq(payload.title),
-            content.eq(payload.content),
-            modified_at.eq(Some(chrono::Utc::now().naive_utc())),
-        ))
-        .get_result::<Note>(&mut conn)
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let changes = (
+        content.eq(payload.content),
+        modified_at.eq(Some(chrono::Utc::now().naive_utc())),
+    );
+
+    let updated_note = if let Some(new_title) = payload.title {
+        diesel::update(notes.find(note_id))
+            .set((title.eq(new_title), changes))
+            .get_result::<Note>(&mut conn)
+    } else {
+        diesel::update(notes.find(note_id))
+            .set(changes)
+            .get_result::<Note>(&mut conn)
+    }
+    .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok((StatusCode::OK, Json(updated_note.into())))
 }
@@ -831,14 +845,14 @@ mod tests {
             (
                 note1.id,
                 UpdateNoteRequest {
-                    title: "Updated Title 1".to_string(),
+                    title: Some("Updated Title 1".to_string()),
                     content: "Updated Content 1".to_string(),
                 },
             ),
             (
                 note2.id,
                 UpdateNoteRequest {
-                    title: "Updated Title 2".to_string(),
+                    title: Some("Updated Title 2".to_string()),
                     content: "Updated Content 2".to_string(),
                 },
             ),

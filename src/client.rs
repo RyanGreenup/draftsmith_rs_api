@@ -314,7 +314,7 @@ mod tests {
 
         // Now update it
         let update_note_req = UpdateNoteRequest {
-            title: "Updated Test Note".to_string(),
+            title: Some("Updated Test Note".to_string()),
             content: "This is an updated test note".to_string(),
         };
         let result = update_note(base_url, created_note.id, update_note_req).await;
