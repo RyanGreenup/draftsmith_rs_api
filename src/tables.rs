@@ -209,7 +209,7 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Queryable, Serialize, Deserialize)]
 pub struct NoteWithParent {
     pub note_id: i32,
     pub title: String,
