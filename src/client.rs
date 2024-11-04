@@ -4,6 +4,7 @@ pub use crate::api::{
 };
 pub use crate::tables::{HierarchyMapping, NoteWithoutFts, NoteWithParent};
 use crate::FLAT_API;
+use std::fs;
 use reqwest::Error as ReqwestError;
 use std::collections::HashMap;
 use std::fmt;
@@ -318,19 +319,13 @@ fn simple_node_to_note_tree_node(
     }
 }
 
-pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
-    use std::fs;
+async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result<Vec<(i32, UpdateNoteRequest)>, NoteError> {
 
     // Get server-side hashes
     let server_hashes = get_all_note_hashes(base_url).await?;
     let server_hash_map: HashMap<i32, String> =
         server_hashes.into_iter().map(|h| (h.id, h.hash)).collect();
 
-    // Read metadata.yaml to get hierarchy information
-    let metadata_path = dir_path.join("metadata.yaml");
-    let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
-    let tree: Vec<SimpleNode> =
-        serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
     // Read all .md files in the directory
     let mut notes_to_update = Vec::new();
@@ -367,98 +362,46 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         }
     }
 
+    Ok(notes_to_update)
+}
+
+pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
+    // Step 1. Update Content..................................................
+
+    // Get the notes from disk regardless of hierarchy
+    let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
+
+
     // Get local note hashes using the API function that considers hierarchy
     let client = reqwest::Client::new();
-    let url = format!("{}/notes/flat/batch", base_url);
-    let response = client
-        .put(url)
-        .json(&BatchUpdateRequest {
-            updates: notes_to_update.clone(),
-        })
-        .send()
-        .await?
-        .error_for_status()?;
-    let batch_result: BatchUpdateResponse = response.json().await?;
+    // TODO pull from /notes/flat/hashes
+    let url = format!("{}/notes/flat/hashes", base_url);
+    // Output type defined in api.rs by this type signature:
+        // From api.rs
+        // async fn get_all_note_hashes(
+        //     State(state): State<AppState>,
+        // ) -> Result<Json<Vec<NoteHash>>, StatusCode> {
 
-    // Filter out notes that haven't changed based on their hashes
-    let mut final_updates = Vec::new();
-    for (id, update) in &notes_to_update {
-        if let Some(server_hash) = server_hash_map.get(&id) {
-            let updated_note = batch_result
-                .updated
-                .iter()
-                .find(|n| n.id == *id)
-                .ok_or_else(|| NoteError::NotFound(*id))?;
-            
-            let note_with_parent = NoteWithParent {
-                note_id: updated_note.id,
-                title: updated_note.title.clone(),
-                content: updated_note.content.clone(),
-                created_at: updated_note.created_at,
-                modified_at: updated_note.modified_at,
-                parent_id: None, // We'll get this from the tree
-            };
+    // If the hash has changed, then the hierarchy has also changed (server accounts for this)
 
-            let local_hash = compute_note_hash(&note_with_parent);
-            if local_hash != *server_hash {
-                final_updates.push((*id, update.clone()));
-            }
-        }
-    }
+    // Now update notes on server that have changed using
+    // 1. batch_update_notes
 
-    // Fetch existing note hierarchy from the server
-    let server_tree = fetch_note_tree(base_url).await?;
+    // Step 2. Update Hierarchy................................................
+    // Set the content and title as Option::None so it's not sent again
 
-    // Convert server_tree to SimpleNode format for comparison
-    fn note_tree_node_to_simple_node(node: &NoteTreeNode) -> SimpleNode {
-        SimpleNode {
-            id: node.id,
-            title: node.title.clone().unwrap_or_default(),
-            children: node
-                .children
-                .iter()
-                .map(note_tree_node_to_simple_node)
-                .collect(),
-        }
-    }
+    // Read metadata.yaml to get hierarchy information
+    let metadata_path = dir_path.join("metadata.yaml");
+    let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
+    let tree: Vec<SimpleNode> =
+        serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    let server_simple_tree: Vec<SimpleNode> = server_tree
-        .iter()
-        .map(note_tree_node_to_simple_node)
-        .collect();
+    // Compare this to the current hierarchy on the server
+    let hierarchy_mappings = fetch_hierarchy_mappings(base_url).await?;
 
-    // Compare hierarchies and update if needed
-    if tree != server_simple_tree {
-        let local_parent_map = extract_parent_mapping(&tree);
-        let server_parent_map = extract_parent_mapping(&server_simple_tree);
-
-        // Update hierarchy where different
-        for (&note_id, &local_parent_id) in &local_parent_map {
-            let server_parent_id = server_parent_map.get(&note_id);
-
-            if server_parent_id != Some(&local_parent_id) {
-                if let Some(&Some(_old_parent_id)) = server_parent_map.get(&note_id) {
-                    detach_child_note(base_url, note_id).await?;
-                }
-                if let Some(new_parent_id) = local_parent_id {
-                    attach_child_note(
-                        base_url,
-                        AttachChildRequest {
-                            child_note_id: note_id,
-                            parent_note_id: Some(new_parent_id),
-                            hierarchy_type: Some("block".to_string()),
-                        },
-                    )
-                    .await?;
-                }
-            }
-        }
-    }
-
-    // Update changed notes
-    if !notes_to_update.is_empty() {
-        batch_update_notes(base_url, notes_to_update).await?;
-    }
+    // TODO: attach and detach as needed (If we need to walk the tree, use a 
+    // 2. attach_child_note
+    // 3. detach_child_note
 
     Ok(())
 }
