@@ -387,9 +387,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
     // Create maps for current parent-child relationships
     let mut current_parents: HashMap<i32, Option<i32>> = HashMap::new();
     for mapping in hierarchy_mappings {
-        if let Some(child_id) = mapping.child_id {
-            current_parents.insert(child_id, mapping.parent_id);
-        }
+        current_parents.insert(mapping.child_id, mapping.parent_id);
     }
 
     // Extract desired parent-child relationships from tree
