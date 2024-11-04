@@ -1274,8 +1274,8 @@ mod tests {
         let note_hashes = response.0;
 
         // Verify both notes are present
-        assert!(note_hashes.contains_key(&note1.id));
-        assert!(note_hashes.contains_key(&note2.id));
+        assert!(note_hashes.iter().any(|nh| nh.id == note1.id));
+        assert!(note_hashes.iter().any(|nh| nh.id == note2.id));
 
         // Verify hash values match expected
         let note1_without_fts = NoteWithoutFts {
@@ -1292,12 +1292,16 @@ mod tests {
             created_at: note2.created_at,
             modified_at: note2.modified_at,
         };
+        
+        let note1_hash = note_hashes.iter().find(|nh| nh.id == note1.id).unwrap();
+        let note2_hash = note_hashes.iter().find(|nh| nh.id == note2.id).unwrap();
+        
         assert_eq!(
-            note_hashes[&note1.id],
+            note1_hash.hash,
             compute_note_hash(&note1_without_fts)
         );
         assert_eq!(
-            note_hashes[&note2.id],
+            note2_hash.hash,
             compute_note_hash(&note2_without_fts)
         );
     }
