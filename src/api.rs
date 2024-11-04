@@ -1,4 +1,4 @@
-use crate::tables::HierarchyMapping;
+use crate::tables::{HierarchyMapping, NoteWithParent}
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -342,9 +342,9 @@ async fn get_all_note_hashes(
         .into_iter()
         .map(|note| {
             let note_id = note.id;
-            tokio::spawn(async move { NoteHash { 
-                id: note_id, 
-                hash: compute_note_hash(&note) 
+            tokio::spawn(async move { NoteHash {
+                id: note_id,
+                hash: compute_note_hash(&note)
             }})
         })
         .collect();
@@ -1292,10 +1292,10 @@ mod tests {
             created_at: note2.created_at,
             modified_at: note2.modified_at,
         };
-        
+
         let note1_hash = note_hashes.iter().find(|nh| nh.id == note1.id).unwrap();
         let note2_hash = note_hashes.iter().find(|nh| nh.id == note2.id).unwrap();
-        
+
         assert_eq!(
             note1_hash.hash,
             compute_note_hash(&note1_without_fts)
