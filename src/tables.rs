@@ -225,14 +225,18 @@ impl NoteWithParent {
         use diesel::prelude::*;
 
         notes::table
-            .left_join(note_hierarchy::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .left_join(
+                note_hierarchy::table.on(
+                    notes::id.nullable().eq(note_hierarchy::child_note_id)
+                )
+            )
             .select((
                 notes::id,
                 notes::title,
                 notes::content,
                 notes::created_at,
                 notes::modified_at,
-                note_hierarchy::parent_note_id,
+                note_hierarchy::parent_note_id.nullable(),
             ))
             .load::<NoteWithParent>(conn)
     }
@@ -242,7 +246,11 @@ impl NoteWithParent {
         use diesel::prelude::*;
 
         notes::table
-            .left_join(note_hierarchy::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .left_join(
+                note_hierarchy::table.on(
+                    notes::id.nullable().eq(note_hierarchy::child_note_id)
+                )
+            )
             .filter(notes::id.eq(id))
             .select((
                 notes::id,
@@ -250,7 +258,7 @@ impl NoteWithParent {
                 notes::content,
                 notes::created_at,
                 notes::modified_at,
-                note_hierarchy::parent_note_id,
+                note_hierarchy::parent_note_id.nullable(),
             ))
             .first::<NoteWithParent>(conn)
     }
