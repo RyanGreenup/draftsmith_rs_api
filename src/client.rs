@@ -1,15 +1,16 @@
+use crate::api::compute_all_note_hashes;
 pub use crate::api::{
-    AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest, NoteHash,
-    NoteTreeNode, UpdateNoteRequest, compute_note_hash,
+    compute_note_hash, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
+    CreateNoteRequest, NoteHash, NoteTreeNode, UpdateNoteRequest,
 };
-pub use crate::tables::{HierarchyMapping, NoteWithoutFts, NoteWithParent};
+pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::FLAT_API;
-use std::fs;
+use futures::future::join_all;
 use reqwest::Error as ReqwestError;
+use reqwest::StatusCode;
 use std::collections::HashMap;
 use std::fmt;
-use axum::http::StatusCode;
-use crate::api::compute_all_note_hashes;
+use tokio::fs;
 
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();
@@ -38,7 +39,8 @@ pub enum NoteError {
     RequestError(ReqwestError),
     IOError(std::io::Error),
     SerdeYamlError(serde_yaml::Error),
-    SerdeJsonError(serde_json::Error),
+    SerdeJsonError(reqwest::Error),
+    HttpStatusError(StatusCode),
 }
 
 impl fmt::Display for NoteError {
@@ -49,6 +51,7 @@ impl fmt::Display for NoteError {
             NoteError::IOError(e) => write!(f, "IO error: {}", e),
             NoteError::SerdeYamlError(e) => write!(f, "YAML serialization error: {}", e),
             NoteError::SerdeJsonError(e) => write!(f, "JSON serialization error: {}", e),
+            NoteError::HttpStatusError(code) => write!(f, "HTTP error with status code: {}", code),
         }
     }
 }
@@ -70,12 +73,6 @@ impl From<std::io::Error> for NoteError {
 impl From<serde_yaml::Error> for NoteError {
     fn from(err: serde_yaml::Error) -> Self {
         NoteError::SerdeYamlError(err)
-    }
-}
-
-impl From<serde_json::Error> for NoteError {
-    fn from(err: serde_json::Error) -> Self {
-        NoteError::SerdeJsonError(err)
     }
 }
 
@@ -269,9 +266,20 @@ pub async fn batch_update_notes(
         .put(url)
         .json(&payload)
         .send()
-        .await?
-        .error_for_status()?;
-    let result = response.json::<BatchUpdateResponse>().await?;
+        .await
+        .map_err(NoteError::RequestError)?;
+
+    if !response.status().is_success() {
+        return Err(NoteError::HttpStatusError(response.status()));
+    }
+
+    let result = response.json::<BatchUpdateResponse>().await.map_err(|e| {
+        if e.is_decode() {
+            NoteError::SerdeJsonError(e)
+        } else {
+            NoteError::RequestError(e)
+        }
+    })?;
     Ok(result)
 }
 
@@ -280,7 +288,17 @@ pub struct SimpleNode {
     pub id: i32,
     #[allow(unused)]
     pub title: String,
+    pub hierarchy_type: Option<String>,
     pub children: Vec<SimpleNode>,
+}
+
+fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
+    SimpleNode {
+        id: node.id,
+        title: node.title.clone().expect("Node title should not be None"),
+        hierarchy_type: node.hierarchy_type.clone(),
+        children: node.children.iter().map(simplify_tree).collect(),
+    }
 }
 
 pub fn write_hierarchy_to_yaml(
@@ -291,6 +309,7 @@ pub fn write_hierarchy_to_yaml(
         SimpleNode {
             id: node.id,
             title: node.title.clone().expect("Node title should not be None"),
+            hierarchy_type: node.hierarchy_type.clone(),
             children: node.children.iter().map(simplify_tree).collect(),
         }
     }
@@ -301,7 +320,6 @@ pub fn write_hierarchy_to_yaml(
     std::fs::write(path, yaml)
 }
 
-#[allow(dead_code)]
 fn simple_node_to_note_tree_node(
     simple_node: &SimpleNode,
     content_map: &HashMap<i32, String>,
@@ -312,7 +330,7 @@ fn simple_node_to_note_tree_node(
         content: content_map.get(&simple_node.id).cloned(),
         created_at: None,
         modified_at: None,
-        hierarchy_type: Some("block".to_string()),
+        hierarchy_type: simple_node.hierarchy_type.clone(),
         children: simple_node
             .children
             .iter()
@@ -320,9 +338,6 @@ fn simple_node_to_note_tree_node(
             .collect(),
     }
 }
-
-
-
 
 pub async fn write_notes_to_disk(
     notes: &[NoteWithoutFts],
@@ -348,14 +363,6 @@ pub async fn write_notes_to_disk(
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
 
-    fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
-        SimpleNode {
-            id: node.id,
-            title: node.title.clone().expect("Node title should not be None"),
-            children: node.children.iter().map(simplify_tree).collect(),
-        }
-    }
-
     let simple_tree: Vec<SimpleNode> = tree.iter().map(simplify_tree).collect();
 
     // Save the simplified hierarchy as metadata.yaml
@@ -363,6 +370,117 @@ pub async fn write_notes_to_disk(
     let yaml = serde_yaml::to_string(&simple_tree)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     fs::write(metadata_path, yaml).await?;
+
+    Ok(())
+}
+
+pub async fn read_from_disk(base_url: &str, input_dir: &std::path::Path) -> Result<(), NoteError> {
+    // Read metadata.yaml to reconstruct the hierarchy
+    let metadata_path = input_dir.join("metadata.yaml");
+    let metadata_content = fs::read_to_string(&metadata_path).await?;
+    let simple_nodes: Vec<SimpleNode> = serde_yaml::from_str(&metadata_content)?;
+
+    // Flatten the tree to get all note IDs
+    fn collect_note_ids(nodes: &[SimpleNode], ids: &mut Vec<i32>) {
+        for node in nodes {
+            ids.push(node.id);
+            collect_note_ids(&node.children, ids);
+        }
+    }
+    let mut note_ids = Vec::new();
+    collect_note_ids(&simple_nodes, &mut note_ids);
+
+    // Read note files concurrently
+    let read_futures: Vec<_> = note_ids
+        .iter()
+        .map(|&id| {
+            let file_path = input_dir.join(format!("{}.md", id));
+            async move {
+                let content = fs::read_to_string(&file_path).await?;
+                Ok::<(i32, String), std::io::Error>((id, content))
+            }
+        })
+        .collect();
+    let note_contents = join_all(read_futures).await;
+    let note_contents: Result<HashMap<i32, String>, _> = note_contents
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map(|vec| vec.into_iter().collect());
+    let note_contents = note_contents?;
+
+    // Build a content map for reconstructing the note tree
+    let content_map: HashMap<i32, String> = note_contents.clone();
+
+    // Reconstruct local notes with hierarchy
+    fn build_notes(
+        node: &SimpleNode,
+        parent_id: Option<i32>,
+        contents: &HashMap<i32, String>,
+        notes: &mut Vec<NoteWithParent>,
+    ) {
+        let content = contents.get(&node.id).cloned().unwrap_or_default();
+        let note = NoteWithParent {
+            note_id: node.id,
+            title: node.title.clone(),
+            content,
+            created_at: None,
+            modified_at: None,
+            parent_id,
+        };
+        notes.push(note);
+        for child in &node.children {
+            build_notes(child, Some(node.id), contents, notes);
+        }
+    }
+    let mut local_notes = Vec::new();
+    for node in &simple_nodes {
+        build_notes(node, None, &note_contents, &mut local_notes);
+    }
+
+    // Compute local hashes
+    let local_hashes_map = compute_all_note_hashes(local_notes.clone()).await?;
+
+    // Fetch remote hashes
+    let remote_hashes = get_all_note_hashes(base_url).await?;
+    let remote_hashes_map: HashMap<i32, String> = remote_hashes
+        .iter()
+        .map(|note_hash| (note_hash.id, note_hash.hash.clone()))
+        .collect();
+
+    // Identify notes that have changed
+    let updates: Vec<_> = local_notes
+        .into_iter()
+        .filter_map(|note| {
+            let local_hash = local_hashes_map.get(&note.note_id)?;
+            let remote_hash = remote_hashes_map.get(&note.note_id);
+            if Some(local_hash) != remote_hash {
+                // Note has changed or is new
+                let update_request = UpdateNoteRequest {
+                    title: Some(note.title.clone()),
+                    content: note.content.clone(),
+                };
+                Some((note.note_id, update_request))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Perform batch update for changed notes
+    if !updates.is_empty() {
+        batch_update_notes(base_url, updates).await?;
+    }
+
+    // Reconstruct the note tree from simple_nodes and content_map
+    let note_tree_nodes: Vec<NoteTreeNode> = simple_nodes
+        .iter()
+        .map(|simple_node| simple_node_to_note_tree_node(simple_node, &content_map))
+        .collect();
+
+    // Update the note hierarchy in the database
+    for note_tree_node in note_tree_nodes {
+        update_note_tree(base_url, note_tree_node).await?;
+    }
 
     Ok(())
 }
@@ -906,40 +1024,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_all_note_hashes() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = BASE_URL;
-
-        // Create a test note
-        let note = create_note(
-            base_url,
-            CreateNoteRequest {
-                title: "Test Note".to_string(),
-                content: "Test content".to_string(),
-            },
-        )
-        .await?;
-
-        // Give the server time to process
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-        // Get all note hashes
-        let hashes = get_all_note_hashes(base_url).await?;
-
-        // Verify we got some hashes back
-        assert!(!hashes.is_empty(), "Should have received at least one hash");
-
-        // Verify the test note's hash is present and valid
-        let note_hash = hashes.iter().find(|h| h.id == note.id)
-            .expect("Newly created note's hash not found");
-        assert!(!note_hash.hash.is_empty(), "Hash should not be empty");
-
-        // Clean up
-        delete_note(base_url, note.id).await?;
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_save_note_tree_as_yaml() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
@@ -997,6 +1081,83 @@ mod tests {
 
         // Cleanup
         std::fs::remove_file(temp_file)?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_note_hashes() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a few test notes first
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: "Content 1".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: "Content 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Get all note hashes
+        let hashes = get_all_note_hashes(base_url).await?;
+
+        // Verify we got hashes
+        assert!(!hashes.is_empty(), "Should have received some note hashes");
+
+        // Find our test notes' hashes
+        let hash1 = hashes.iter().find(|h| h.id == note1.id);
+        let hash2 = hashes.iter().find(|h| h.id == note2.id);
+
+        assert!(hash1.is_some(), "Hash for note1 should exist");
+        assert!(hash2.is_some(), "Hash for note2 should exist");
+
+        let hash1 = hash1.unwrap();
+        let hash2 = hash2.unwrap();
+
+        // Verify hash format (should be non-empty strings)
+        assert!(!hash1.hash.is_empty(), "Hash1 should not be empty");
+        assert!(!hash2.hash.is_empty(), "Hash2 should not be empty");
+
+        // Verify hashes are different for different notes
+        assert_ne!(
+            hash1.hash, hash2.hash,
+            "Different notes should have different hashes"
+        );
+
+        // Modify a note and verify its hash changes
+        let update = UpdateNoteRequest {
+            title: Some("Modified Note 1".to_string()),
+            content: "Modified Content 1".to_string(),
+        };
+        update_note(base_url, note1.id, update).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Get updated hashes
+        let updated_hashes = get_all_note_hashes(base_url).await?;
+        let updated_hash1 = updated_hashes
+            .iter()
+            .find(|h| h.id == note1.id)
+            .expect("Modified note should still exist");
+
+        assert_ne!(
+            hash1.hash, updated_hash1.hash,
+            "Hash should change when note content changes"
+        );
 
         Ok(())
     }

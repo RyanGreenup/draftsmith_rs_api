@@ -209,7 +209,7 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable, Serialize, Deserialize)]
+#[derive(Debug, Queryable, Serialize, Deserialize, Clone)]
 pub struct NoteWithParent {
     pub note_id: i32,
     pub title: String,
@@ -226,9 +226,7 @@ impl NoteWithParent {
 
         notes::table
             .left_join(
-                note_hierarchy::table.on(
-                    notes::id.nullable().eq(note_hierarchy::child_note_id)
-                )
+                note_hierarchy::table.on(notes::id.nullable().eq(note_hierarchy::child_note_id)),
             )
             .select((
                 notes::id,
@@ -247,9 +245,7 @@ impl NoteWithParent {
 
         notes::table
             .left_join(
-                note_hierarchy::table.on(
-                    notes::id.nullable().eq(note_hierarchy::child_note_id)
-                )
+                note_hierarchy::table.on(notes::id.nullable().eq(note_hierarchy::child_note_id)),
             )
             .filter(notes::id.eq(id))
             .select((

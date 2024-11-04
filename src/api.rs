@@ -1,3 +1,4 @@
+use crate::client::NoteError;
 use crate::tables::{HierarchyMapping, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use axum::{
@@ -302,8 +303,7 @@ async fn get_note_hash(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let note = NoteWithParent::get_by_id(&mut conn, note_id)
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let note = NoteWithParent::get_by_id(&mut conn, note_id).map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(compute_note_hash(&note))
 }
@@ -314,23 +314,37 @@ pub struct NoteHash {
     pub hash: String,
 }
 
-pub async fn compute_all_note_hashes(conn: &mut PgConnection) -> Result<HashMap<i32, String>, StatusCode> {
-    let all_notes = NoteWithParent::get_all(conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
+pub async fn compute_all_note_hashes(
+    all_notes: Vec<NoteWithParent>,
+) -> Result<HashMap<i32, String>, NoteError> {
     // Process notes concurrently using tokio's spawn
     let hash_futures: Vec<_> = all_notes
         .into_iter()
         .map(|note| {
             let note_id = note.note_id;
-            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+            tokio::spawn(async move {
+                Ok::<(i32, String), NoteError>((note_id, compute_note_hash(&note)))
+            })
         })
         .collect();
 
     // Wait for all hashes to complete and collect into HashMap
     let mut note_hashes = HashMap::new();
     for future in hash_futures {
-        if let Ok((id, hash)) = future.await {
-            note_hashes.insert(id, hash);
+        match future.await {
+            Ok(Ok((id, hash))) => {
+                note_hashes.insert(id, hash);
+            }
+            Ok(Err(e)) => return Err(e),
+            Err(_) => {
+                return Err(NoteError::RequestError(
+                    reqwest::Client::new()
+                        .get("http://dummy")
+                        .send()
+                        .await
+                        .unwrap_err(),
+                ))
+            }
         }
     }
 
@@ -345,9 +359,13 @@ async fn get_all_note_hashes(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let hash_map = compute_all_note_hashes(&mut conn).await?;
+    let all_notes =
+        NoteWithParent::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Convert HashMap to sorted Vec<NoteHash>
+    let hash_map = compute_all_note_hashes(all_notes)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     let mut note_hashes: Vec<_> = hash_map
         .into_iter()
         .map(|(id, hash)| NoteHash { id, hash })
@@ -623,7 +641,7 @@ async fn update_database_from_notetreenode(
     // Recursive function to process each node
     fn process_node(
         conn: &mut PgConnection,
-        node: NoteTreeNode,
+        mut node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
         eprintln!("Processing node: id={}, title={:?}", node.id, node.title);
@@ -665,33 +683,39 @@ async fn update_database_from_notetreenode(
             node.id
         };
 
-        // Update hierarchy
-        // Remove existing hierarchy entry for this node
-        match diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn) {
-            Ok(_) => eprintln!("Deleted existing hierarchy for node: {}", node_id),
-            Err(e) => {
-                eprintln!("Failed to delete hierarchy for node {}: {:?}", node_id, e);
-                return Err(e);
+        // After determining 'node_id', but before deleting the existing hierarchy
+        // NOTE this is because hierarchy_type is still not a core component.
+        if node.hierarchy_type.is_none() {
+            use crate::schema::note_hierarchy::dsl::*;
+
+            // Retrieve the existing hierarchy_type from the database
+            let existing_hierarchy = note_hierarchy
+                .filter(child_note_id.eq(node_id))
+                .first::<NoteHierarchy>(conn)
+                .optional()?;
+
+            if let Some(existing_h) = existing_hierarchy {
+                // Assign the existing hierarchy_type to the node
+                node.hierarchy_type = existing_h.hierarchy_type.clone();
             }
         }
 
-        // Insert new hierarchy entry if there is a parent
+        // Update hierarchy
+
+        // Update hierarchy only if there is a parent
         if let Some(p_id) = parent_id {
+            // Remove existing hierarchy entry for this node
+            diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn)?;
+
+            // Insert new hierarchy entry
             let new_hierarchy = NewNoteHierarchy {
                 child_note_id: Some(node_id),
                 parent_note_id: Some(p_id),
                 hierarchy_type: node.hierarchy_type.as_deref(),
             };
-            match diesel::insert_into(note_hierarchy)
+            diesel::insert_into(note_hierarchy)
                 .values(&new_hierarchy)
-                .execute(conn)
-            {
-                Ok(_) => eprintln!("Inserted new hierarchy: child={}, parent={}", node_id, p_id),
-                Err(e) => {
-                    eprintln!("Failed to insert hierarchy: {:?}", e);
-                    return Err(e);
-                }
-            }
+                .execute(conn)?;
         }
 
         // Process child nodes recursively
