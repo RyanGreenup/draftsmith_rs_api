@@ -1,19 +1,13 @@
 pub use crate::api::{
-    AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest,
-    HierarchyMapping, NoteHash, NoteTreeNode, UpdateNoteRequest,
+    AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest, NoteHash,
+    NoteTreeNode, UpdateNoteRequest,
 };
-pub use crate::tables::NoteWithoutFts;
+pub use crate::tables::{HierarchyMapping, NoteWithoutFts};
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt;
-
-fn compute_hash(content: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    format!("{:x}", hasher.finalize())
-}
 
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();

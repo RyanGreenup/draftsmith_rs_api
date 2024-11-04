@@ -91,7 +91,7 @@ pub struct NewNoteAttribute<'a> {
     pub value: &'a str,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HierarchyMapping {
     pub parent_id: Option<i32>,
     pub child_id: i32,
@@ -108,9 +108,11 @@ pub struct NoteHierarchy {
 }
 
 impl NoteHierarchy {
-    pub fn get_hierarchy_mappings(conn: &mut PgConnection) -> diesel::QueryResult<Vec<HierarchyMapping>> {
+    pub fn get_hierarchy_mappings(
+        conn: &mut PgConnection,
+    ) -> diesel::QueryResult<Vec<HierarchyMapping>> {
         use crate::schema::note_hierarchy::dsl::*;
-        
+
         let hierarchies = note_hierarchy
             .select((parent_note_id, child_note_id, hierarchy_type))
             .load::<(Option<i32>, Option<i32>, Option<String>)>(conn)?;
