@@ -371,7 +371,19 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         });
 
     // Batch update the notes if there are any changes
-    let notes_with_content_to_update: Vec<(i32, UpdateNoteRequest)> = // TODO
+    let notes_with_content_to_update: Vec<(i32, UpdateNoteRequest)> = notes_to_update
+        .into_iter()
+        .map(|note| {
+            (
+                note.note_id,
+                UpdateNoteRequest {
+                    title: Some(note.title),
+                    content: note.content,
+                },
+            )
+        })
+        .collect();
+
     if !notes_with_content_to_update.is_empty() {
         batch_update_notes(base_url, notes_with_content_to_update).await?;
     }
@@ -385,10 +397,34 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
     // Convert the tree into a hierarchy mapping
-    let hierarchy_mappings = extract_parent_mapping(&tree);
+    let new_hierarchy = extract_parent_mapping(&tree);
 
+    // Get current hierarchy mappings from server
+    let current_mappings = fetch_hierarchy_mappings(base_url).await?;
+    let current_hierarchy: HashMap<i32, Option<i32>> = current_mappings
+        .into_iter()
+        .map(|m| (m.child_id, m.parent_id))
+        .collect();
 
-    // TODO Use attach_child_note and detach_child_note to update hierarchy
+    // Find differences and update hierarchy
+    for (child_id, new_parent_id) in new_hierarchy {
+        if current_hierarchy.get(&child_id) != Some(&new_parent_id) {
+            // Detach first if needed
+            if current_hierarchy.contains_key(&child_id) {
+                detach_child_note(base_url, child_id).await?;
+            }
+
+            // Attach to new parent if there is one
+            if let Some(parent_id) = new_parent_id {
+                let attach_request = AttachChildRequest {
+                    child_note_id: child_id,
+                    parent_note_id: Some(parent_id),
+                    hierarchy_type: Some("block".to_string()),
+                };
+                attach_child_note(base_url, attach_request).await?;
+            }
+        }
+    }
 
 }
 
