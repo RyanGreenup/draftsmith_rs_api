@@ -314,7 +314,7 @@ pub struct NoteHash {
     pub hash: String,
 }
 
-async fn compute_all_note_hashes(conn: &mut PgConnection) -> Result<HashMap<i32, String>, StatusCode> {
+pub async fn compute_all_note_hashes(conn: &mut PgConnection) -> Result<HashMap<i32, String>, StatusCode> {
     let all_notes = NoteWithParent::get_all(conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Process notes concurrently using tokio's spawn
