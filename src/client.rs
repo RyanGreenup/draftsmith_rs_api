@@ -9,7 +9,6 @@ use reqwest::Error as ReqwestError;
 use std::collections::HashMap;
 use std::fmt;
 use axum::http::StatusCode;
-use crate::api::compute_all_note_hashes;
 
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();
@@ -64,6 +63,15 @@ impl From<ReqwestError> for NoteError {
 impl From<std::io::Error> for NoteError {
     fn from(err: std::io::Error) -> Self {
         NoteError::IOError(err)
+    }
+}
+
+impl From<StatusCode> for NoteError {
+    fn from(_: StatusCode) -> Self {
+        NoteError::RequestError(reqwest::Error::from(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Status code error",
+        )))
     }
 }
 
@@ -322,32 +330,37 @@ fn simple_node_to_note_tree_node(
 }
 
 
-pub async fn compute_all_note_hashes(all_notes: Vec<NoteWithParent>) -> Result<HashMap<i32, String>, StatusCode> {
 
-    // Process notes concurrently using tokio's spawn
-    let hash_futures: Vec<_> = all_notes
-        .into_iter()
-        .map(|note| {
-            let note_id = note.note_id;
-            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
-        })
-        .collect();
-
-    // Wait for all hashes to complete and collect into HashMap
-    let mut note_hashes = HashMap::new();
-    for future in hash_futures {
-        if let Ok((id, hash)) = future.await {
-            note_hashes.insert(id, hash);
+async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result<Vec<NoteWithParent>, NoteError> {
+    let mut notes = Vec::new();
+    
+    for entry in std::fs::read_dir(dir_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.extension().map_or(false, |ext| ext == "md") {
+            if let Some(stem) = path.file_stem() {
+                if let Ok(note_id) = stem.to_string_lossy().parse::<i32>() {
+                    let content = std::fs::read_to_string(&path)?;
+                    let note = fetch_note(base_url, note_id, false).await?;
+                    notes.push(NoteWithParent {
+                        note_id,
+                        title: note.title,
+                        content,
+                        created_at: note.created_at,
+                        modified_at: note.modified_at,
+                        parent_id: None, // We'll get this from metadata.yaml later
+                    });
+                }
+            }
         }
     }
-
-    Ok(note_hashes)
+    
+    Ok(notes)
 }
 
 pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
     // Step 1. Read Content from Disk..........................................
-    // All files will be flat of the form dir_path/<id>.md (don't walk the directory)
-    // Step 1. Update Content..................................................
     let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
 
     // Get server-side hashes
@@ -361,14 +374,15 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
     // Filter out notes that have changed
     let notes_to_update: Vec<NoteWithParent> = notes_with_content_to_update
         .into_iter()
-        .filter(|(id, _)| {
-            if let Some(server_hash) = server_hash_map.get(id) {
-                if let Some(client_hash) = client_hashes.get(id) {
+        .filter(|note| {
+            if let Some(server_hash) = server_hash_map.get(&note.note_id) {
+                if let Some(client_hash) = client_hashes.get(&note.note_id) {
                     return server_hash != client_hash;
                 }
             }
             false
-        });
+        })
+        .collect();
 
     // Batch update the notes if there are any changes
     let notes_with_content_to_update: Vec<(i32, UpdateNoteRequest)> = notes_to_update
@@ -425,6 +439,8 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
             }
         }
     }
+    
+    Ok(())
 
 }
 
