@@ -314,6 +314,29 @@ pub struct NoteHash {
     pub hash: String,
 }
 
+async fn compute_all_note_hashes(conn: &mut PgConnection) -> Result<HashMap<i32, String>, StatusCode> {
+    let all_notes = NoteWithParent::get_all(conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Process notes concurrently using tokio's spawn
+    let hash_futures: Vec<_> = all_notes
+        .into_iter()
+        .map(|note| {
+            let note_id = note.note_id;
+            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+        })
+        .collect();
+
+    // Wait for all hashes to complete and collect into HashMap
+    let mut note_hashes = HashMap::new();
+    for future in hash_futures {
+        if let Ok((id, hash)) = future.await {
+            note_hashes.insert(id, hash);
+        }
+    }
+
+    Ok(note_hashes)
+}
+
 async fn get_all_note_hashes(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteHash>>, StatusCode> {
@@ -322,33 +345,15 @@ async fn get_all_note_hashes(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let all_notes =
-        NoteWithParent::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let hash_map = compute_all_note_hashes(&mut conn).await?;
 
-    // Process notes concurrently using tokio's spawn
-    let hash_futures: Vec<_> = all_notes
+    // Convert HashMap to sorted Vec<NoteHash>
+    let mut note_hashes: Vec<_> = hash_map
         .into_iter()
-        .map(|note| {
-            let note_id = note.note_id;
-            tokio::spawn(async move {
-                NoteHash {
-                    id: note_id,
-                    hash: compute_note_hash(&note),
-                }
-            })
-        })
+        .map(|(id, hash)| NoteHash { id, hash })
         .collect();
-
-    // Wait for all hashes to complete and collect into Vec
-    let mut note_hashes = Vec::new();
-    for future in hash_futures {
-        if let Ok(hash) = future.await {
-            note_hashes.push(hash);
-        }
-    }
-
-    // Sort by ID for consistent ordering
     note_hashes.sort_by_key(|h| h.id);
+
     Ok(Json(note_hashes))
 }
 
