@@ -69,10 +69,7 @@ impl From<std::io::Error> for NoteError {
 
 impl From<StatusCode> for NoteError {
     fn from(_: StatusCode) -> Self {
-        NoteError::RequestError(reqwest::Error::from(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Status code error",
-        )))
+        NoteError::RequestError(reqwest::Error::from_static("Status code error"))
     }
 }
 
@@ -370,7 +367,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         server_hashes.into_iter().map(|h| (h.id, h.hash)).collect();
 
     // Get client-side hashes
-    let client_hashes = compute_all_note_hashes(notes_with_content_to_update).await?;
+    let client_hashes = compute_all_note_hashes(notes_with_content_to_update.clone()).await?;
 
     // Filter out notes that have changed
     let notes_to_update: Vec<NoteWithParent> = notes_with_content_to_update
