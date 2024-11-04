@@ -1272,26 +1272,16 @@ mod tests {
         assert!(note_hashes.iter().any(|nh| nh.id == note1.id));
         assert!(note_hashes.iter().any(|nh| nh.id == note2.id));
 
-        // Verify hash values match expected
-        let note1_without_fts = NoteWithoutFts {
-            id: note1.id,
-            title: note1.title,
-            content: note1.content,
-            created_at: note1.created_at,
-            modified_at: note1.modified_at,
-        };
-        let note2_without_fts = NoteWithoutFts {
-            id: note2.id,
-            title: note2.title,
-            content: note2.content,
-            created_at: note2.created_at,
-            modified_at: note2.modified_at,
-        };
+        // Get NoteWithParent instances for hash verification
+        let note1_with_parent = NoteWithParent::get_by_id(&mut conn, note1.id)
+            .expect("Failed to get note1 with parent");
+        let note2_with_parent = NoteWithParent::get_by_id(&mut conn, note2.id)
+            .expect("Failed to get note2 with parent");
 
         let note1_hash = note_hashes.iter().find(|nh| nh.id == note1.id).unwrap();
         let note2_hash = note_hashes.iter().find(|nh| nh.id == note2.id).unwrap();
 
-        assert_eq!(note1_hash.hash, compute_note_hash(&note1_without_fts));
-        assert_eq!(note2_hash.hash, compute_note_hash(&note2_without_fts));
+        assert_eq!(note1_hash.hash, compute_note_hash(&note1_with_parent));
+        assert_eq!(note2_hash.hash, compute_note_hash(&note2_with_parent));
     }
 }
