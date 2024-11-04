@@ -8,6 +8,8 @@ use std::fs;
 use reqwest::Error as ReqwestError;
 use std::collections::HashMap;
 use std::fmt;
+use axum::http::StatusCode;
+use crate::api::compute_all_note_hashes;
 
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();
@@ -319,102 +321,75 @@ fn simple_node_to_note_tree_node(
     }
 }
 
-async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result<Vec<(i32, UpdateNoteRequest)>, NoteError> {
+
+pub async fn compute_all_note_hashes(all_notes: Vec<NoteWithParent>) -> Result<HashMap<i32, String>, StatusCode> {
+
+    // Process notes concurrently using tokio's spawn
+    let hash_futures: Vec<_> = all_notes
+        .into_iter()
+        .map(|note| {
+            let note_id = note.note_id;
+            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+        })
+        .collect();
+
+    // Wait for all hashes to complete and collect into HashMap
+    let mut note_hashes = HashMap::new();
+    for future in hash_futures {
+        if let Ok((id, hash)) = future.await {
+            note_hashes.insert(id, hash);
+        }
+    }
+
+    Ok(note_hashes)
+}
+
+pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
+    // Step 1. Read Content from Disk..........................................
+    // All files will be flat of the form dir_path/<id>.md (don't walk the directory)
+    // Step 1. Update Content..................................................
+    let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
 
     // Get server-side hashes
     let server_hashes = get_all_note_hashes(base_url).await?;
     let server_hash_map: HashMap<i32, String> =
         server_hashes.into_iter().map(|h| (h.id, h.hash)).collect();
 
+    // Get client-side hashes
+    let client_hashes = compute_all_note_hashes(notes_with_content_to_update).await?;
 
-    // Read all .md files in the directory
-    let mut notes_to_update = Vec::new();
-    for entry in fs::read_dir(dir_path).map_err(NoteError::IOError)? {
-        let entry = entry.map_err(NoteError::IOError)?;
-        let path = entry.path();
-
-        if path.extension().map_or(false, |ext| ext == "md") {
-            // Extract note ID from filename
-            let id = path
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .and_then(|s| s.parse::<i32>().ok())
-                .ok_or_else(|| {
-                    NoteError::IOError(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to parse note ID from filename",
-                    ))
-                })?;
-
-            // Read note content
-            let content = fs::read_to_string(&path).map_err(NoteError::IOError)?;
-
-            // Add to notes to update if the server hash differs
-            if let Some(_server_hash) = server_hash_map.get(&id) {
-                notes_to_update.push((
-                    id,
-                    UpdateNoteRequest {
-                        title: None,
-                        content,
-                    },
-                ));
+    // Filter out notes that have changed
+    let notes_to_update: Vec<NoteWithParent> = notes_with_content_to_update
+        .into_iter()
+        .filter(|(id, _)| {
+            if let Some(server_hash) = server_hash_map.get(id) {
+                if let Some(client_hash) = client_hashes.get(id) {
+                    return server_hash != client_hash;
+                }
             }
-        }
-    }
-
-    Ok(notes_to_update)
-}
-
-pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
-    // Step 1. Update Content..................................................
-    let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
+            false
+        });
 
     // Batch update the notes if there are any changes
+    let notes_with_content_to_update: Vec<(i32, UpdateNoteRequest)> = // TODO
     if !notes_with_content_to_update.is_empty() {
         batch_update_notes(base_url, notes_with_content_to_update).await?;
     }
 
     // Step 2. Update Hierarchy................................................
+
     // Read metadata.yaml to get hierarchy information
     let metadata_path = dir_path.join("metadata.yaml");
     let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
     let tree: Vec<SimpleNode> =
         serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    // Get current hierarchy from server
-    let hierarchy_mappings = fetch_hierarchy_mappings(base_url).await?;
+    // Convert the tree into a hierarchy mapping
+    let hierarchy_mappings = extract_parent_mapping(&tree);
 
-    // Create maps for current parent-child relationships
-    let mut current_parents: HashMap<i32, Option<i32>> = HashMap::new();
-    for mapping in hierarchy_mappings {
-        current_parents.insert(mapping.child_id, mapping.parent_id);
-    }
 
-    // Extract desired parent-child relationships from tree
-    let desired_parents = extract_parent_mapping(&tree);
+    // TODO Use attach_child_note and detach_child_note to update hierarchy
 
-    // Detach notes that need to be moved
-    for (child_id, desired_parent) in &desired_parents {
-        if let Some(&current_parent) = current_parents.get(child_id) {
-            if current_parent != *desired_parent {
-                detach_child_note(base_url, *child_id).await?;
-            }
-        }
-    }
-
-    // Attach notes according to desired hierarchy
-    for (child_id, desired_parent) in desired_parents {
-        if let Some(parent_id) = desired_parent {
-            let attach_request = AttachChildRequest {
-                child_note_id: child_id,
-                parent_note_id: Some(parent_id),
-                hierarchy_type: Some("block".to_string()),
-            };
-            attach_child_note(base_url, attach_request).await?;
-        }
-    }
-
-    Ok(())
 }
 
 pub async fn write_notes_to_disk(
