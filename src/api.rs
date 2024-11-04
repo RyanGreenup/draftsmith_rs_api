@@ -329,15 +329,12 @@ pub struct NoteHash {
 async fn get_all_note_hashes(
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<i32, String>>, StatusCode> {
-    use crate::schema::notes::dsl::*;
-
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let all_notes = notes
-        .load::<Note>(&mut conn)
+    let all_notes = NoteWithoutFts::get_all(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Process notes concurrently using tokio's spawn
@@ -345,14 +342,7 @@ async fn get_all_note_hashes(
         .into_iter()
         .map(|note| {
             let note_id = note.id;
-            let note_without_fts = NoteWithoutFts {
-                id: note.id,
-                title: note.title,
-                content: note.content,
-                created_at: note.created_at,
-                modified_at: note.modified_at,
-            };
-            tokio::spawn(async move { (note_id, compute_note_hash(&note_without_fts)) })
+            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
         })
         .collect();
 
