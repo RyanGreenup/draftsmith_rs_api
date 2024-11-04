@@ -33,7 +33,7 @@ pub struct CreateNoteRequest {
     pub content: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct UpdateNoteRequest {
     pub title: Option<String>,
     pub content: String,
@@ -280,7 +280,7 @@ struct DeleteResponse {
     deleted_id: i32,
 }
 
-fn compute_note_hash(note: &NoteWithParent) -> String {
+pub fn compute_note_hash(note: &NoteWithParent) -> String {
     // Create a string containing all note properties including parent_id
     let note_string = format!(
         "id:{},title:{},content:{},created_at:{:?},modified_at:{:?},parent_id:{:?}",
