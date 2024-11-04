@@ -9,6 +9,7 @@ use reqwest::Error as ReqwestError;
 use std::collections::HashMap;
 use std::fmt;
 use axum::http::StatusCode;
+use crate::api::compute_all_note_hashes;
 
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();
@@ -333,11 +334,11 @@ fn simple_node_to_note_tree_node(
 
 async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result<Vec<NoteWithParent>, NoteError> {
     let mut notes = Vec::new();
-    
+
     for entry in std::fs::read_dir(dir_path)? {
         let entry = entry?;
         let path = entry.path();
-        
+
         if path.extension().map_or(false, |ext| ext == "md") {
             if let Some(stem) = path.file_stem() {
                 if let Ok(note_id) = stem.to_string_lossy().parse::<i32>() {
@@ -355,7 +356,7 @@ async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result
             }
         }
     }
-    
+
     Ok(notes)
 }
 
@@ -439,7 +440,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
             }
         }
     }
-    
+
     Ok(())
 
 }
