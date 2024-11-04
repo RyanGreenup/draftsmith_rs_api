@@ -3,6 +3,7 @@ use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::api;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -73,6 +74,12 @@ enum NotesCommands {
     Push {
         /// Directory containing notes to push
         dir: String,
+    },
+    /// Render note content as HTML
+    Render {
+        /// Output HTML file (optional - defaults to stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
     },
 }
 
@@ -385,6 +392,50 @@ async fn main() {
                             eprintln!("Error pushing notes: {}", e);
                             std::process::exit(1);
                         }
+                    }
+                }
+                NotesCommands::Render { output } => {
+                    if let Some(note_id) = id {
+                        // Fetch the note
+                        match rust_cli_app::client::fetch_note(&url, note_id, false).await {
+                            Ok(note) => {
+                                // Convert note content to HTML
+                                let html_output =
+                                    draftsmith_render::parse_md_to_html(&note.content);
+
+                                // Write output to file or stdout
+                                if let Some(output_path) = output {
+                                    match std::fs::write(output_path.clone(), html_output) {
+                                        Ok(_) => println!(
+                                            "Rendered note {} to {}",
+                                            note_id,
+                                            output_path.display()
+                                        ),
+                                        Err(e) => {
+                                            eprintln!(
+                                                "Error writing to file {}: {}",
+                                                output_path.display(),
+                                                e
+                                            );
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                } else {
+                                    println!("{}", html_output);
+                                }
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for render command");
+                        std::process::exit(1);
                     }
                 }
             },

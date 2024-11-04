@@ -31,6 +31,7 @@ futures = "0.3.31"
 axum-extra = { version = "0.9.4", features = ["erased-json"] }
 sha2 = "0.10.8"
 anyhow = "1.0.92"
+draftsmith_render = { path = "../draftsmith_render" }
 
 [dependencies.clap]
 version = "4.5.20"
