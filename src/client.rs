@@ -333,7 +333,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
     let tree: Vec<SimpleNode> =
         serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    // Read all .md files in the directory and compute their hashes
+    // Read all .md files in the directory
     let mut notes_to_update = Vec::new();
     for entry in fs::read_dir(dir_path).map_err(NoteError::IOError)? {
         let entry = entry.map_err(NoteError::IOError)?;
@@ -355,23 +355,54 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
             // Read note content
             let content = fs::read_to_string(&path).map_err(NoteError::IOError)?;
 
-            // Compute hash of local content
-            let mut hasher = Sha256::new();
-            let note_string = format!("id:{},content:{}", id, content);
-            hasher.update(note_string.as_bytes());
-            let local_hash = format!("{:x}", hasher.finalize());
-
-            // Compare with server hash
+            // Add to notes to update if the server hash differs
             if let Some(server_hash) = server_hash_map.get(&id) {
-                if local_hash != *server_hash {
-                    notes_to_update.push((
-                        id,
-                        UpdateNoteRequest {
-                            title: None,
-                            content,
-                        },
-                    ));
-                }
+                notes_to_update.push((
+                    id,
+                    UpdateNoteRequest {
+                        title: None,
+                        content,
+                    },
+                ));
+            }
+        }
+    }
+
+    // Get local note hashes using the API function that considers hierarchy
+    let client = reqwest::Client::new();
+    let url = format!("{}/notes/flat/batch", base_url);
+    let response = client
+        .put(url)
+        .json(&BatchUpdateRequest {
+            updates: notes_to_update.clone(),
+        })
+        .send()
+        .await?
+        .error_for_status()?;
+    let batch_result: BatchUpdateResponse = response.json().await?;
+
+    // Filter out notes that haven't changed based on their hashes
+    let mut final_updates = Vec::new();
+    for (id, update) in notes_to_update {
+        if let Some(server_hash) = server_hash_map.get(&id) {
+            let updated_note = batch_result
+                .updated
+                .iter()
+                .find(|n| n.id == id)
+                .ok_or_else(|| NoteError::NotFound(id))?;
+            
+            let note_with_parent = NoteWithParent {
+                note_id: updated_note.id,
+                title: updated_note.title.clone(),
+                content: updated_note.content.clone(),
+                created_at: updated_note.created_at,
+                modified_at: updated_note.modified_at,
+                parent_id: None, // We'll get this from the tree
+            };
+
+            let local_hash = compute_note_hash(&note_with_parent);
+            if local_hash != *server_hash {
+                final_updates.push((id, update));
             }
         }
     }
