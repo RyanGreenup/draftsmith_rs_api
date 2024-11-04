@@ -328,7 +328,7 @@ pub struct NoteHash {
 
 async fn get_all_note_hashes(
     State(state): State<AppState>,
-) -> Result<Json<HashMap<i32, String>>, StatusCode> {
+) -> Result<Json<Vec<NoteHash>>, StatusCode> {
     let mut conn = state
         .pool
         .get()
@@ -342,18 +342,23 @@ async fn get_all_note_hashes(
         .into_iter()
         .map(|note| {
             let note_id = note.id;
-            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+            tokio::spawn(async move { NoteHash { 
+                id: note_id, 
+                hash: compute_note_hash(&note) 
+            }})
         })
         .collect();
 
-    // Wait for all hashes to complete and collect into HashMap
-    let mut note_hashes = HashMap::new();
+    // Wait for all hashes to complete and collect into Vec
+    let mut note_hashes = Vec::new();
     for future in hash_futures {
-        if let Ok((note_id, hash)) = future.await {
-            note_hashes.insert(note_id, hash);
+        if let Ok(hash) = future.await {
+            note_hashes.push(hash);
         }
     }
 
+    // Sort by ID for consistent ordering
+    note_hashes.sort_by_key(|h| h.id);
     Ok(Json(note_hashes))
 }
 
