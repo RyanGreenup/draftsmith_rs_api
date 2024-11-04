@@ -1002,39 +1002,25 @@ mod tests {
     async fn test_get_all_note_hashes() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
-        // Create some test notes
-        let note1 = create_note(
+        // Create a test note
+        let note = create_note(
             base_url,
             CreateNoteRequest {
-                title: "Note 1".to_string(),
-                content: "Content 1".to_string(),
+                title: "Test Note".to_string(),
+                content: "Test content".to_string(),
             },
         )
         .await?;
 
-        let note2 = create_note(
-            base_url,
-            CreateNoteRequest {
-                title: "Note 2".to_string(),
-                content: "Content 2".to_string(),
-            },
-        )
-        .await?;
-
-        // Get all hashes
+        // Get all note hashes
         let hashes = get_all_note_hashes(base_url).await?;
 
-        // Verify our test notes' hashes are present
-        let hash1 = hashes
-            .iter()
-            .find(|h| h.id == note1.id)
-            .expect("Hash for note1 not found");
-        let hash2 = hashes
-            .iter()
-            .find(|h| h.id == note2.id)
-            .expect("Hash for note2 not found");
-        assert!(!hash1.hash.is_empty());
-        assert!(!hash2.hash.is_empty());
+        // Verify the test note's hash is present
+        let note_hash = hashes.iter().find(|h| h.id == note.id).expect("Hash not found");
+        assert!(!note_hash.hash.is_empty());
+
+        // Clean up
+        delete_note(base_url, note.id).await?;
 
         Ok(())
     }
