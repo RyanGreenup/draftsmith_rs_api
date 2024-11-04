@@ -1,11 +1,10 @@
 pub use crate::api::{
     AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest, NoteHash,
-    NoteTreeNode, UpdateNoteRequest,
+    NoteTreeNode, UpdateNoteRequest, compute_note_hash,
 };
-pub use crate::tables::{HierarchyMapping, NoteWithoutFts};
+pub use crate::tables::{HierarchyMapping, NoteWithoutFts, NoteWithParent};
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fmt;
 
