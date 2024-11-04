@@ -69,7 +69,7 @@ impl From<std::io::Error> for NoteError {
 
 impl From<StatusCode> for NoteError {
     fn from(_: StatusCode) -> Self {
-        NoteError::RequestError(reqwest::Error::from_static("Status code error"))
+        NoteError::RequestError(reqwest::Error::new_cancelled())
     }
 }
 
