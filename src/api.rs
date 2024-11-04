@@ -297,27 +297,15 @@ async fn get_note_hash(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Result<String, StatusCode> {
-    use crate::schema::notes::dsl::*;
-
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let note = notes
-        .find(note_id)
-        .first::<Note>(&mut conn)
+    let note = NoteWithParent::get_by_id(&mut conn, note_id)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let note_without_fts = NoteWithoutFts {
-        id: note.id,
-        title: note.title,
-        content: note.content,
-        created_at: note.created_at,
-        modified_at: note.modified_at,
-    };
-
-    Ok(compute_note_hash(&note_without_fts))
+    Ok(compute_note_hash(&note))
 }
 
 #[derive(Deserialize, Serialize)]
