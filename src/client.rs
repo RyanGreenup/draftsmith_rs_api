@@ -367,41 +367,54 @@ async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result
 
 pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
     // Step 1. Update Content..................................................
-
-    // Get the notes from disk regardless of hierarchy
     let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
 
-
-    // Get local note hashes using the API function that considers hierarchy
-    let client = reqwest::Client::new();
-    // TODO pull from /notes/flat/hashes
-    let url = format!("{}/notes/flat/hashes", base_url);
-    // Output type defined in api.rs by this type signature:
-        // From api.rs
-        // async fn get_all_note_hashes(
-        //     State(state): State<AppState>,
-        // ) -> Result<Json<Vec<NoteHash>>, StatusCode> {
-
-    // If the hash has changed, then the hierarchy has also changed (server accounts for this)
-
-    // Now update notes on server that have changed using
-    // 1. batch_update_notes
+    // Batch update the notes if there are any changes
+    if !notes_with_content_to_update.is_empty() {
+        batch_update_notes(base_url, notes_with_content_to_update).await?;
+    }
 
     // Step 2. Update Hierarchy................................................
-    // Set the content and title as Option::None so it's not sent again
-
     // Read metadata.yaml to get hierarchy information
     let metadata_path = dir_path.join("metadata.yaml");
     let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
     let tree: Vec<SimpleNode> =
         serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    // Compare this to the current hierarchy on the server
+    // Get current hierarchy from server
     let hierarchy_mappings = fetch_hierarchy_mappings(base_url).await?;
 
-    // TODO: attach and detach as needed (If we need to walk the tree, use a 
-    // 2. attach_child_note
-    // 3. detach_child_note
+    // Create maps for current parent-child relationships
+    let mut current_parents: HashMap<i32, Option<i32>> = HashMap::new();
+    for mapping in hierarchy_mappings {
+        if let Some(child_id) = mapping.child_id {
+            current_parents.insert(child_id, mapping.parent_id);
+        }
+    }
+
+    // Extract desired parent-child relationships from tree
+    let desired_parents = extract_parent_mapping(&tree);
+
+    // Detach notes that need to be moved
+    for (child_id, desired_parent) in &desired_parents {
+        if let Some(&current_parent) = current_parents.get(child_id) {
+            if current_parent != *desired_parent {
+                detach_child_note(base_url, *child_id).await?;
+            }
+        }
+    }
+
+    // Attach notes according to desired hierarchy
+    for (child_id, desired_parent) in desired_parents {
+        if let Some(parent_id) = desired_parent {
+            let attach_request = AttachChildRequest {
+                child_note_id: child_id,
+                parent_note_id: Some(parent_id),
+                hierarchy_type: Some("block".to_string()),
+            };
+            attach_child_note(base_url, attach_request).await?;
+        }
+    }
 
     Ok(())
 }
