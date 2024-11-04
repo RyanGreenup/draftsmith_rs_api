@@ -236,6 +236,24 @@ impl NoteWithParent {
             ))
             .load::<NoteWithParent>(conn)
     }
+
+    pub fn get_by_id(conn: &mut PgConnection, id: i32) -> diesel::QueryResult<NoteWithParent> {
+        use crate::schema::{note_hierarchy, notes};
+        use diesel::prelude::*;
+
+        notes::table
+            .left_join(note_hierarchy::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .filter(notes::id.eq(id))
+            .select((
+                notes::id,
+                notes::title,
+                notes::content,
+                notes::created_at,
+                notes::modified_at,
+                note_hierarchy::parent_note_id,
+            ))
+            .first::<NoteWithParent>(conn)
+    }
 }
 
 #[derive(Debug, Queryable, Serialize, Deserialize)]
