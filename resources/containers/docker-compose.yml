@@ -1,0 +1,16 @@
+version: "3"
+services:
+
+  postgres-db:
+    image: pgvector/pgvector:pg17
+    restart: always
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      # declare your mount volume /host/dir:/container/dir
+      - ./pgdata:/var/lib/postgresql/data
+
+# See Also ~/.config/sql-language-server/.sqllsrc.json
