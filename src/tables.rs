@@ -4,6 +4,7 @@ use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::{AsExpression, FromSqlRow};
+use serde::{Deserialize, Serialize};
 use std::io::Write;
 
 #[derive(Debug, Clone, AsExpression, FromSqlRow)]
@@ -178,7 +179,7 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable)]
+#[derive(Debug, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
     pub id: i32,
@@ -187,6 +188,15 @@ pub struct NoteWithoutFts {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     // Exclude the 'fts' field to prevent deserialization issues
+}
+
+impl NoteWithoutFts {
+    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<NoteWithoutFts>> {
+        use crate::schema::notes::dsl::*;
+        Ok(notes
+            .select((id, title, content, created_at, modified_at))
+            .load::<NoteWithoutFts>(conn)?)
+    }
 }
 
 #[derive(Insertable)]

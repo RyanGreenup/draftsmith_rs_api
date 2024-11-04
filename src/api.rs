@@ -130,23 +130,15 @@ async fn list_notes(
     State(state): State<AppState>,
     Query(params): Query<ListNotesParams>,
 ) -> Result<ErasedJson, StatusCode> {
-    use crate::schema::notes::dsl::*;
-
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let results = match notes
-        .select((id, title, content, created_at, modified_at))
-        .load::<NoteWithoutFts>(&mut conn)
-    {
-        Ok(results) => results,
-        Err(_) => {
-            println!("An error occurred while loading notes.");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let results = NoteWithoutFts::get_all(&mut conn).map_err(|_| {
+        println!("An error occurred while loading notes.");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     if params.exclude_content {
         let response: Vec<NoteMetadataResponse> = results
@@ -294,7 +286,7 @@ struct DeleteResponse {
     deleted_id: i32,
 }
 
-fn compute_note_hash(note: &Note) -> String {
+fn compute_note_hash(note: &NoteWithoutFts) -> String {
     // Create a string containing all note properties
     let note_string = format!(
         "id:{},title:{},content:{},created_at:{:?},modified_at:{:?}",
@@ -323,7 +315,15 @@ async fn get_note_hash(
         .first::<Note>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(compute_note_hash(&note))
+    let note_without_fts = NoteWithoutFts {
+        id: note.id,
+        title: note.title,
+        content: note.content,
+        created_at: note.created_at,
+        modified_at: note.modified_at,
+    };
+
+    Ok(compute_note_hash(&note_without_fts))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -351,7 +351,14 @@ async fn get_all_note_hashes(
         .into_iter()
         .map(|note| {
             let note_id = note.id;
-            tokio::spawn(async move { (note_id, compute_note_hash(&note)) })
+            let note_without_fts = NoteWithoutFts {
+                id: note.id,
+                title: note.title,
+                content: note.content,
+                created_at: note.created_at,
+                modified_at: note.modified_at,
+            };
+            tokio::spawn(async move { (note_id, compute_note_hash(&note_without_fts)) })
         })
         .collect();
 
@@ -491,20 +498,14 @@ async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
     use crate::schema::note_hierarchy::dsl::note_hierarchy;
-    use crate::schema::notes::dsl::{
-        content, created_at, id as note_id_col, modified_at, notes, title,
-    };
-
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all notes
-    let all_notes: Vec<NoteWithoutFts> = notes
-        .select((note_id_col, title, content, created_at, modified_at))
-        .load::<NoteWithoutFts>(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let all_notes =
+        NoteWithoutFts::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all hierarchies
     let hierarchies: Vec<NoteHierarchy> = note_hierarchy
@@ -1301,7 +1302,27 @@ mod tests {
         assert!(note_hashes.contains_key(&note2.id));
 
         // Verify hash values match expected
-        assert_eq!(note_hashes[&note1.id], compute_note_hash(&note1));
-        assert_eq!(note_hashes[&note2.id], compute_note_hash(&note2));
+        let note1_without_fts = NoteWithoutFts {
+            id: note1.id,
+            title: note1.title,
+            content: note1.content,
+            created_at: note1.created_at,
+            modified_at: note1.modified_at,
+        };
+        let note2_without_fts = NoteWithoutFts {
+            id: note2.id,
+            title: note2.title,
+            content: note2.content,
+            created_at: note2.created_at,
+            modified_at: note2.modified_at,
+        };
+        assert_eq!(
+            note_hashes[&note1.id],
+            compute_note_hash(&note1_without_fts)
+        );
+        assert_eq!(
+            note_hashes[&note2.id],
+            compute_note_hash(&note2_without_fts)
+        );
     }
 }

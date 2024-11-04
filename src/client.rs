@@ -1,7 +1,8 @@
 pub use crate::api::{
     AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse, CreateNoteRequest,
-    HierarchyMapping, NoteHash, NoteResponse, NoteTreeNode, UpdateNoteRequest,
+    HierarchyMapping, NoteHash, NoteTreeNode, UpdateNoteRequest,
 };
+pub use crate::tables::NoteWithoutFts;
 use crate::FLAT_API;
 use reqwest::Error as ReqwestError;
 use sha2::{Digest, Sha256};
@@ -86,7 +87,7 @@ pub async fn fetch_note(
     base_url: &str,
     id: i32,
     metadata_only: bool,
-) -> Result<NoteResponse, NoteError> {
+) -> Result<NoteWithoutFts, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}/{}?metadata_only=true", base_url, id)
     } else {
@@ -100,11 +101,11 @@ pub async fn fetch_note(
     }
 
     let response = response.error_for_status()?;
-    let note = response.json::<NoteResponse>().await?;
+    let note = response.json::<NoteWithoutFts>().await?;
 
     // If metadata_only is true, ensure content field is empty
     if metadata_only {
-        Ok(NoteResponse {
+        Ok(NoteWithoutFts {
             content: String::new(),
             ..note
         })
@@ -116,14 +117,14 @@ pub async fn fetch_note(
 pub async fn fetch_notes(
     base_url: &str,
     metadata_only: bool,
-) -> Result<Vec<NoteResponse>, NoteError> {
+) -> Result<Vec<NoteWithoutFts>, NoteError> {
     let url = if metadata_only {
         format!("{}/{FLAT_API}?metadata_only=true", base_url)
     } else {
         format!("{}/{FLAT_API}", base_url)
     };
     let response = reqwest::get(url).await?.error_for_status()?;
-    let notes = response.json::<Vec<NoteResponse>>().await?;
+    let notes = response.json::<Vec<NoteWithoutFts>>().await?;
 
     // If metadata_only is true, ensure content field is empty
     if metadata_only {
@@ -142,7 +143,7 @@ pub async fn fetch_notes(
 pub async fn create_note(
     base_url: &str,
     note: CreateNoteRequest,
-) -> Result<NoteResponse, NoteError> {
+) -> Result<NoteWithoutFts, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}", base_url);
     let response = client
@@ -151,7 +152,7 @@ pub async fn create_note(
         .send()
         .await?
         .error_for_status()?;
-    let created_note = response.json::<NoteResponse>().await?;
+    let created_note = response.json::<NoteWithoutFts>().await?;
     Ok(created_note)
 }
 
@@ -159,7 +160,7 @@ pub async fn update_note(
     base_url: &str,
     id: i32,
     note: UpdateNoteRequest,
-) -> Result<NoteResponse, NoteError> {
+) -> Result<NoteWithoutFts, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
     let response = client.put(url).json(&note).send().await?;
@@ -169,7 +170,7 @@ pub async fn update_note(
     }
 
     let response = response.error_for_status()?;
-    let updated_note = response.json::<NoteResponse>().await?;
+    let updated_note = response.json::<NoteWithoutFts>().await?;
     Ok(updated_note)
 }
 
@@ -327,16 +328,10 @@ fn simple_node_to_note_tree_node(
 pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
     use std::fs;
 
-    // Fetch existing notes from the server
-    let server_notes = fetch_notes(base_url, false).await?;
-    // Build a mapping from note ID to NoteResponse for easy lookup
-    let server_notes_map: HashMap<i32, NoteResponse> = server_notes
-        .into_iter()
-        .map(|note| (note.id, note))
-        .collect();
-
-    // Fetch existing note hierarchy from the server
-    let server_tree = fetch_note_tree(base_url).await?;
+    // Get server-side hashes
+    let server_hashes = get_all_note_hashes(base_url).await?;
+    let server_hash_map: HashMap<i32, String> =
+        server_hashes.into_iter().map(|h| (h.id, h.hash)).collect();
 
     // Read metadata.yaml to get hierarchy information
     let metadata_path = dir_path.join("metadata.yaml");
@@ -344,8 +339,8 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
     let tree: Vec<SimpleNode> =
         serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
 
-    // Read all .md files in the directory and build content_map
-    let mut content_map = HashMap::new();
+    // Read all .md files in the directory and compute their hashes
+    let mut notes_to_update = Vec::new();
     for entry in fs::read_dir(dir_path).map_err(NoteError::IOError)? {
         let entry = entry.map_err(NoteError::IOError)?;
         let path = entry.path();
@@ -365,11 +360,32 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
 
             // Read note content
             let content = fs::read_to_string(&path).map_err(NoteError::IOError)?;
-            content_map.insert(id, content);
+
+            // Compute hash of local content
+            let mut hasher = Sha256::new();
+            let note_string = format!("id:{},content:{}", id, content);
+            hasher.update(note_string.as_bytes());
+            let local_hash = format!("{:x}", hasher.finalize());
+
+            // Compare with server hash
+            if let Some(server_hash) = server_hash_map.get(&id) {
+                if local_hash != *server_hash {
+                    notes_to_update.push((
+                        id,
+                        UpdateNoteRequest {
+                            title: None,
+                            content,
+                        },
+                    ));
+                }
+            }
         }
     }
 
-    // Convert server_tree (Vec<NoteTreeNode>) to Vec<SimpleNode> for comparison
+    // Fetch existing note hierarchy from the server
+    let server_tree = fetch_note_tree(base_url).await?;
+
+    // Convert server_tree to SimpleNode format for comparison
     fn note_tree_node_to_simple_node(node: &NoteTreeNode) -> SimpleNode {
         SimpleNode {
             id: node.id,
@@ -387,56 +403,19 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
         .map(note_tree_node_to_simple_node)
         .collect();
 
-    // Compare the local and server hierarchies
-    let hierarchy_unchanged = tree == server_simple_tree;
-
-    // Prepare the set of notes that have changed
-    let mut notes_to_update = Vec::new();
-
-    for (&id, local_content) in &content_map {
-        if let Some(server_note) = server_notes_map.get(&id) {
-            // Compare content hashes
-            let local_hash = compute_hash(local_content);
-            let server_hash = compute_hash(&server_note.content);
-
-            if local_hash != server_hash {
-                // Note content has changed
-                notes_to_update.push((
-                    id,
-                    UpdateNoteRequest {
-                        title: None,
-                        content: local_content.clone(),
-                    },
-                ));
-            }
-        } else {
-            // Note exists locally but not on the server; handle as needed
-            // For this case, we might want to create the note on the server
-            // but then the id will change, so it would diverge from the local
-            // For now we'll leave it, one can use the cli and re-clone
-        }
-    }
-
-    if hierarchy_unchanged {
-        if !notes_to_update.is_empty() {
-            batch_update_notes(base_url, notes_to_update).await?;
-        }
-    } else {
-        // Determine hierarchy differences and generate necessary API calls
+    // Compare hierarchies and update if needed
+    if tree != server_simple_tree {
         let local_parent_map = extract_parent_mapping(&tree);
         let server_parent_map = extract_parent_mapping(&server_simple_tree);
 
-        // Identify differences
+        // Update hierarchy where different
         for (&note_id, &local_parent_id) in &local_parent_map {
             let server_parent_id = server_parent_map.get(&note_id);
 
             if server_parent_id != Some(&local_parent_id) {
-                // Parent has changed for this note
-                // Detach from old parent if necessary
                 if let Some(&Some(_old_parent_id)) = server_parent_map.get(&note_id) {
                     detach_child_note(base_url, note_id).await?;
                 }
-                // Attach to new parent if necessary
                 if let Some(new_parent_id) = local_parent_id {
                     attach_child_note(
                         base_url,
@@ -450,18 +429,18 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
                 }
             }
         }
+    }
 
-        // Update changed notes
-        if !notes_to_update.is_empty() {
-            batch_update_notes(base_url, notes_to_update).await?;
-        }
+    // Update changed notes
+    if !notes_to_update.is_empty() {
+        batch_update_notes(base_url, notes_to_update).await?;
     }
 
     Ok(())
 }
 
 pub async fn write_notes_to_disk(
-    notes: &[NoteResponse],
+    notes: &[NoteWithoutFts],
     tree: &[NoteTreeNode],
     output_dir: &std::path::Path,
 ) -> std::io::Result<()> {
