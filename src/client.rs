@@ -355,7 +355,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
             let content = fs::read_to_string(&path).map_err(NoteError::IOError)?;
 
             // Add to notes to update if the server hash differs
-            if let Some(server_hash) = server_hash_map.get(&id) {
+            if let Some(_server_hash) = server_hash_map.get(&id) {
                 notes_to_update.push((
                     id,
                     UpdateNoteRequest {
@@ -382,7 +382,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
 
     // Filter out notes that haven't changed based on their hashes
     let mut final_updates = Vec::new();
-    for (id, update) in notes_to_update {
+    for (id, update) in &notes_to_update {
         if let Some(server_hash) = server_hash_map.get(&id) {
             let updated_note = batch_result
                 .updated
@@ -401,7 +401,7 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
 
             let local_hash = compute_note_hash(&note_with_parent);
             if local_hash != *server_hash {
-                final_updates.push((id, update));
+                final_updates.push((*id, update.clone()));
             }
         }
     }
