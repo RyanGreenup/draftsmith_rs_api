@@ -387,8 +387,8 @@ pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Resul
             let updated_note = batch_result
                 .updated
                 .iter()
-                .find(|n| n.id == id)
-                .ok_or_else(|| NoteError::NotFound(id))?;
+                .find(|n| n.id == *id)
+                .ok_or_else(|| NoteError::NotFound(*id))?;
             
             let note_with_parent = NoteWithParent {
                 note_id: updated_note.id,
