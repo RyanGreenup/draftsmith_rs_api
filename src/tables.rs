@@ -209,6 +209,35 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
+#[derive(Debug, Queryable)]
+pub struct NoteWithParent {
+    pub note_id: i32,
+    pub title: String,
+    pub content: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub parent_id: Option<i32>,
+}
+
+impl NoteWithParent {
+    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<NoteWithParent>> {
+        use crate::schema::{note_hierarchy, notes};
+        use diesel::prelude::*;
+
+        notes::table
+            .left_join(note_hierarchy::table.on(notes::id.eq(note_hierarchy::child_note_id)))
+            .select((
+                notes::id,
+                notes::title,
+                notes::content,
+                notes::created_at,
+                notes::modified_at,
+                note_hierarchy::parent_note_id,
+            ))
+            .load::<NoteWithParent>(conn)
+    }
+}
+
 #[derive(Debug, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
