@@ -1012,12 +1012,19 @@ mod tests {
         )
         .await?;
 
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         // Get all note hashes
         let hashes = get_all_note_hashes(base_url).await?;
 
-        // Verify the test note's hash is present
-        let note_hash = hashes.iter().find(|h| h.id == note.id).expect("Hash not found");
-        assert!(!note_hash.hash.is_empty());
+        // Verify we got some hashes back
+        assert!(!hashes.is_empty(), "Should have received at least one hash");
+
+        // Verify the test note's hash is present and valid
+        let note_hash = hashes.iter().find(|h| h.id == note.id)
+            .expect("Newly created note's hash not found");
+        assert!(!note_hash.hash.is_empty(), "Hash should not be empty");
 
         // Clean up
         delete_note(base_url, note.id).await?;
