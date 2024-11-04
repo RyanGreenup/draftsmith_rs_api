@@ -280,11 +280,11 @@ struct DeleteResponse {
     deleted_id: i32,
 }
 
-fn compute_note_hash(note: &NoteWithoutFts) -> String {
-    // Create a string containing all note properties
+fn compute_note_hash(note: &NoteWithParent) -> String {
+    // Create a string containing all note properties including parent_id
     let note_string = format!(
-        "id:{},title:{},content:{},created_at:{:?},modified_at:{:?}",
-        note.id, note.title, note.content, note.created_at, note.modified_at
+        "id:{},title:{},content:{},created_at:{:?},modified_at:{:?},parent_id:{:?}",
+        note.note_id, note.title, note.content, note.created_at, note.modified_at, note.parent_id
     );
 
     // Compute hash
@@ -334,14 +334,14 @@ async fn get_all_note_hashes(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let all_notes = NoteWithoutFts::get_all(&mut conn)
+    let all_notes = NoteWithParent::get_all(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Process notes concurrently using tokio's spawn
     let hash_futures: Vec<_> = all_notes
         .into_iter()
         .map(|note| {
-            let note_id = note.id;
+            let note_id = note.note_id;
             tokio::spawn(async move { NoteHash {
                 id: note_id,
                 hash: compute_note_hash(&note)
