@@ -67,12 +67,6 @@ impl From<std::io::Error> for NoteError {
     }
 }
 
-impl From<StatusCode> for NoteError {
-    fn from(_: StatusCode) -> Self {
-        NoteError::RequestError(reqwest::Error::new_cancelled())
-    }
-}
-
 impl From<serde_yaml::Error> for NoteError {
     fn from(err: serde_yaml::Error) -> Self {
         NoteError::SerdeYamlError(err)
@@ -329,118 +323,6 @@ fn simple_node_to_note_tree_node(
 
 
 
-async fn read_notes_to_vec(base_url: &str, dir_path: &std::path::Path) -> Result<Vec<NoteWithParent>, NoteError> {
-    let mut notes = Vec::new();
-
-    for entry in std::fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        if path.extension().map_or(false, |ext| ext == "md") {
-            if let Some(stem) = path.file_stem() {
-                if let Ok(note_id) = stem.to_string_lossy().parse::<i32>() {
-                    let content = std::fs::read_to_string(&path)?;
-                    let note = fetch_note(base_url, note_id, false).await?;
-                    notes.push(NoteWithParent {
-                        note_id,
-                        title: note.title,
-                        content,
-                        created_at: note.created_at,
-                        modified_at: note.modified_at,
-                        parent_id: None, // We'll get this from metadata.yaml later
-                    });
-                }
-            }
-        }
-    }
-
-    Ok(notes)
-}
-
-pub async fn read_from_disk(base_url: &str, dir_path: &std::path::Path) -> Result<(), NoteError> {
-    // Step 1. Read Content from Disk..........................................
-    let notes_with_content_to_update = read_notes_to_vec(base_url, dir_path).await?;
-
-    // Get server-side hashes
-    let server_hashes = get_all_note_hashes(base_url).await?;
-    let server_hash_map: HashMap<i32, String> =
-        server_hashes.into_iter().map(|h| (h.id, h.hash)).collect();
-
-    // Get client-side hashes
-    let client_hashes = compute_all_note_hashes(notes_with_content_to_update.clone()).await?;
-
-    // Filter out notes that have changed
-    let notes_to_update: Vec<NoteWithParent> = notes_with_content_to_update
-        .into_iter()
-        .filter(|note| {
-            if let Some(server_hash) = server_hash_map.get(&note.note_id) {
-                if let Some(client_hash) = client_hashes.get(&note.note_id) {
-                    return server_hash != client_hash;
-                }
-            }
-            false
-        })
-        .collect();
-
-    // Batch update the notes if there are any changes
-    let notes_with_content_to_update: Vec<(i32, UpdateNoteRequest)> = notes_to_update
-        .into_iter()
-        .map(|note| {
-            (
-                note.note_id,
-                UpdateNoteRequest {
-                    title: Some(note.title),
-                    content: note.content,
-                },
-            )
-        })
-        .collect();
-
-    if !notes_with_content_to_update.is_empty() {
-        batch_update_notes(base_url, notes_with_content_to_update).await?;
-    }
-
-    // Step 2. Update Hierarchy................................................
-
-    // Read metadata.yaml to get hierarchy information
-    let metadata_path = dir_path.join("metadata.yaml");
-    let metadata_content = fs::read_to_string(metadata_path).map_err(NoteError::IOError)?;
-    let tree: Vec<SimpleNode> =
-        serde_yaml::from_str(&metadata_content).map_err(NoteError::SerdeYamlError)?;
-
-    // Convert the tree into a hierarchy mapping
-    let new_hierarchy = extract_parent_mapping(&tree);
-
-    // Get current hierarchy mappings from server
-    let current_mappings = fetch_hierarchy_mappings(base_url).await?;
-    let current_hierarchy: HashMap<i32, Option<i32>> = current_mappings
-        .into_iter()
-        .map(|m| (m.child_id, m.parent_id))
-        .collect();
-
-    // Find differences and update hierarchy
-    for (child_id, new_parent_id) in new_hierarchy {
-        if current_hierarchy.get(&child_id) != Some(&new_parent_id) {
-            // Detach first if needed
-            if current_hierarchy.contains_key(&child_id) {
-                detach_child_note(base_url, child_id).await?;
-            }
-
-            // Attach to new parent if there is one
-            if let Some(parent_id) = new_parent_id {
-                let attach_request = AttachChildRequest {
-                    child_note_id: child_id,
-                    parent_note_id: Some(parent_id),
-                    hierarchy_type: Some("block".to_string()),
-                };
-                attach_child_note(base_url, attach_request).await?;
-            }
-        }
-    }
-
-    Ok(())
-
-}
 
 pub async fn write_notes_to_disk(
     notes: &[NoteWithoutFts],
