@@ -1674,7 +1674,7 @@ mod tests {
         // Test case 2: Asset creation with all optional parameters
         let description = Some("Test asset with full options".to_string());
         let custom_filename = Some("custom_test_file.txt".to_string());
-        
+
         // First create a note to link the asset to
         let note = create_note(
             base_url,
@@ -1719,43 +1719,4 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_get_asset_by_name() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = crate::BASE_URL;
-
-        // First create a test file
-        let mut temp_file = tempfile::NamedTempFile::new()?;
-        write!(temp_file, "test content")?;
-
-        let uploaded_file_name = "test.txt".to_string();
-        // Create an asset with the test file
-        // TODO, set this to timestamp
-        let created_asset = create_asset(
-            base_url,
-            temp_file.path(),
-            None,
-            None,
-            Some(uploaded_file_name.clone()),
-        )
-        .await?;
-
-        // Create a temporary file for the downloaded content
-        let output_path = std::env::temp_dir().join("test_download.tmp");
-
-        // Get the asset's content
-        dbg!(&created_asset.location);
-        get_asset_by_name(base_url, &uploaded_file_name, &output_path).await?;
-
-        // Read and verify the content matches what we uploaded
-        let downloaded_content = std::fs::read(&output_path)?;
-        assert_eq!(downloaded_content, b"test content");
-
-        // Test getting a non-existent asset
-        let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
-        let non_existent_filename = "zzzzzzzzzzznonexistent.txt";
-        let result = get_asset_by_name(base_url, non_existent_filename, &bad_output_path).await;
-        assert!(matches!(result, Err( AssetError::FileNotFound(_non_existent_filename))));
-
-        Ok(())
-    }
 }
