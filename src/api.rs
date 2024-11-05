@@ -1,5 +1,5 @@
 use crate::client::NoteError;
-use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent}; 
+use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::extract::Multipart;
@@ -973,14 +973,14 @@ async fn create_asset(
         // Split the path into directory components and filename
         let path = PathBuf::from(custom_path);
         let full_path = base_path.join(&path);
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent)
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
-        
+
         full_path
     } else {
         // Use original filename or generate UUID
@@ -1161,6 +1161,8 @@ async fn download_asset_by_filename(
 
     // Convert the filename to a PathBuf and join with base path
     let file_path = base_path.join(filename);
+
+    dbg!(format!("Downloading file: {:?}", &file_path));
 
     // Ensure the resulting path is within the base directory (prevent directory traversal)
     if !file_path.starts_with(&base_path) {
