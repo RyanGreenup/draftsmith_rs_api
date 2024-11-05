@@ -75,7 +75,7 @@ pub struct CreateAssetRequest {
     pub description: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct UpdateAssetRequest {
     pub note_id: Option<i32>,
     pub description: Option<String>,
@@ -1087,7 +1087,8 @@ async fn get_asset(
         ),
         (
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename)).unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename))
+                .unwrap(),
         ),
     ];
 
@@ -1209,7 +1210,8 @@ async fn download_asset_by_filename(
         ),
         (
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename)).unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename))
+                .unwrap(),
         ),
     ];
 

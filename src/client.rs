@@ -1,7 +1,8 @@
 use crate::api::compute_all_note_hashes;
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
-    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, UpdateNoteRequest,
+    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, UpdateAssetRequest,
+    UpdateNoteRequest,
 };
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -75,7 +76,9 @@ impl fmt::Display for AssetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AssetError::NotFound(id) => write!(f, "Asset with id {} not found", id),
-            AssetError::FileNotFound(file_path) => write!(f, "Asset file '{}' not found", file_path),
+            AssetError::FileNotFound(file_path) => {
+                write!(f, "Asset file '{}' not found", file_path)
+            }
             AssetError::RequestError(e) => write!(f, "Request error: {}", e),
             AssetError::IOError(e) => write!(f, "IO error: {}", e),
         }
@@ -222,14 +225,15 @@ pub async fn create_asset(
 
     // Add file
     let file_content = tokio::fs::read(file_path).await?;
-    let file_part = reqwest::multipart::Part::bytes(file_content)
-        .file_name(filename.clone().unwrap_or_else(|| {
+    let file_part = reqwest::multipart::Part::bytes(file_content).file_name(
+        filename.clone().unwrap_or_else(|| {
             file_path
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("file")
                 .to_string()
-        }));
+        }),
+    );
     form = form.part("file", file_part);
 
     // Add note_id if provided
@@ -460,6 +464,24 @@ pub async fn get_asset_by_name(
     Ok(())
 }
 
+pub async fn update_asset(
+    base_url: &str,
+    asset_id: i32,
+    payload: UpdateAssetRequest,
+) -> Result<AssetResponse, AssetError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/assets/{}", base_url, asset_id);
+
+    let response = client.put(url).json(&payload).send().await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(AssetError::NotFound(asset_id));
+    }
+
+    let asset = response.error_for_status()?.json::<AssetResponse>().await?;
+    Ok(asset)
+}
+
 pub async fn list_assets(
     base_url: &str,
     note_id: Option<i32>,
@@ -476,7 +498,6 @@ pub async fn list_assets(
     let assets = response.json::<Vec<AssetResponse>>().await?;
     Ok(assets)
 }
-
 
 pub async fn batch_update_notes(
     base_url: &str,
@@ -1571,8 +1592,6 @@ mod tests {
         Ok(())
     }
 
-
-
     #[tokio::test]
     async fn test_get_asset() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = crate::BASE_URL;
@@ -1654,6 +1673,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_asset() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // First create a test file and asset
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content")?;
+
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Initial description".to_string()),
+            None,
+        )
+        .await?;
+
+        // Create a test note to link the asset to
+        let note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note for Asset Update".to_string(),
+                content: "Test content".to_string(),
+            },
+        )
+        .await?;
+
+        // Update the asset
+        let update_payload = UpdateAssetRequest {
+            note_id: Some(note.id),
+            description: Some("Updated description".to_string()),
+        };
+
+        let updated_asset = update_asset(base_url, created_asset.id, update_payload).await?;
+
+        // Verify the updates
+        assert_eq!(updated_asset.id, created_asset.id);
+        assert_eq!(updated_asset.note_id, Some(note.id));
+        assert_eq!(
+            updated_asset.description,
+            Some("Updated description".to_string())
+        );
+
+        // Test updating non-existent asset
+        let bad_payload = UpdateAssetRequest {
+            note_id: None,
+            description: None,
+        };
+        let result = update_asset(base_url, -1, bad_payload).await;
+        assert!(matches!(result, Err(AssetError::NotFound(-1))));
+
+        // Cleanup
+        delete_asset(base_url, created_asset.id).await?;
+        delete_note(base_url, note.id).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_list_assets() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
@@ -1699,13 +1776,7 @@ mod tests {
         write!(temp_file, "test content with options")?;
 
         // Test case 1: Basic asset creation with just file
-        let created_asset1 = create_asset(
-            base_url,
-            temp_file.path(),
-            None,
-            None,
-            None,
-        ).await?;
+        let created_asset1 = create_asset(base_url, temp_file.path(), None, None, None).await?;
 
         assert!(created_asset1.id > 0);
         assert!(created_asset1.location.exists());
@@ -1723,7 +1794,8 @@ mod tests {
                 title: "Test Note for Asset".to_string(),
                 content: "Test content".to_string(),
             },
-        ).await?;
+        )
+        .await?;
 
         let created_asset2 = create_asset(
             base_url,
@@ -1731,22 +1803,20 @@ mod tests {
             Some(note.id),
             description.clone(),
             custom_filename.clone(),
-        ).await?;
+        )
+        .await?;
 
         assert!(created_asset2.id > 0);
         assert!(created_asset2.location.exists());
         assert_eq!(created_asset2.note_id, Some(note.id));
         assert_eq!(created_asset2.description, description);
-        assert!(created_asset2.location.to_string_lossy().contains("custom_test_file.txt"));
+        assert!(created_asset2
+            .location
+            .to_string_lossy()
+            .contains("custom_test_file.txt"));
 
         // Test case 3: Create asset with invalid note_id
-        let result = create_asset(
-            base_url,
-            temp_file.path(),
-            Some(-1),
-            None,
-            None,
-        ).await;
+        let result = create_asset(base_url, temp_file.path(), Some(-1), None, None).await;
 
         assert!(matches!(result, Err(AssetError::RequestError(_))));
 
@@ -1759,5 +1829,4 @@ mod tests {
 
         Ok(())
     }
-
 }
