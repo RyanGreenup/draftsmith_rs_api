@@ -319,6 +319,24 @@ pub async fn fts_search_notes(
     Ok(notes)
 }
 
+pub async fn get_asset(base_url: &str, asset_id: i32) -> Result<Vec<u8>, NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/assets/{}", base_url, asset_id);
+
+    let response = client.get(&url).send().await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(asset_id));
+    }
+
+    response
+        .error_for_status()?
+        .bytes()
+        .await
+        .map(|b| b.to_vec())
+        .map_err(NoteError::from)
+}
+
 pub async fn list_assets(
     base_url: &str,
     note_id: Option<i32>,
@@ -1495,6 +1513,36 @@ mod tests {
         assert!(!asset.location.is_empty());
         assert_eq!(asset.description, Some("Test asset".to_string()));
         assert!(asset.created_at.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_asset() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = crate::BASE_URL;
+
+        // First create a test file
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content")?;
+
+        // Create an asset with the test file
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset".to_string()),
+        )
+        .await?;
+
+        // Get the asset's content
+        let content = get_asset(base_url, created_asset.id).await?;
+
+        // Verify the content matches what we uploaded
+        assert_eq!(content, b"test content");
+
+        // Test getting a non-existent asset
+        let result = get_asset(base_url, -1).await;
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
 
         Ok(())
     }
