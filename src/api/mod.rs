@@ -2,6 +2,7 @@ use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
+mod tags;
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};
 use axum::{
@@ -165,6 +166,7 @@ pub fn create_router(pool: Pool) -> Router {
 
     Router::new()
         .layer(DefaultBodyLimit::max(max_body_size))
+        .merge(tags::create_router())
         .route("/assets", post(create_asset).get(list_assets))
         .route(
             "/assets/:id",
