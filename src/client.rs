@@ -1654,10 +1654,10 @@ mod tests {
         let base_url = crate::BASE_URL;
 
         // Create a temporary file with a proper extension
-        let temp_file = tempfile::Builder::new()
+        let mut temp_file = tempfile::Builder::new()
             .suffix(".txt")  // Add a file extension
             .tempfile()?;
-        
+
         // Write content to the file
         write!(temp_file.as_file_mut(), "test content")?;
 
