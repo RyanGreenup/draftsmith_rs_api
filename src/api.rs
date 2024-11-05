@@ -910,6 +910,7 @@ async fn create_asset(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut file_data = Vec::new();
+    let mut original_filename = None;
     let mut asset_request = CreateAssetRequest {
         note_id: None,
         filename: None,
@@ -919,6 +920,7 @@ async fn create_asset(
     while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
         match field.name() {
             Some("file") => {
+                original_filename = field.file_name().map(String::from);
                 file_data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?.to_vec();
             }
             Some("note_id") => {
@@ -945,12 +947,11 @@ async fn create_asset(
         let safe_path = sanitize_filename::sanitize(&custom_path);
         PathBuf::from(base_path).join(safe_path)
     } else {
-        // Get original filename from the field if available
-        let original_filename = field
-            .file_name()
-            .map(|name| sanitize_filename::sanitize(name))
+        // Use original filename or generate UUID
+        let filename = original_filename
+            .map(|name| sanitize_filename::sanitize(&name))
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-        PathBuf::from(base_path).join(original_filename)
+        PathBuf::from(base_path).join(filename)
     };
 
     // Create parent directories if they don't exist
