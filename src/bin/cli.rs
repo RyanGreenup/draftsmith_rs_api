@@ -5,6 +5,60 @@ use rust_cli_app::api;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+#[derive(Subcommand)]
+enum AssetCommands {
+    /// Create a new asset
+    Create {
+        /// Path to the file to upload
+        file: PathBuf,
+        /// Optional note ID to associate with
+        #[arg(long)]
+        note_id: Option<i32>,
+        /// Optional description
+        #[arg(long)]
+        description: Option<String>,
+        /// Optional custom filename
+        #[arg(long)]
+        filename: Option<String>,
+    },
+    /// List all assets
+    List {
+        /// Filter by note ID
+        #[arg(long)]
+        note_id: Option<i32>,
+    },
+    /// Get an asset by ID
+    Get {
+        /// Asset ID
+        id: i32,
+        /// Output file path
+        output: PathBuf,
+    },
+    /// Get an asset by filename
+    GetByName {
+        /// Asset filename/path
+        filename: String,
+        /// Output file path
+        output: PathBuf,
+    },
+    /// Update an asset
+    Update {
+        /// Asset ID
+        id: i32,
+        /// Optional note ID to associate with
+        #[arg(long)]
+        note_id: Option<i32>,
+        /// Optional description
+        #[arg(long)]
+        description: Option<String>,
+    },
+    /// Delete an asset
+    Delete {
+        /// Asset ID
+        id: i32,
+    },
+}
+
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -45,6 +99,11 @@ enum ClientCommands {
         id: Option<i32>,
         #[command(subcommand)]
         command: NotesCommands,
+    },
+    /// Assets related commands
+    Assets {
+        #[command(subcommand)]
+        command: AssetCommands,
     },
 }
 
@@ -509,6 +568,111 @@ async fn main() {
                         }
                         Err(e) => {
                             eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            },
+            ClientCommands::Assets { command } => match command {
+                AssetCommands::Create {
+                    file,
+                    note_id,
+                    description,
+                    filename,
+                } => {
+                    match rust_cli_app::client::create_asset(
+                        &url,
+                        &file,
+                        note_id,
+                        description,
+                        filename,
+                    )
+                    .await
+                    {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AssetCommands::List { note_id } => {
+                    match rust_cli_app::client::list_assets(&url, note_id).await {
+                        Ok(assets) => {
+                            println!("{}", serde_json::to_string_pretty(&assets).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error listing assets: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AssetCommands::Get { id, output } => {
+                    match rust_cli_app::client::get_asset(&url, id, &output).await {
+                        Ok(_) => {
+                            println!("Asset downloaded to {}", output.display());
+                        }
+                        Err(rust_cli_app::client::NoteError::NotFound(_)) => {
+                            eprintln!("Error: Asset not found");
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error downloading asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AssetCommands::GetByName { filename, output } => {
+                    match rust_cli_app::client::get_asset_by_name(&url, &filename, &output).await {
+                        Ok(_) => {
+                            println!("Asset downloaded to {}", output.display());
+                        }
+                        Err(rust_cli_app::client::AssetError::FileNotFound(_)) => {
+                            eprintln!("Error: Asset not found");
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error downloading asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AssetCommands::Update {
+                    id,
+                    note_id,
+                    description,
+                } => {
+                    let update_request = rust_cli_app::client::UpdateAssetRequest {
+                        note_id,
+                        description,
+                    };
+                    match rust_cli_app::client::update_asset(&url, id, update_request).await {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(rust_cli_app::client::AssetError::NotFound(_)) => {
+                            eprintln!("Error: Asset not found");
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error updating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                AssetCommands::Delete { id } => {
+                    match rust_cli_app::client::delete_asset(&url, id).await {
+                        Ok(_) => {
+                            println!("Asset {} deleted successfully", id);
+                        }
+                        Err(rust_cli_app::client::AssetError::NotFound(_)) => {
+                            eprintln!("Error: Asset not found");
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error deleting asset: {}", e);
                             std::process::exit(1);
                         }
                     }

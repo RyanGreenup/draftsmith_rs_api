@@ -10,3 +10,4 @@ pub const SEARCH_FTS_API: &str = "notes/search/fts";
 pub const SEARCH_SEM_API: &str = "notes/search/semantic";
 pub const SEARCH_HYB_API: &str = "notes/search/hybrid";
 pub const SEARCH_TS_API: &str = "notes/search/typesense";
+pub const UPLOADS_DIR: &str = "uploads";

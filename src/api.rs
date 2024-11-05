@@ -1,7 +1,7 @@
 use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
-use crate::{FLAT_API, SEARCH_FTS_API};
+use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};
 use axum::{
@@ -917,7 +917,7 @@ async fn create_asset(
     use crate::schema::assets::dsl::*;
 
     // Get the upload directory from environment or use a default
-    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| UPLOADS_DIR.to_string());
     let base_path = PathBuf::from(&upload_dir);
 
     // Create upload directory if it doesn't exist
@@ -1044,7 +1044,7 @@ async fn get_asset(
     let file_path = PathBuf::from(&asset.location);
 
     // Get the upload directory from environment or use a default
-    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| UPLOADS_DIR.to_string());
     let base_path = PathBuf::from(&upload_dir);
 
     // Ensure the file path is within the base directory
@@ -1164,7 +1164,7 @@ async fn download_asset_by_filename(
     Path(filepath): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Get the upload directory from environment or use a default
-    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| UPLOADS_DIR.to_string());
     let base_path = PathBuf::from(&upload_dir);
 
     // Convert the filepath to a PathBuf and join with base path
@@ -1242,7 +1242,7 @@ async fn cleanup_orphaned_assets(state: AppState) {
     };
 
     // Get the upload directory
-    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| UPLOADS_DIR.to_string());
     let base_path = FilePath::new(&upload_dir);
 
     // Ensure upload directory exists
