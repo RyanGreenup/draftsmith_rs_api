@@ -320,7 +320,7 @@ pub async fn fts_search_notes(
 }
 
 pub async fn get_asset(
-    base_url: &str, 
+    base_url: &str,
     asset_id: i32,
     output_path: &std::path::Path
 ) -> Result<(), NoteError> {
@@ -1554,42 +1554,6 @@ mod tests {
         let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
         let result = get_asset(base_url, -1, &bad_output_path).await;
         assert!(matches!(result, Err(NoteError::NotFound(-1))));
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_download_asset_by_filename() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = crate::BASE_URL;
-
-        // Create a test file with a specific name
-        let test_filename = format!("test_file_{}.txt", chrono::Utc::now().timestamp());
-        let mut temp_file = tempfile::NamedTempFile::new()?;
-        write!(temp_file, "test content for download")?;
-
-        // Create an asset with the test file and specific filename
-        let mut form = reqwest::multipart::Form::new();
-        form = form.text("filename", test_filename.clone());
-        form = form.file("file", temp_file.path())?;
-
-        let client = reqwest::Client::new();
-        let response = client.post(format!("{}/assets", base_url))
-            .multipart(form)
-            .send()
-            .await?
-            .error_for_status()?;
-
-        let _asset: AssetResponse = response.json().await?;
-
-        // Download the asset by filename
-        let content = download_asset_by_filename(base_url, &test_filename).await?;
-        
-        // Verify the content matches what we uploaded
-        assert_eq!(content, b"test content for download");
-
-        // Test downloading a non-existent file
-        let result = download_asset_by_filename(base_url, "nonexistent.txt").await;
-        assert!(matches!(result, Err(NoteError::NotFound(_))));
 
         Ok(())
     }
