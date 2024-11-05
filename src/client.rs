@@ -1679,13 +1679,15 @@ mod tests {
         let mut temp_file = tempfile::NamedTempFile::new()?;
         write!(temp_file, "test content")?;
 
+        let uploaded_file_name = "test.txt".to_string();
         // Create an asset with the test file
+        // TODO, set this to timestamp
         let created_asset = create_asset(
             base_url,
             temp_file.path(),
             None,
-            Some("Test asset".to_string()),
             None,
+            Some(uploaded_file_name.clone()),
         )
         .await?;
 
@@ -1694,7 +1696,7 @@ mod tests {
 
         // Get the asset's content
         dbg!(&created_asset.location);
-        get_asset_by_name(base_url, &created_asset.location, &output_path).await?;
+        get_asset_by_name(base_url, &uploaded_file_name, &output_path).await?;
 
         // Read and verify the content matches what we uploaded
         let downloaded_content = std::fs::read(&output_path)?;
