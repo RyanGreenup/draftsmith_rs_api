@@ -229,9 +229,27 @@ impl NoteWithoutFts {
     }
 }
 
+// Direct conversion from Note to NoteWithoutFts is considered an anti-pattern. Use NoteWithoutFts::get_all to fetch data without FTS.
+// NoteResponse is legacy, use NoteWithoutFts instead.
+// This is included as it's very convenient for:
+
+// ```rust
+// let note = diesel::insert_into(notes::table)
+//     .values(&new_note)
+//     .get_result::<Note>(&mut conn)
+//     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+// ```
+//
+// As in the api::create_note function.
 impl From<Note> for NoteWithoutFts {
-    fn from(_: Note) -> Self {
-        panic!("Direct conversion from Note to NoteWithoutFts is considered an anti-pattern. Use NoteWithoutFts::get_all to fetch data without FTS.");
+    fn from(note: Note) -> Self {
+        Self {
+            id: note.id,
+            title: note.title,
+            content: note.content,
+            created_at: note.created_at,
+            modified_at: note.modified_at,
+        }
     }
 }
 

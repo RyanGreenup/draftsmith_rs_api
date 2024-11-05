@@ -40,14 +40,7 @@ pub struct UpdateNoteRequest {
     pub content: String,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct NoteResponse {
-    pub id: i32,
-    pub title: String,
-    pub content: String,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-}
+type NoteResponse = NoteWithoutFts;
 
 #[derive(Serialize, Deserialize)]
 pub struct NoteMetadataResponse {
@@ -73,18 +66,6 @@ pub struct NoteTreeNode {
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub hierarchy_type: Option<String>,
     pub children: Vec<NoteTreeNode>,
-}
-
-impl From<Note> for NoteResponse {
-    fn from(note: Note) -> Self {
-        Self {
-            id: note.id,
-            title: note.title,
-            content: note.content,
-            created_at: note.created_at,
-            modified_at: note.modified_at,
-        }
-    }
 }
 
 pub fn create_router(pool: Pool) -> Router {
@@ -598,7 +579,7 @@ async fn get_hierarchy_mappings(
 async fn create_note(
     State(state): State<AppState>,
     Json(payload): Json<CreateNoteRequest>,
-) -> Result<(StatusCode, Json<NoteResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<NoteWithoutFts>), StatusCode> {
     use crate::schema::notes;
 
     let new_note = NewNote {
@@ -1014,7 +995,7 @@ mod tests {
             }),
         )
         .await
-        .unwrap()
+        .expect("Failed to create note 1")
         .1
          .0;
 
@@ -1026,7 +1007,7 @@ mod tests {
             }),
         )
         .await
-        .unwrap()
+        .expect("Failed to create note 2")
         .1
          .0;
 
