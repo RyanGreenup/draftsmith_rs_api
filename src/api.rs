@@ -28,9 +28,8 @@ use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use uuid::Uuid;
-use tokio::time::{self, Duration}; 
-use std::time::SystemTime;
-use tracing::{info, error, warn};
+use tokio::time::{self, Duration};
+use tracing::{info, error, warn}; 
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -1157,7 +1156,7 @@ async fn cleanup_orphaned_assets(state: AppState) {
 
     // Get all assets from database
     let db_assets = match assets.load::<Asset>(&mut conn) {
-        Ok(assets) => assets,
+        Ok(db_assets) => db_assets,  // Changed variable name to avoid conflict
         Err(e) => {
             error!("Failed to load assets from database: {}", e);
             return;
