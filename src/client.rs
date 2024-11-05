@@ -207,6 +207,71 @@ pub async fn update_note(
     Ok(updated_note)
 }
 
+pub async fn create_asset(
+    base_url: &str,
+    file_path: &std::path::Path,
+    note_id: Option<i32>,
+    description: Option<String>,
+    filename: Option<String>,
+) -> Result<AssetResponse, AssetError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/assets", base_url);
+
+    // Create multipart form
+    let mut form = reqwest::multipart::Form::new();
+
+    // Add file
+    let file_content = tokio::fs::read(file_path).await?;
+    let file_part = reqwest::multipart::Part::bytes(file_content)
+        .file_name(filename.unwrap_or_else(|| {
+            file_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("file")
+                .to_string()
+        }));
+    form = form.part("file", file_part);
+
+    // Add note_id if provided
+    if let Some(id) = note_id {
+        form = form.text("note_id", id.to_string());
+    }
+
+    // Add description if provided
+    if let Some(desc) = description {
+        form = form.text("description", desc);
+    }
+
+    // Add custom filename if provided
+    if let Some(name) = filename {
+        form = form.text("filename", name);
+    }
+
+    // Send request
+    let response = client.post(url).multipart(form).send().await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(AssetError::NotFound(-1));
+    }
+
+    let asset = response.error_for_status()?.json::<AssetResponse>().await?;
+    Ok(asset)
+}
+
+pub async fn delete_asset(base_url: &str, asset_id: i32) -> Result<(), AssetError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/assets/{}", base_url, asset_id);
+
+    let response = client.delete(url).send().await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(AssetError::NotFound(asset_id));
+    }
+
+    response.error_for_status()?;
+    Ok(())
+}
+
 pub async fn delete_note(base_url: &str, id: i32) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/{FLAT_API}/{}", base_url, id);
@@ -1580,6 +1645,76 @@ mod tests {
         // Test filtering by note_id
         let filtered_assets = list_assets(base_url, Some(999999)).await?; // Using a likely non-existent note_id
         assert!(filtered_assets.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_asset_with_options() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = crate::BASE_URL;
+
+        // Create a temporary file with test content
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content with options")?;
+
+        // Test case 1: Basic asset creation with just file
+        let created_asset1 = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            None,
+            None,
+        ).await?;
+
+        assert!(created_asset1.id > 0);
+        assert!(created_asset1.location.exists());
+        assert_eq!(created_asset1.note_id, None);
+        assert_eq!(created_asset1.description, None);
+
+        // Test case 2: Asset creation with all optional parameters
+        let description = Some("Test asset with full options".to_string());
+        let custom_filename = Some("custom_test_file.txt".to_string());
+        
+        // First create a note to link the asset to
+        let note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note for Asset".to_string(),
+                content: "Test content".to_string(),
+            },
+        ).await?;
+
+        let created_asset2 = create_asset(
+            base_url,
+            temp_file.path(),
+            Some(note.id),
+            description.clone(),
+            custom_filename.clone(),
+        ).await?;
+
+        assert!(created_asset2.id > 0);
+        assert!(created_asset2.location.exists());
+        assert_eq!(created_asset2.note_id, Some(note.id));
+        assert_eq!(created_asset2.description, description);
+        assert!(created_asset2.location.to_string_lossy().contains("custom_test_file.txt"));
+
+        // Test case 3: Create asset with invalid note_id
+        let result = create_asset(
+            base_url,
+            temp_file.path(),
+            Some(-1),
+            None,
+            None,
+        ).await;
+
+        assert!(matches!(result, Err(AssetError::RequestError(_))));
+
+        // Cleanup
+        // Delete the assets
+        let _ = delete_asset(base_url, created_asset1.id).await;
+        let _ = delete_asset(base_url, created_asset2.id).await;
+        // Delete the note
+        let _ = delete_note(base_url, note.id).await;
 
         Ok(())
     }
