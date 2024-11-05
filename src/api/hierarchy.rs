@@ -363,6 +363,7 @@ mod note_hierarchy_tests {
     /// the tree function is recursive and passing in a connection
     /// will add too much complexity to the test.
     /// This function automatically cleans up after itself via Drop trait.
+    #[tokio::test]
     async fn test_update_database_from_notetreenode() {
         // Set up the test state
         let state = setup_test_state();
