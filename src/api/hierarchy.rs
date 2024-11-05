@@ -1,5 +1,74 @@
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
+
+#[derive(Debug)]
+pub struct BasicTreeNode<T> {
+    pub id: i32,
+    pub data: T,
+    pub children: Vec<BasicTreeNode<T>>,
+}
+
+// Generic function that builds a basic tree structure
+pub fn build_generic_tree<T>(
+    items: &[(i32, T)],
+    hierarchies: &[(i32, i32)], // (child_id, parent_id)
+) -> Vec<BasicTreeNode<T>> 
+where
+    T: Clone,
+{
+    // Create a map of parent_id to children
+    let mut parent_to_children: HashMap<Option<i32>, Vec<i32>> = HashMap::new();
+    
+    // Track which items are children
+    let mut child_items: HashSet<i32> = HashSet::new();
+
+    // Build the parent-to-children mapping
+    for (child_id, parent_id) in hierarchies {
+        parent_to_children
+            .entry(Some(*parent_id))
+            .or_default()
+            .push(*child_id);
+        child_items.insert(*child_id);
+    }
+
+    // Create a map of item id to data for easy lookup
+    let items_map: HashMap<_, _> = items.iter().map(|(id, data)| (*id, data)).collect();
+
+    // Function to recursively build the tree
+    fn build_subtree<T: Clone>(
+        item_id: i32,
+        items_map: &HashMap<i32, &T>,
+        parent_to_children: &HashMap<Option<i32>, Vec<i32>>,
+    ) -> BasicTreeNode<T> {
+        let children = parent_to_children
+            .get(&Some(item_id))
+            .map(|children| {
+                children
+                    .iter()
+                    .map(|child_id| build_subtree(*child_id, items_map, parent_to_children))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        BasicTreeNode {
+            id: item_id,
+            data: (*items_map.get(&item_id).unwrap()).clone(),
+            children,
+        }
+    }
+
+    // Build trees starting from root items (items that aren't children)
+    let mut tree: Vec<BasicTreeNode<T>> = items
+        .iter()
+        .filter(|(id, _)| !child_items.contains(id))
+        .map(|(id, _)| build_subtree(*id, &items_map, &parent_to_children))
+        .collect();
+
+    // Sort the tree by item ID for consistent ordering
+    tree.sort_by_key(|node| node.id);
+
+    tree
+}
 use crate::api::Path;
 use crate::schema::note_hierarchy::dsl::*;
 use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
@@ -126,75 +195,46 @@ pub async fn get_note_tree(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all notes
-    let all_notes =
-        NoteWithoutFts::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let all_notes = NoteWithoutFts::get_all(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all hierarchies
     let hierarchies: Vec<NoteHierarchy> = note_hierarchy
         .load::<NoteHierarchy>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Create a map of parent_id to children
-    let mut parent_to_children: HashMap<Option<i32>, Vec<(i32, Option<String>)>> = HashMap::new();
-
-    // Track which notes are children
-    let mut child_notes: HashSet<i32> = HashSet::new();
-
-    // Build the parent-to-children mapping
-    for hierarchy in hierarchies {
-        if let Some(child_id) = hierarchy.child_note_id {
-            parent_to_children
-                .entry(hierarchy.parent_note_id)
-                .or_default()
-                .push((child_id, hierarchy.hierarchy_type));
-            child_notes.insert(child_id);
-        }
-    }
-
-    // Function to recursively build the tree
-    fn build_tree(
-        note_id: i32,
-        notes_map: &HashMap<i32, &NoteWithoutFts>,
-        parent_to_children: &HashMap<Option<i32>, Vec<(i32, Option<String>)>>,
-    ) -> NoteTreeNode {
-        let note = notes_map.get(&note_id).unwrap();
-        let children = parent_to_children
-            .get(&Some(note_id))
-            .map(|children| {
-                children
-                    .iter()
-                    .map(|(child_id, h_type)| {
-                        let mut child = build_tree(*child_id, notes_map, parent_to_children);
-                        child.hierarchy_type = h_type.clone();
-                        child
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        NoteTreeNode {
-            id: note.id,
-            title: Some(note.title.clone()),
-            content: Some(note.content.clone()),
-            created_at: note.created_at,
-            modified_at: note.modified_at,
-            hierarchy_type: None,
-            children,
-        }
-    }
-
-    // Create a map of note id to note for easy lookup
-    let notes_map: HashMap<_, _> = all_notes.iter().map(|note| (note.id, note)).collect();
-
-    // Build trees starting from root notes (notes that aren't children)
-    let mut tree: Vec<NoteTreeNode> = all_notes
-        .iter()
-        .filter(|note| !child_notes.contains(&note.id))
-        .map(|note| build_tree(note.id, &notes_map, &parent_to_children))
+    // Prepare data for generic tree building
+    let note_data: Vec<(i32, NoteWithoutFts)> = all_notes
+        .into_iter()
+        .map(|note| (note.id, note))
         .collect();
 
-    // Sort the tree by note ID for consistent ordering
-    tree.sort_by_key(|node| node.id);
+    let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
+        .iter()
+        .filter_map(|h| {
+            h.child_note_id
+                .zip(h.parent_note_id)
+                .map(|(child, parent)| (child, parent))
+        })
+        .collect();
+
+    // Build the basic tree
+    let basic_tree = build_generic_tree(&note_data, &hierarchy_tuples);
+
+    // Convert BasicTreeNode to NoteTreeNode
+    fn convert_to_note_tree(basic_node: BasicTreeNode<NoteWithoutFts>) -> NoteTreeNode {
+        NoteTreeNode {
+            id: basic_node.id,
+            title: Some(basic_node.data.title),
+            content: Some(basic_node.data.content),
+            created_at: basic_node.data.created_at,
+            modified_at: basic_node.data.modified_at,
+            hierarchy_type: None, // This will be handled separately if needed
+            children: basic_node.children.into_iter().map(convert_to_note_tree).collect(),
+        }
+    }
+
+    let tree = basic_tree.into_iter().map(convert_to_note_tree).collect();
 
     Ok(Json(tree))
 }
