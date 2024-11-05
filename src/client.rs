@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::fmt;
 use tokio::fs;
 
+#[allow(dead_code)]
 fn extract_parent_mapping(nodes: &[SimpleNode]) -> HashMap<i32, Option<i32>> {
     let mut parent_map = HashMap::new();
 
@@ -1219,7 +1220,7 @@ mod tests {
 
         // Try getting hash for non-existent note
         let result = get_note_hash(base_url, -1).await;
-        assert!(matches!(result, Err(AssetError::FileNotFound(ref s)) if s == "nonexistent.png"));
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
 
         Ok(())
     }
@@ -1688,7 +1689,7 @@ mod tests {
         // Test getting a non-existent asset
         let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
         let result = get_asset_by_name(base_url, "nonexistent.png", &bad_output_path).await;
-        assert!(matches!(result, Err(NoteError::NotFound(-1))));
+        assert!(matches!(result, Err(AssetError::FileNotFound(ref s)) if s == "nonexistent.png"));
 
         Ok(())
     }
