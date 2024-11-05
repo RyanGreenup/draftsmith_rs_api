@@ -939,25 +939,26 @@ async fn create_asset(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    // Generate a unique filename if none provided
+    // Generate filename from custom path, original filename, or UUID
     let file_path = if let Some(custom_path) = asset_request.filename {
         // Sanitize the custom path
         let safe_path = sanitize_filename::sanitize(&custom_path);
-        let mut full_path = PathBuf::from(base_path);
-        full_path.push(&safe_path);
-
-        // Create parent directories if they don't exist
-        if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        }
-        
-        full_path
+        PathBuf::from(base_path).join(safe_path)
     } else {
-        let uuid = Uuid::new_v4();
-        PathBuf::from(base_path).join(uuid.to_string())
+        // Get original filename from the field if available
+        let original_filename = field
+            .file_name()
+            .map(|name| sanitize_filename::sanitize(name))
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
+        PathBuf::from(base_path).join(original_filename)
     };
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
 
     // Write the file
     fs::write(&file_path, file_data)
