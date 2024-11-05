@@ -1052,6 +1052,13 @@ async fn get_asset(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Create parent directories if they don't exist
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
     // Check if file exists
     if !file_path.exists() {
         return Err(StatusCode::NOT_FOUND);
@@ -1153,20 +1160,25 @@ async fn update_asset(
 
 async fn download_asset_by_filename(
     State(_state): State<AppState>,
-    Path(filename): Path<String>,
+    Path(filepath): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Get the upload directory from environment or use a default
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
     let base_path = PathBuf::from(&upload_dir);
 
-    // Convert the filename to a PathBuf and join with base path
-    let file_path = base_path.join(filename);
-
-    dbg!(format!("Downloading file: {:?}", &file_path));
+    // Convert the filepath to a PathBuf and join with base path
+    let file_path = base_path.join(&filepath);
 
     // Ensure the resulting path is within the base directory (prevent directory traversal)
     if !file_path.starts_with(&base_path) {
         return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
     // Check if file exists
