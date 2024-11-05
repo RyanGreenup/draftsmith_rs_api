@@ -1653,9 +1653,13 @@ mod tests {
     async fn test_get_asset_by_name() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = crate::BASE_URL;
 
-        // First create a test file
-        let mut temp_file = tempfile::NamedTempFile::new()?;
-        write!(temp_file, "test content")?;
+        // Create a temporary file with a proper extension
+        let temp_file = tempfile::Builder::new()
+            .suffix(".txt")  // Add a file extension
+            .tempfile()?;
+        
+        // Write content to the file
+        write!(temp_file.as_file_mut(), "test content")?;
 
         // Create an asset with the test file
         let created_asset = create_asset(
@@ -1674,7 +1678,7 @@ mod tests {
             .expect("Asset location should contain a filename");
 
         // Create a temporary file for the downloaded content
-        let output_path = std::env::temp_dir().join("test_download_by_name.tmp");
+        let output_path = std::env::temp_dir().join("test_download_by_name.txt"); // Add extension here too
 
         // Get the asset's content by name
         get_asset_by_name(base_url, asset_name, &output_path).await?;
@@ -1687,9 +1691,9 @@ mod tests {
         std::fs::remove_file(&output_path)?;
 
         // Test getting a non-existent asset
-        let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
-        let result = get_asset_by_name(base_url, "nonexistent.png", &bad_output_path).await;
-        assert!(matches!(result, Err(AssetError::FileNotFound(ref s)) if s == "nonexistent.png"));
+        let bad_output_path = std::env::temp_dir().join("nonexistent.txt");
+        let result = get_asset_by_name(base_url, "nonexistent.txt", &bad_output_path).await;
+        assert!(matches!(result, Err(AssetError::FileNotFound(ref s)) if s == "nonexistent.txt"));
 
         Ok(())
     }
