@@ -62,6 +62,23 @@ impl fmt::Display for NoteError {
     }
 }
 
+#[derive(Debug)]
+pub enum AssetError {
+    NotFound(i32),
+    FileNotFound(String),
+}
+
+impl fmt::Display for AssetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetError::NotFound(id) => write!(f, "Asset with id {} not found", id),
+            AssetError::FileNotFound(file_path) => {
+                write!(f, "Asset file '{}' not found", file_path)
+            }
+        }
+    }
+}
+
 impl std::error::Error for NoteError {}
 
 impl From<ReqwestError> for NoteError {
@@ -322,7 +339,7 @@ pub async fn fts_search_notes(
 pub async fn get_asset(
     base_url: &str,
     asset_id: i32,
-    output_path: &std::path::Path
+    output_path: &std::path::Path,
 ) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/assets/{}", base_url, asset_id);
@@ -343,15 +360,15 @@ pub async fn get_asset(
 pub async fn get_asset_by_name(
     base_url: &str,
     asset_name: &str,
-    output_path: &std::path::Path
-) -> Result<(), NoteError> {
+    output_path: &std::path::Path,
+) -> Result<(), AssetError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/assets/{}", base_url, asset_id);
+    let url = format!("{}/assets/{}", base_url, asset_name);
 
     let response = client.get(&url).send().await?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err(NoteError::NotFound(asset_id));
+        return Err(AssetError::FileNotFound(String::from(asset_name)));
     }
 
     // Get the response bytes and write them directly to the file
@@ -1633,7 +1650,8 @@ mod tests {
         .await?;
 
         // Get the filename from the asset location
-        let asset_name = created_asset.location
+        let asset_name = created_asset
+            .location
             .split('/')
             .last()
             .expect("Asset location should contain a filename");
