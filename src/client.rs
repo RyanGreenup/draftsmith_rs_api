@@ -66,16 +66,32 @@ impl fmt::Display for NoteError {
 pub enum AssetError {
     NotFound(i32),
     FileNotFound(String),
+    RequestError(reqwest::Error),
+    IOError(std::io::Error),
 }
 
 impl fmt::Display for AssetError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AssetError::NotFound(id) => write!(f, "Asset with id {} not found", id),
-            AssetError::FileNotFound(file_path) => {
-                write!(f, "Asset file '{}' not found", file_path)
-            }
+            AssetError::FileNotFound(file_path) => write!(f, "Asset file '{}' not found", file_path),
+            AssetError::RequestError(e) => write!(f, "Request error: {}", e),
+            AssetError::IOError(e) => write!(f, "IO error: {}", e),
         }
+    }
+}
+
+impl std::error::Error for AssetError {}
+
+impl From<reqwest::Error> for AssetError {
+    fn from(err: reqwest::Error) -> Self {
+        AssetError::RequestError(err)
+    }
+}
+
+impl From<std::io::Error> for AssetError {
+    fn from(err: std::io::Error) -> Self {
+        AssetError::IOError(err)
     }
 }
 
@@ -1203,7 +1219,7 @@ mod tests {
 
         // Try getting hash for non-existent note
         let result = get_note_hash(base_url, -1).await;
-        assert!(matches!(result, Err(NoteError::NotFound(-1))));
+        assert!(matches!(result, Err(AssetError::FileNotFound(ref s)) if s == "nonexistent.png"));
 
         Ok(())
     }
