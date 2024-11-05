@@ -28,6 +28,9 @@ use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 use uuid::Uuid;
+use tokio::time::{self, Duration}; 
+use std::time::SystemTime;
+use tracing::{info, error, warn};
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -146,6 +149,18 @@ pub fn create_router(pool: Pool) -> Router {
     let state = AppState {
         pool: Arc::new(pool),
     };
+
+    // Spawn cleanup task
+    {
+        let state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = time::interval(Duration::from_secs(24 * 60 * 60)); // 24 hours
+            loop {
+                interval.tick().await;
+                cleanup_orphaned_assets(state.clone()).await;
+            }
+        });
+    }
 
     let max_body_size = 1024 * 1024 * 1024; // 1 GB
 
@@ -1124,6 +1139,121 @@ async fn download_asset_by_filename(
     ];
 
     Ok((headers, file_data))
+}
+
+async fn cleanup_orphaned_assets(state: AppState) {
+    use crate::schema::assets::dsl::*;
+    
+    info!("Starting orphaned assets cleanup");
+    
+    // Get a connection from the pool
+    let mut conn = match state.pool.get() {
+        Ok(conn) => conn,
+        Err(e) => {
+            error!("Failed to get database connection for cleanup: {}", e);
+            return;
+        }
+    };
+
+    // Get all assets from database
+    let db_assets = match assets.load::<Asset>(&mut conn) {
+        Ok(assets) => assets,
+        Err(e) => {
+            error!("Failed to load assets from database: {}", e);
+            return;
+        }
+    };
+
+    // Get the upload directory
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let base_path = FilePath::new(&upload_dir);
+
+    // Ensure upload directory exists
+    if let Err(e) = fs::create_dir_all(&base_path).await {
+        error!("Failed to create upload directory: {}", e);
+        return;
+    }
+
+    let mut files_on_disk = HashSet::new();
+
+    // Read all files in the upload directory
+    match fs::read_dir(&base_path).await {
+        Ok(mut entries) => {
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                if let Ok(path) = entry.path().canonicalize() {
+                    files_on_disk.insert(path);
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to read upload directory: {}", e);
+            return;
+        }
+    }
+
+    // Track statistics
+    let mut orphaned_files = 0;
+    let mut dangling_records = 0;
+
+    // Check for files without database records
+    for file_path in &files_on_disk {
+        let file_exists_in_db = db_assets.iter().any(|asset| {
+            FilePath::new(&asset.location)
+                .canonicalize()
+                .map(|p| p == *file_path)
+                .unwrap_or(false)
+        });
+
+        if !file_exists_in_db {
+            match fs::remove_file(file_path).await {
+                Ok(_) => {
+                    orphaned_files += 1;
+                    info!("Removed orphaned file: {:?}", file_path);
+                }
+                Err(e) => {
+                    warn!("Failed to remove orphaned file {:?}: {}", file_path, e);
+                }
+            }
+        }
+    }
+
+    // Check for database records without files
+    for asset in db_assets {
+        let asset_path = FilePath::new(&asset.location);
+        let canonical_path = match asset_path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                // File doesn't exist, remove the database record
+                match diesel::delete(assets.filter(id.eq(asset.id))).execute(&mut conn) {
+                    Ok(_) => {
+                        dangling_records += 1;
+                        info!("Removed dangling database record for asset ID: {}", asset.id);
+                    }
+                    Err(e) => {
+                        warn!("Failed to remove dangling record for asset ID {}: {}", asset.id, e);
+                    }
+                }
+                continue;
+            }
+        };
+
+        if !files_on_disk.contains(&canonical_path) {
+            match diesel::delete(assets.filter(id.eq(asset.id))).execute(&mut conn) {
+                Ok(_) => {
+                    dangling_records += 1;
+                    info!("Removed dangling database record for asset ID: {}", asset.id);
+                }
+                Err(e) => {
+                    warn!("Failed to remove dangling record for asset ID {}: {}", asset.id, e);
+                }
+            }
+        }
+    }
+
+    info!(
+        "Cleanup completed. Removed {} orphaned files and {} dangling database records",
+        orphaned_files, dangling_records
+    );
 }
 
 async fn delete_asset(
