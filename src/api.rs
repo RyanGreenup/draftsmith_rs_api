@@ -182,6 +182,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
+        .route("/assets/download/:filename", get(download_asset_by_filename))
         .with_state(state)
 }
 
@@ -1085,6 +1086,44 @@ async fn update_asset(
         description: asset.description,
         created_at: asset.created_at,
     }))
+}
+
+async fn download_asset_by_filename(
+    State(state): State<AppState>,
+    Path(filename): Path<String>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Get the upload directory from environment or use a default
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let base_path = FilePath::new(&upload_dir);
+    
+    // Sanitize the filename for security
+    let safe_filename = sanitize_filename::sanitize(&filename);
+    let file_path = base_path.join(&safe_filename);
+
+    // Check if file exists
+    if !file_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Read the file
+    let file_data = fs::read(&file_path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Guess the mime type
+    let mime_type = mime_guess::from_path(&file_path)
+        .first_or_octet_stream()
+        .to_string();
+
+    let headers: [(HeaderName, HeaderValue); 2] = [
+        (header::CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap()),
+        (
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", safe_filename)).unwrap(),
+        ),
+    ];
+
+    Ok((headers, file_data))
 }
 
 async fn delete_asset(
