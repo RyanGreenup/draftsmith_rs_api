@@ -1621,7 +1621,7 @@ mod tests {
         write!(temp_file, "test content for filename download")?;
 
         // Create an asset with a specific filename
-        let custom_filename = "test_download_by_name.txt".to_string();
+        let custom_filename = "foo/bar/baz/test_download_by_name.txt".to_string();
         let created_asset = create_asset(
             base_url,
             temp_file.path(),
