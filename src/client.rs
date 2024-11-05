@@ -319,7 +319,11 @@ pub async fn fts_search_notes(
     Ok(notes)
 }
 
-pub async fn get_asset(base_url: &str, asset_id: i32) -> Result<Vec<u8>, NoteError> {
+pub async fn get_asset(
+    base_url: &str, 
+    asset_id: i32,
+    output_path: &std::path::Path
+) -> Result<(), NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/assets/{}", base_url, asset_id);
 
@@ -329,12 +333,11 @@ pub async fn get_asset(base_url: &str, asset_id: i32) -> Result<Vec<u8>, NoteErr
         return Err(NoteError::NotFound(asset_id));
     }
 
-    response
-        .error_for_status()?
-        .bytes()
-        .await
-        .map(|b| b.to_vec())
-        .map_err(NoteError::from)
+    // Get the response bytes and write them directly to the file
+    let bytes = response.error_for_status()?.bytes().await?;
+    tokio::fs::write(output_path, bytes).await?;
+
+    Ok(())
 }
 
 pub async fn list_assets(
@@ -1534,14 +1537,22 @@ mod tests {
         )
         .await?;
 
-        // Get the asset's content
-        let content = get_asset(base_url, created_asset.id).await?;
+        // Create a temporary file for the downloaded content
+        let output_path = std::env::temp_dir().join("test_download.tmp");
 
-        // Verify the content matches what we uploaded
-        assert_eq!(content, b"test content");
+        // Get the asset's content
+        get_asset(base_url, created_asset.id, &output_path).await?;
+
+        // Read and verify the content matches what we uploaded
+        let downloaded_content = std::fs::read(&output_path)?;
+        assert_eq!(downloaded_content, b"test content");
+
+        // Clean up the temporary file
+        std::fs::remove_file(&output_path)?;
 
         // Test getting a non-existent asset
-        let result = get_asset(base_url, -1).await;
+        let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
+        let result = get_asset(base_url, -1, &bad_output_path).await;
         assert!(matches!(result, Err(NoteError::NotFound(-1))));
 
         Ok(())
