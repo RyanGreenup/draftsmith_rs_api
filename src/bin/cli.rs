@@ -34,11 +34,13 @@ enum AssetCommands {
         /// Output file path
         output: PathBuf,
     },
-    /// Get an asset by filename
+    /// Get an asset by filename/path
     GetByName {
-        /// Asset filename/path
-        filename: String,
+        /// Asset path (can include directories, e.g. 'dir1/dir2/file.txt')
+        #[arg(value_name = "PATH")]
+        path: String,
         /// Output file path
+        #[arg(value_name = "OUTPUT")]
         output: PathBuf,
     },
     /// Update an asset
@@ -624,8 +626,8 @@ async fn main() {
                         }
                     }
                 }
-                AssetCommands::GetByName { filename, output } => {
-                    match rust_cli_app::client::get_asset_by_name(&url, &filename, &output).await {
+                AssetCommands::GetByName { path, output } => {
+                    match rust_cli_app::client::get_asset_by_name(&url, &path, &output).await {
                         Ok(_) => {
                             println!("Asset downloaded to {}", output.display());
                         }

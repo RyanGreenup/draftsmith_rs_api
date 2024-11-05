@@ -457,9 +457,27 @@ pub async fn get_asset_by_name(
         return Err(AssetError::FileNotFound(String::from(asset_name)));
     }
 
-    // Get the response bytes and write them directly to the file
+    // Get the response bytes
     let bytes = response.error_for_status()?.bytes().await?;
-    tokio::fs::write(output_path, bytes).await?;
+
+    // If output_path is a directory, construct the full path using the asset name
+    let final_path = if output_path.is_dir() {
+        // Extract the filename from asset_name (last component of the path)
+        let filename = std::path::Path::new(asset_name)
+            .file_name()
+            .ok_or_else(|| AssetError::FileNotFound("Invalid asset name".to_string()))?;
+        output_path.join(filename)
+    } else {
+        output_path.to_path_buf()
+    };
+
+    // Create parent directories if they don't exist
+    if let Some(parent) = final_path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
+    // Write the bytes to the final path
+    tokio::fs::write(&final_path, bytes).await?;
 
     Ok(())
 }
