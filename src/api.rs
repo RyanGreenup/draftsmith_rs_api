@@ -1,6 +1,8 @@
 use crate::client::NoteError;
-use crate::tables::{HierarchyMapping, NoteWithParent};
+use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
+use axum::extract::Multipart;
+use axum::http::header;
 use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -22,7 +24,10 @@ struct RenderedNote {
 }
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
+use tokio::fs;
+use uuid::Uuid;
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -59,6 +64,33 @@ pub struct NoteMetadataResponse {
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateAssetRequest {
+    pub note_id: Option<i32>,
+    pub filename: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateAssetRequest {
+    pub note_id: Option<i32>,
+    pub description: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct AssetResponse {
+    pub id: i32,
+    pub note_id: Option<i32>,
+    pub location: String,
+    pub description: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Deserialize)]
+pub struct ListAssetsParams {
+    note_id: Option<i32>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -119,6 +151,13 @@ pub fn create_router(pool: Pool) -> Router {
 
     Router::new()
         .layer(DefaultBodyLimit::max(max_body_size))
+        .route("/assets", post(create_asset).get(list_assets))
+        .route(
+            "/assets/:id",
+            get(get_asset)
+                .put(update_asset)
+                .delete(delete_asset),
+        )
         .route(format!("/{SEARCH_FTS_API}").as_str(), get(fts_search_notes))
         .route("/notes/search/semantic", get(fts_search_notes))
         .route("/notes/search/hybrid", get(fts_search_notes))
@@ -853,6 +892,225 @@ async fn render_all_notes_md(
         .collect();
 
     Ok(Json(rendered))
+}
+
+async fn create_asset(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> Result<(StatusCode, Json<AssetResponse>), StatusCode> {
+    use crate::schema::assets::dsl::*;
+
+    // Get the upload directory from environment or use a default
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let base_path = FilePath::new(&upload_dir);
+
+    // Create upload directory if it doesn't exist
+    fs::create_dir_all(base_path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut file_data = Vec::new();
+    let mut asset_request = CreateAssetRequest {
+        note_id: None,
+        filename: None,
+        description: None,
+    };
+
+    while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
+        match field.name() {
+            Some("file") => {
+                file_data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?.to_vec();
+            }
+            Some("note_id") => {
+                let note_id_str = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
+                asset_request.note_id = Some(note_id_str.parse().map_err(|_| StatusCode::BAD_REQUEST)?);
+            }
+            Some("filename") => {
+                asset_request.filename = Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
+            }
+            Some("description") => {
+                asset_request.description = Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
+            }
+            _ => {}
+        }
+    }
+
+    if file_data.is_empty() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Generate a unique filename if none provided
+    let file_path = if let Some(custom_path) = asset_request.filename {
+        // Sanitize the custom path
+        let safe_path = sanitize_filename::sanitize(&custom_path);
+        let mut full_path = PathBuf::from(base_path);
+        full_path.push(&safe_path);
+
+        // Create parent directories if they don't exist
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        
+        full_path
+    } else {
+        let uuid = Uuid::new_v4();
+        PathBuf::from(base_path).join(uuid.to_string())
+    };
+
+    // Write the file
+    fs::write(&file_path, file_data)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Store asset record in database
+    let new_asset = NewAsset {
+        note_id: asset_request.note_id,
+        location: file_path.to_str().unwrap(),
+        description: asset_request.description.as_deref(),
+    };
+
+    let asset = diesel::insert_into(assets)
+        .values(&new_asset)
+        .get_result::<Asset>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok((StatusCode::CREATED, Json(AssetResponse {
+        id: asset.id,
+        note_id: asset.note_id,
+        location: asset.location,
+        description: asset.description,
+        created_at: asset.created_at,
+    })))
+}
+
+async fn get_asset(
+    State(state): State<AppState>,
+    Path(asset_id): Path<i32>,
+) -> Result<impl IntoResponse, StatusCode> {
+    use crate::schema::assets::dsl::*;
+
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let asset = assets
+        .find(asset_id)
+        .first::<Asset>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    // Read the file
+    let file_data = fs::read(&asset.location)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Guess the mime type
+    let mime_type = mime_guess::from_path(&asset.location)
+        .first_or_octet_stream()
+        .to_string();
+
+    // Get the filename from the path
+    let filename = FilePath::new(&asset.location)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("download");
+
+    let headers = [
+        (header::CONTENT_TYPE, mime_type.parse().unwrap()),
+        (
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", filename).parse().unwrap(),
+        ),
+    ];
+
+    Ok((headers, file_data))
+}
+
+async fn list_assets(
+    State(state): State<AppState>,
+    Query(params): Query<ListAssetsParams>,
+) -> Result<Json<Vec<AssetResponse>>, StatusCode> {
+    use crate::schema::assets::dsl::*;
+
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let mut query = assets.into_boxed();
+    
+    if let Some(note_id_param) = params.note_id {
+        query = query.filter(note_id.eq(note_id_param));
+    }
+
+    let results = query
+        .load::<Asset>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let response = results
+        .into_iter()
+        .map(|asset| AssetResponse {
+            id: asset.id,
+            note_id: asset.note_id,
+            location: asset.location,
+            description: asset.description,
+            created_at: asset.created_at,
+        })
+        .collect();
+
+    Ok(Json(response))
+}
+
+async fn update_asset(
+    State(state): State<AppState>,
+    Path(asset_id): Path<i32>,
+    Json(payload): Json<UpdateAssetRequest>,
+) -> Result<Json<AssetResponse>, StatusCode> {
+    use crate::schema::assets::dsl::*;
+
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let asset = diesel::update(assets.find(asset_id))
+        .set((
+            note_id.eq(payload.note_id),
+            description.eq(payload.description),
+        ))
+        .get_result::<Asset>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(Json(AssetResponse {
+        id: asset.id,
+        note_id: asset.note_id,
+        location: asset.location,
+        description: asset.description,
+        created_at: asset.created_at,
+    }))
+}
+
+async fn delete_asset(
+    State(state): State<AppState>,
+    Path(asset_id): Path<i32>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::assets::dsl::*;
+
+    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get the asset first to get the file location
+    let asset = assets
+        .find(asset_id)
+        .first::<Asset>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    // Delete the file
+    if let Err(e) = fs::remove_file(&asset.location).await {
+        eprintln!("Error deleting file {}: {}", asset.location, e);
+        // Continue with database deletion even if file deletion fails
+    }
+
+    // Delete from database
+    diesel::delete(assets.find(asset_id))
+        .execute(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]
