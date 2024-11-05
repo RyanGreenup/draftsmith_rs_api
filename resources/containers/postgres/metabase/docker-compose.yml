@@ -1,0 +1,26 @@
+services:
+
+# Adapted from <https://www.metabase.com/docs/latest/installation-and-operation/running-metabase-on-docker>
+  metabase-app:
+    image: metabase/metabase
+    restart: always
+    ports:
+      - 3007:3000
+    volumes:
+      # declare your mount volume /host/dir:/container/dir
+      - ./metabase-data:/metabase-data
+  # Comment out all environment variables to just use H2 Driver
+  # If using postgres, `CREATE DATABASE metabaseappdb` and restart container
+  # on first run.
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: metabaseappdb
+      MB_DB_PORT: 5432
+      MB_DB_USER: postgres
+      MB_DB_PASS: postgres
+      MB_DB_HOST: postgres-db
+    depends_on:
+      - postgres-db
+    links:
+      - postgres-db
+
