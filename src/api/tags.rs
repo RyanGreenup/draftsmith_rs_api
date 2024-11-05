@@ -3,7 +3,7 @@ use crate::tables::{NewTag, Tag};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
 use diesel::prelude::*;
