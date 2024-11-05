@@ -1,7 +1,7 @@
 use crate::api::compute_all_note_hashes;
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
-    CreateNoteRequest, NoteHash, NoteTreeNode, UpdateNoteRequest,
+    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, UpdateNoteRequest,
 };
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -317,6 +317,23 @@ pub async fn fts_search_notes(
     let response = reqwest::get(&url).await?.error_for_status()?;
     let notes = response.json::<Vec<NoteWithoutFts>>().await?;
     Ok(notes)
+}
+
+pub async fn list_assets(
+    base_url: &str,
+    note_id: Option<i32>,
+) -> Result<Vec<AssetResponse>, NoteError> {
+    let client = reqwest::Client::new();
+    let mut url = format!("{}/assets", base_url);
+
+    // Add query parameters if note_id is provided
+    if let Some(id) = note_id {
+        url = format!("{}?note_id={}", url, id);
+    }
+
+    let response = client.get(&url).send().await?.error_for_status()?;
+    let assets = response.json::<Vec<AssetResponse>>().await?;
+    Ok(assets)
 }
 
 pub async fn create_asset(
@@ -1478,6 +1495,42 @@ mod tests {
         assert!(!asset.location.is_empty());
         assert_eq!(asset.description, Some("Test asset".to_string()));
         assert!(asset.created_at.is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_assets() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // First create an asset to ensure we have something to list
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content")?;
+
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset for listing".to_string()),
+        )
+        .await?;
+
+        // List all assets
+        let assets = list_assets(base_url, None).await?;
+
+        // Verify we can find our created asset
+        assert!(!assets.is_empty());
+        let found_asset = assets.iter().find(|a| a.id == created_asset.id);
+        assert!(found_asset.is_some());
+        let found_asset = found_asset.unwrap();
+        assert_eq!(
+            found_asset.description,
+            Some("Test asset for listing".to_string())
+        );
+
+        // Test filtering by note_id
+        let filtered_assets = list_assets(base_url, Some(999999)).await?; // Using a likely non-existent note_id
+        assert!(filtered_assets.is_empty());
 
         Ok(())
     }
