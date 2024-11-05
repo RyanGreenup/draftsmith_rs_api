@@ -1613,6 +1613,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_asset_by_name() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = crate::BASE_URL;
+
+        // First create a test file with known content
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content for filename download")?;
+
+        // Create an asset with a specific filename
+        let custom_filename = "test_download_by_name.txt".to_string();
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset for filename download".to_string()),
+            Some(custom_filename.clone()),
+        )
+        .await?;
+
+        // Create a temporary file for the downloaded content
+        let output_path = std::env::temp_dir().join("test_download_by_name_output.tmp");
+
+        // Get the asset by filename
+        get_asset_by_name(base_url, &custom_filename, &output_path).await?;
+
+        // Read and verify the content matches what we uploaded
+        let downloaded_content = std::fs::read_to_string(&output_path)?;
+        assert_eq!(downloaded_content, "test content for filename download");
+
+        // Clean up
+        std::fs::remove_file(&output_path)?;
+        delete_asset(base_url, created_asset.id).await?;
+
+        // Test getting a non-existent asset
+        let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
+        let result = get_asset_by_name(base_url, "nonexistent.txt", &bad_output_path).await;
+        assert!(matches!(result, Err(AssetError::FileNotFound(_))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_list_assets() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
