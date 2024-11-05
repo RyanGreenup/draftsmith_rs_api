@@ -12,6 +12,12 @@ struct Cli {
     command: Commands,
 }
 
+#[derive(clap::ValueEnum, Clone)]
+enum RenderType {
+    Html,
+    Md,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Start the API server
@@ -75,11 +81,14 @@ enum NotesCommands {
         /// Directory containing notes to push
         dir: String,
     },
-    /// Render note content as HTML
+    /// Render note content
     Render {
-        /// Output HTML file (optional - defaults to stdout)
+        /// Output file (optional - defaults to stdout)
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Render type (html or md)
+        #[arg(short = 't', long, value_enum, default_value_t = RenderType::Md)]
+        render_type: RenderType,
     },
 }
 
@@ -394,18 +403,25 @@ async fn main() {
                         }
                     }
                 }
-                NotesCommands::Render { output } => {
+                NotesCommands::Render {
+                    output,
+                    render_type,
+                } => {
                     if let Some(note_id) = id {
                         // Fetch the note
                         match rust_cli_app::client::fetch_note(&url, note_id, false).await {
                             Ok(note) => {
-                                // Convert note content to HTML
-                                let html_output =
-                                    draftsmith_render::parse_md_to_html(&note.content);
+                                // Convert note content based on render type
+                                let rendered_output = match render_type {
+                                    RenderType::Html => {
+                                        draftsmith_render::parse_md_to_html(&note.content)
+                                    }
+                                    RenderType::Md => draftsmith_render::process_md(&note.content),
+                                };
 
                                 // Write output to file or stdout
                                 if let Some(output_path) = output {
-                                    match std::fs::write(output_path.clone(), html_output) {
+                                    match std::fs::write(output_path.clone(), rendered_output) {
                                         Ok(_) => println!(
                                             "Rendered note {} to {}",
                                             note_id,
@@ -421,7 +437,7 @@ async fn main() {
                                         }
                                     }
                                 } else {
-                                    println!("{}", html_output);
+                                    println!("{}", rendered_output);
                                 }
                             }
                             Err(rust_cli_app::client::NoteError::NotFound(id)) => {
