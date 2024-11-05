@@ -2,7 +2,7 @@ use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use axum::extract::Multipart;
-use axum::http::header;
+use axum::http::{header, HeaderName, HeaderValue};
 use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -1016,11 +1016,11 @@ async fn get_asset(
         .and_then(|n| n.to_str())
         .unwrap_or("download");
 
-    let headers = [
-        (header::CONTENT_TYPE, mime_type.parse().unwrap()),
+    let headers: [(HeaderName, HeaderValue); 2] = [
+        (header::CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap()),
         (
             header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename).parse().unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", filename)).unwrap(),
         ),
     ];
 
