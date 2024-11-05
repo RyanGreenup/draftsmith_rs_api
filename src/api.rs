@@ -1,9 +1,9 @@
 use crate::client::NoteError;
-use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
+use crate::tables::{Asset, AssetWithoutFts, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
+use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};
-use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
@@ -27,9 +27,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
-use uuid::Uuid;
 use tokio::time::{self, Duration};
-use tracing::{info, error, warn}; 
+use tracing::{error, info, warn};
+use uuid::Uuid;
 
 // Connection pool type
 type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -81,14 +81,7 @@ pub struct UpdateAssetRequest {
     pub description: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct AssetResponse {
-    pub id: i32,
-    pub note_id: Option<i32>,
-    pub location: String,
-    pub description: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-}
+pub type AssetResponse = AssetWithoutFts;
 
 #[derive(Deserialize)]
 pub struct ListAssetsParams {
@@ -168,9 +161,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/assets", post(create_asset).get(list_assets))
         .route(
             "/assets/:id",
-            get(get_asset)
-                .put(update_asset)
-                .delete(delete_asset),
+            get(get_asset).put(update_asset).delete(delete_asset),
         )
         .route(format!("/{SEARCH_FTS_API}").as_str(), get(fts_search_notes))
         .route("/notes/search/semantic", get(fts_search_notes))
@@ -196,7 +187,10 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
-        .route("/assets/download/:filename", get(download_asset_by_filename))
+        .route(
+            "/assets/download/:filename",
+            get(download_asset_by_filename),
+        )
         .with_state(state)
 }
 
@@ -932,21 +926,32 @@ async fn create_asset(
         description: None,
     };
 
-    while let Some(field) = multipart.next_field().await.map_err(|_| StatusCode::BAD_REQUEST)? {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+    {
         match field.name() {
             Some("file") => {
                 original_filename = field.file_name().map(String::from);
-                file_data = field.bytes().await.map_err(|_| StatusCode::BAD_REQUEST)?.to_vec();
+                file_data = field
+                    .bytes()
+                    .await
+                    .map_err(|_| StatusCode::BAD_REQUEST)?
+                    .to_vec();
             }
             Some("note_id") => {
                 let note_id_str = field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?;
-                asset_request.note_id = Some(note_id_str.parse().map_err(|_| StatusCode::BAD_REQUEST)?);
+                asset_request.note_id =
+                    Some(note_id_str.parse().map_err(|_| StatusCode::BAD_REQUEST)?);
             }
             Some("filename") => {
-                asset_request.filename = Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
+                asset_request.filename =
+                    Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
             }
             Some("description") => {
-                asset_request.description = Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
+                asset_request.description =
+                    Some(field.text().await.map_err(|_| StatusCode::BAD_REQUEST)?);
             }
             _ => {}
         }
@@ -981,7 +986,10 @@ async fn create_asset(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Store asset record in database
     let new_asset = NewAsset {
@@ -995,13 +1003,16 @@ async fn create_asset(
         .get_result::<Asset>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok((StatusCode::CREATED, Json(AssetResponse {
-        id: asset.id,
-        note_id: asset.note_id,
-        location: asset.location,
-        description: asset.description,
-        created_at: asset.created_at,
-    })))
+    Ok((
+        StatusCode::CREATED,
+        Json(AssetResponse {
+            id: asset.id,
+            note_id: asset.note_id,
+            location: asset.location,
+            description: asset.description,
+            created_at: asset.created_at,
+        }),
+    ))
 }
 
 async fn get_asset(
@@ -1010,7 +1021,10 @@ async fn get_asset(
 ) -> Result<impl IntoResponse, StatusCode> {
     use crate::schema::assets::dsl::*;
 
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let asset = assets
         .find(asset_id)
@@ -1034,7 +1048,10 @@ async fn get_asset(
         .unwrap_or("download");
 
     let headers: [(HeaderName, HeaderValue); 2] = [
-        (header::CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap()),
+        (
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(&mime_type).unwrap(),
+        ),
         (
             header::CONTENT_DISPOSITION,
             HeaderValue::from_str(&format!("attachment; filename=\"{}\"", filename)).unwrap(),
@@ -1050,10 +1067,13 @@ async fn list_assets(
 ) -> Result<Json<Vec<AssetResponse>>, StatusCode> {
     use crate::schema::assets::dsl::*;
 
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut query = assets.into_boxed();
-    
+
     if let Some(note_id_param) = params.note_id {
         query = query.filter(note_id.eq(note_id_param));
     }
@@ -1083,7 +1103,10 @@ async fn update_asset(
 ) -> Result<Json<AssetResponse>, StatusCode> {
     use crate::schema::assets::dsl::*;
 
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let asset = diesel::update(assets.find(asset_id))
         .set((
@@ -1109,7 +1132,7 @@ async fn download_asset_by_filename(
     // Get the upload directory from environment or use a default
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
     let base_path = FilePath::new(&upload_dir);
-    
+
     // Sanitize the filename for security
     let safe_filename = sanitize_filename::sanitize(&filename);
     let file_path = base_path.join(&safe_filename);
@@ -1130,7 +1153,10 @@ async fn download_asset_by_filename(
         .to_string();
 
     let headers: [(HeaderName, HeaderValue); 2] = [
-        (header::CONTENT_TYPE, HeaderValue::from_str(&mime_type).unwrap()),
+        (
+            header::CONTENT_TYPE,
+            HeaderValue::from_str(&mime_type).unwrap(),
+        ),
         (
             header::CONTENT_DISPOSITION,
             HeaderValue::from_str(&format!("attachment; filename=\"{}\"", safe_filename)).unwrap(),
@@ -1142,9 +1168,9 @@ async fn download_asset_by_filename(
 
 async fn cleanup_orphaned_assets(state: AppState) {
     use crate::schema::assets::dsl::*;
-    
+
     info!("Starting orphaned assets cleanup");
-    
+
     // Get a connection from the pool
     let mut conn = match state.pool.get() {
         Ok(conn) => conn,
@@ -1156,7 +1182,7 @@ async fn cleanup_orphaned_assets(state: AppState) {
 
     // Get all assets from database
     let db_assets = match assets.load::<Asset>(&mut conn) {
-        Ok(db_assets) => db_assets,  // Changed variable name to avoid conflict
+        Ok(db_assets) => db_assets, // Changed variable name to avoid conflict
         Err(e) => {
             error!("Failed to load assets from database: {}", e);
             return;
@@ -1226,10 +1252,16 @@ async fn cleanup_orphaned_assets(state: AppState) {
                 match diesel::delete(assets.filter(id.eq(asset.id))).execute(&mut conn) {
                     Ok(_) => {
                         dangling_records += 1;
-                        info!("Removed dangling database record for asset ID: {}", asset.id);
+                        info!(
+                            "Removed dangling database record for asset ID: {}",
+                            asset.id
+                        );
                     }
                     Err(e) => {
-                        warn!("Failed to remove dangling record for asset ID {}: {}", asset.id, e);
+                        warn!(
+                            "Failed to remove dangling record for asset ID {}: {}",
+                            asset.id, e
+                        );
                     }
                 }
                 continue;
@@ -1240,10 +1272,16 @@ async fn cleanup_orphaned_assets(state: AppState) {
             match diesel::delete(assets.filter(id.eq(asset.id))).execute(&mut conn) {
                 Ok(_) => {
                     dangling_records += 1;
-                    info!("Removed dangling database record for asset ID: {}", asset.id);
+                    info!(
+                        "Removed dangling database record for asset ID: {}",
+                        asset.id
+                    );
                 }
                 Err(e) => {
-                    warn!("Failed to remove dangling record for asset ID {}: {}", asset.id, e);
+                    warn!(
+                        "Failed to remove dangling record for asset ID {}: {}",
+                        asset.id, e
+                    );
                 }
             }
         }
@@ -1261,7 +1299,10 @@ async fn delete_asset(
 ) -> Result<StatusCode, StatusCode> {
     use crate::schema::assets::dsl::*;
 
-    let mut conn = state.pool.get().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get the asset first to get the file location
     let asset = assets

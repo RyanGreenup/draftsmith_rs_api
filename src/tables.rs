@@ -36,6 +36,15 @@ pub struct Asset {
     pub created_at: Option<chrono::NaiveDateTime>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AssetWithoutFts {
+    pub id: i32,
+    pub note_id: Option<i32>,
+    pub location: String,
+    pub description: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = crate::schema::assets)]
 pub struct NewAsset<'a> {
