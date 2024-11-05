@@ -209,6 +209,32 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
+#[derive(Debug, Queryable, Serialize, Deserialize)]
+#[diesel(table_name = crate::schema::notes)]
+pub struct NoteWithoutFts {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    // Exclude the 'fts' field to prevent deserialization issues
+}
+
+impl NoteWithoutFts {
+    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<NoteWithoutFts>> {
+        use crate::schema::notes::dsl::*;
+        Ok(notes
+            .select((id, title, content, created_at, modified_at))
+            .load::<NoteWithoutFts>(conn)?)
+    }
+}
+
+impl From<Note> for NoteWithoutFts {
+    fn from(_: Note) -> Self {
+        panic!("Direct conversion from Note to NoteWithoutFts is considered an anti-pattern. Use NoteWithoutFts::get_all to fetch data without FTS.");
+    }
+}
+
 #[derive(Debug, Queryable, Serialize, Deserialize, Clone)]
 pub struct NoteWithParent {
     pub note_id: i32,
@@ -257,26 +283,6 @@ impl NoteWithParent {
                 note_hierarchy::parent_note_id.nullable(),
             ))
             .first::<NoteWithParent>(conn)
-    }
-}
-
-#[derive(Debug, Queryable, Serialize, Deserialize)]
-#[diesel(table_name = crate::schema::notes)]
-pub struct NoteWithoutFts {
-    pub id: i32,
-    pub title: String,
-    pub content: String,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    // Exclude the 'fts' field to prevent deserialization issues
-}
-
-impl NoteWithoutFts {
-    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<NoteWithoutFts>> {
-        use crate::schema::notes::dsl::*;
-        Ok(notes
-            .select((id, title, content, created_at, modified_at))
-            .load::<NoteWithoutFts>(conn)?)
     }
 }
 
