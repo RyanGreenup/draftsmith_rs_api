@@ -340,6 +340,27 @@ pub async fn get_asset(
     Ok(())
 }
 
+pub async fn get_asset_by_name(
+    base_url: &str,
+    asset_name: &str,
+    output_path: &std::path::Path
+) -> Result<(), NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/assets/{}", base_url, asset_id);
+
+    let response = client.get(&url).send().await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(asset_id));
+    }
+
+    // Get the response bytes and write them directly to the file
+    let bytes = response.error_for_status()?.bytes().await?;
+    tokio::fs::write(output_path, bytes).await?;
+
+    Ok(())
+}
+
 pub async fn list_assets(
     base_url: &str,
     note_id: Option<i32>,
@@ -1590,6 +1611,50 @@ mod tests {
         // Test filtering by note_id
         let filtered_assets = list_assets(base_url, Some(999999)).await?; // Using a likely non-existent note_id
         assert!(filtered_assets.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_asset_by_name() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = crate::BASE_URL;
+
+        // First create a test file
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content")?;
+
+        // Create an asset with the test file
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset".to_string()),
+        )
+        .await?;
+
+        // Get the filename from the asset location
+        let asset_name = created_asset.location
+            .split('/')
+            .last()
+            .expect("Asset location should contain a filename");
+
+        // Create a temporary file for the downloaded content
+        let output_path = std::env::temp_dir().join("test_download_by_name.tmp");
+
+        // Get the asset's content by name
+        get_asset_by_name(base_url, asset_name, &output_path).await?;
+
+        // Read and verify the content matches what we uploaded
+        let downloaded_content = std::fs::read(&output_path)?;
+        assert_eq!(downloaded_content, b"test content");
+
+        // Clean up the temporary file
+        std::fs::remove_file(&output_path)?;
+
+        // Test getting a non-existent asset
+        let bad_output_path = std::env::temp_dir().join("nonexistent.tmp");
+        let result = get_asset_by_name(base_url, "nonexistent.png", &bad_output_path).await;
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
 
         Ok(())
     }
