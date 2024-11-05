@@ -2,7 +2,10 @@ use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
+mod hierarchy;
+mod state;
 mod tags;
+
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};
 use axum::{
@@ -14,7 +17,6 @@ use axum::{
 };
 use axum_extra::response::ErasedJson;
 use diesel::prelude::*;
-use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -23,7 +25,9 @@ struct RenderedNote {
     id: i32,
     rendered_content: String,
 }
+use hierarchy::is_circular_hierarchy;
 use sha2::{Digest, Sha256};
+use state::{AppState, Pool};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
@@ -31,15 +35,6 @@ use tokio::fs;
 use tokio::time::{self, Duration};
 use tracing::{error, info, warn};
 use uuid::Uuid;
-
-// Connection pool type
-type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
-
-// Shared state
-#[derive(Clone)]
-pub struct AppState {
-    pool: Arc<Pool>,
-}
 
 // Request/Response types
 #[derive(Deserialize, Serialize)]
@@ -487,27 +482,6 @@ async fn delete_note(
     } else {
         Err(StatusCode::NOT_FOUND)
     }
-}
-
-fn is_circular_hierarchy(
-    conn: &mut PgConnection,
-    child_id: i32,
-    potential_parent_id: Option<i32>,
-) -> Result<bool, DieselError> {
-    use crate::schema::note_hierarchy::dsl::*;
-    let mut current_parent_id = potential_parent_id;
-    while let Some(pid) = current_parent_id {
-        if pid == child_id {
-            return Ok(true); // Circular hierarchy detected
-        }
-        current_parent_id = note_hierarchy
-            .filter(child_note_id.eq(pid))
-            .select(parent_note_id)
-            .first::<Option<i32>>(conn)
-            .optional()?
-            .flatten();
-    }
-    Ok(false)
 }
 
 async fn attach_child_note(
