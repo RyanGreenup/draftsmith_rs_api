@@ -411,6 +411,10 @@ async fn main() {
                         // Fetch the note
                         match rust_cli_app::client::fetch_note(&url, note_id, false).await {
                             Ok(note) => {
+                                // TODO, given that the note has come from the api
+                                // Should this simply pull the rendered content from the api?
+                                // That way there is a single source of truth for the rendered
+                                // content
                                 // Convert note content based on render type
                                 let rendered_output = match render_type {
                                     RenderType::Html => {

@@ -14,6 +14,11 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
+#[derive(Serialize)]
+struct RenderedNote {
+    id: i32,
+    rendered_content: String,
+}
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -93,6 +98,10 @@ pub fn create_router(pool: Pool) -> Router {
             delete(detach_child_note),
         )
         .route("/notes/tree", put(update_note_tree))
+        .route("/notes/flat/:id/render/html", get(render_note_html))
+        .route("/notes/flat/:id/render/md", get(render_note_md))
+        .route("/notes/flat/render/html", get(render_all_notes_html))
+        .route("/notes/flat/render/md", get(render_all_notes_md))
         .with_state(state)
 }
 
@@ -713,6 +722,98 @@ async fn update_database_from_notetreenode(
     Ok(StatusCode::OK)
 }
 
+// Single note rendering handlers
+async fn render_note_html(
+    Path(note_id): Path<i32>,
+    State(state): State<AppState>,
+) -> Result<String, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let note = notes
+        .find(note_id)
+        .first::<Note>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(draftsmith_render::parse_md_to_html(&note.content))
+}
+
+async fn render_note_md(
+    Path(note_id): Path<i32>,
+    State(state): State<AppState>,
+) -> Result<String, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let note = notes
+        .find(note_id)
+        .first::<Note>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    Ok(draftsmith_render::process_md(&note.content))
+}
+
+// All notes rendering handlers
+async fn render_all_notes_html(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RenderedNote>>, StatusCode> {
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let notes =
+        NoteWithoutFts::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let rendered: Vec<RenderedNote> = notes
+        .iter()
+        .map(|note| RenderedNote {
+            id: note.id,
+            rendered_content: format!(
+                "# {}\n\n{}",
+                note.title,
+                draftsmith_render::parse_md_to_html(&note.content)
+            ),
+        })
+        .collect();
+
+    Ok(Json(rendered))
+}
+
+async fn render_all_notes_md(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<RenderedNote>>, StatusCode> {
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let notes =
+        NoteWithoutFts::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let rendered: Vec<RenderedNote> = notes
+        .iter()
+        .map(|note| RenderedNote {
+            id: note.id,
+            rendered_content: format!(
+                "# {}\n\n{}",
+                note.title,
+                draftsmith_render::process_md(&note.content)
+            ),
+        })
+        .collect();
+
+    Ok(Json(rendered))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1288,5 +1389,86 @@ mod tests {
 
         assert_eq!(note1_hash.hash, compute_note_hash(&note1_with_parent));
         assert_eq!(note2_hash.hash, compute_note_hash(&note2_with_parent));
+    }
+
+    #[tokio::test]
+    async fn test_note_rendering() {
+        use crate::schema::notes::dsl::*;
+
+        let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
+        let mut conn = pool.get().expect("Failed to get connection");
+
+        // Create test notes with markdown content
+        let test_content1 = "# Test Header 1\n\nThis is a **test** note with _markdown_.";
+        let test_content2 = "# Test Header 2\n\nThis is another **test** note with _markdown_.";
+
+        let note1 = diesel::insert_into(notes)
+            .values(NewNote {
+                title: "Test Note 1",
+                content: test_content1,
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create test note 1");
+
+        let note2 = diesel::insert_into(notes)
+            .values(NewNote {
+                title: "Test Note 2",
+                content: test_content2,
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            })
+            .get_result::<Note>(&mut conn)
+            .expect("Failed to create test note 2");
+
+        let _cleanup = TestCleanup {
+            pool: pool.clone(),
+            note_ids: vec![note1.id, note2.id],
+        };
+
+        // Test single note HTML rendering
+        let html_response = render_note_html(Path(note1.id), State(state.clone()))
+            .await
+            .expect("Failed to render HTML");
+        assert!(html_response.contains("<h1>"));
+        assert!(html_response.contains("<strong>test</strong>"));
+        assert!(html_response.contains("<em>markdown</em>"));
+
+        // Test single note MD rendering
+        let md_response = render_note_md(Path(note1.id), State(state.clone()))
+            .await
+            .expect("Failed to render MD");
+        assert!(md_response.contains("# Test Header"));
+        assert!(md_response.contains("**test**"));
+        assert!(md_response.contains("_markdown_"));
+
+        // Test all notes HTML rendering
+        let all_html_response = render_all_notes_html(State(state.clone()))
+            .await
+            .expect("Failed to render all HTML");
+        let rendered_notes_html = all_html_response.0;
+
+        assert!(rendered_notes_html.len() >= 2);
+        let note1_html = rendered_notes_html
+            .iter()
+            .find(|n| n.id == note1.id)
+            .unwrap();
+        assert!(note1_html.rendered_content.contains("<h1>"));
+        assert!(note1_html
+            .rendered_content
+            .contains("<strong>test</strong>"));
+
+        // Test all notes MD rendering
+        let all_md_response = render_all_notes_md(State(state.clone()))
+            .await
+            .expect("Failed to render all MD");
+        let rendered_notes_md = all_md_response.0;
+
+        assert!(rendered_notes_md.len() >= 2);
+        let note1_md = rendered_notes_md.iter().find(|n| n.id == note1.id).unwrap();
+        assert!(note1_md.rendered_content.contains("# Test Header"));
+        assert!(note1_md.rendered_content.contains("**test**"));
     }
 }

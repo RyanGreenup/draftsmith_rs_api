@@ -3,6 +3,12 @@ pub use crate::api::{
     compute_note_hash, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
     CreateNoteRequest, NoteHash, NoteTreeNode, UpdateNoteRequest,
 };
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RenderedNote {
+    pub id: i32,
+    pub rendered_content: String,
+}
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::FLAT_API;
 use futures::future::join_all;
@@ -253,6 +259,50 @@ pub async fn get_all_note_hashes(base_url: &str) -> Result<Vec<NoteHash>, NoteEr
     let response = reqwest::get(url).await?.error_for_status()?;
     let hashes = response.json::<Vec<NoteHash>>().await?;
     Ok(hashes)
+}
+
+/// Fetch rendered HTML for a single note
+pub async fn get_note_rendered_html(base_url: &str, note_id: i32) -> Result<String, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/render/html", base_url, note_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let html = response.text().await?;
+    Ok(html)
+}
+
+/// Fetch rendered Markdown for a single note
+pub async fn get_note_rendered_md(base_url: &str, note_id: i32) -> Result<String, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/render/md", base_url, note_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let md = response.text().await?;
+    Ok(md)
+}
+
+/// Fetch rendered HTML for all notes
+pub async fn get_all_notes_rendered_html(base_url: &str) -> Result<Vec<RenderedNote>, NoteError> {
+    let url = format!("{}/{FLAT_API}/render/html", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let rendered_notes = response.json::<Vec<RenderedNote>>().await?;
+    Ok(rendered_notes)
+}
+
+/// Fetch rendered Markdown for all notes
+pub async fn get_all_notes_rendered_md(base_url: &str) -> Result<Vec<RenderedNote>, NoteError> {
+    let url = format!("{}/{FLAT_API}/render/md", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let rendered_notes = response.json::<Vec<RenderedNote>>().await?;
+    Ok(rendered_notes)
 }
 
 pub async fn batch_update_notes(
@@ -1081,6 +1131,134 @@ mod tests {
 
         // Cleanup
         std::fs::remove_file(temp_file)?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_note_rendered_html() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a test note with markdown content
+        let note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note".to_string(),
+                content: "**Bold** and *italic*".to_string(),
+            },
+        )
+        .await?;
+
+        // Test single note HTML rendering
+        let html = get_note_rendered_html(base_url, note.id).await?;
+        assert!(html.contains("<strong>Bold</strong>"));
+        assert!(html.contains("<em>italic</em>"));
+
+        // Test non-existent note
+        let result = get_note_rendered_html(base_url, -1).await;
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_note_rendered_md() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a test note with markdown content
+        let note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note".to_string(),
+                content: "λ#(21*2)#".to_string(),
+            },
+        )
+        .await?;
+
+        // Test single note Markdown rendering
+        let md = get_note_rendered_md(base_url, note.id).await?;
+        dbg!(format!("in: {}", note.content));
+        dbg!(format!("MD: {}", md));
+        dbg!(md.contains("42"));
+        assert!(md.contains("42")); // Assuming Rhai block was executed
+
+        // Test non-existent note
+        let result = get_note_rendered_md(base_url, -1).await;
+        assert!(matches!(result, Err(NoteError::NotFound(-1))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_notes_rendered_html() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create multiple test notes
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 1".to_string(),
+                content: "**Bold** text".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 2".to_string(),
+                content: "*Italic* text".to_string(),
+            },
+        )
+        .await?;
+
+        // Test all notes HTML rendering
+        let rendered_notes = get_all_notes_rendered_html(base_url).await?;
+        assert!(!rendered_notes.is_empty());
+
+        // Find our test notes in the results
+        let rendered1 = rendered_notes.iter().find(|n| n.id == note1.id).unwrap();
+        let rendered2 = rendered_notes.iter().find(|n| n.id == note2.id).unwrap();
+
+        assert!(rendered1.rendered_content.contains("<strong>Bold</strong>"));
+        assert!(rendered2.rendered_content.contains("<em>Italic</em>"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_all_notes_rendered_md() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create multiple test notes
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 1".to_string(),
+                content: "λ#(21*2)#".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 2".to_string(),
+                content: "Regular **markdown**".to_string(),
+            },
+        )
+        .await?;
+
+        // Test all notes Markdown rendering
+        let rendered_notes = get_all_notes_rendered_md(base_url).await?;
+        assert!(!rendered_notes.is_empty());
+
+        // Find our test notes in the results
+        let rendered1 = rendered_notes.iter().find(|n| n.id == note1.id).unwrap();
+        let rendered2 = rendered_notes.iter().find(|n| n.id == note2.id).unwrap();
+
+        assert!(rendered1.rendered_content.contains("42")); // Rhai block executed
+        assert!(rendered2.rendered_content.contains("**markdown**")); // Regular markdown preserved
 
         Ok(())
     }
