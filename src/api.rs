@@ -1040,18 +1040,35 @@ async fn get_asset(
         .first::<Asset>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
+    // Convert stored location to PathBuf
+    let file_path = PathBuf::from(&asset.location);
+
+    // Get the upload directory from environment or use a default
+    let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
+    let base_path = PathBuf::from(&upload_dir);
+
+    // Ensure the file path is within the base directory
+    if !file_path.starts_with(&base_path) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    // Check if file exists
+    if !file_path.exists() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
     // Read the file
-    let file_data = fs::read(&asset.location)
+    let file_data = fs::read(&file_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Guess the mime type
-    let mime_type = mime_guess::from_path(&asset.location)
+    let mime_type = mime_guess::from_path(&file_path)
         .first_or_octet_stream()
         .to_string();
 
     // Get the filename from the path
-    let filename = FilePath::new(&asset.location)
+    let display_filename = file_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("download");
@@ -1063,7 +1080,7 @@ async fn get_asset(
         ),
         (
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", filename)).unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename)).unwrap(),
         ),
     ];
 
@@ -1142,9 +1159,13 @@ async fn download_asset_by_filename(
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
     let base_path = PathBuf::from(&upload_dir);
 
-    // Sanitize the filename for security
-    let safe_filename = sanitize_filename::sanitize(&filename);
-    let file_path = base_path.join(&safe_filename);
+    // Convert the filename to a PathBuf and join with base path
+    let file_path = base_path.join(filename);
+
+    // Ensure the resulting path is within the base directory (prevent directory traversal)
+    if !file_path.starts_with(&base_path) {
+        return Err(StatusCode::FORBIDDEN);
+    }
 
     // Check if file exists
     if !file_path.exists() {
@@ -1161,6 +1182,12 @@ async fn download_asset_by_filename(
         .first_or_octet_stream()
         .to_string();
 
+    // Get the filename from the path
+    let display_filename = file_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("download");
+
     let headers: [(HeaderName, HeaderValue); 2] = [
         (
             header::CONTENT_TYPE,
@@ -1168,7 +1195,7 @@ async fn download_asset_by_filename(
         ),
         (
             header::CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", safe_filename)).unwrap(),
+            HeaderValue::from_str(&format!("attachment; filename=\"{}\"", display_filename)).unwrap(),
         ),
     ];
 
