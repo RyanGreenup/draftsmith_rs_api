@@ -918,7 +918,7 @@ async fn create_asset(
 
     // Get the upload directory from environment or use a default
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
-    let base_path = FilePath::new(&upload_dir);
+    let base_path = PathBuf::from(&upload_dir);
 
     // Create upload directory if it doesn't exist
     fs::create_dir_all(base_path)
@@ -972,13 +972,13 @@ async fn create_asset(
     let file_path = if let Some(custom_path) = asset_request.filename {
         // Sanitize the custom path
         let safe_path = sanitize_filename::sanitize(&custom_path);
-        PathBuf::from(base_path).join(safe_path)
+        base_path.join(safe_path)
     } else {
         // Use original filename or generate UUID
         let filename = original_filename
             .map(|name| sanitize_filename::sanitize(&name))
             .unwrap_or_else(|| Uuid::new_v4().to_string());
-        PathBuf::from(base_path).join(filename)
+        base_path.join(filename)
     };
 
     // Create parent directories if they don't exist
@@ -1015,7 +1015,7 @@ async fn create_asset(
         Json(AssetResponse {
             id: asset.id,
             note_id: asset.note_id,
-            location: asset.location,
+            location: PathBuf::from(asset.location),
             description: asset.description,
             created_at: asset.created_at,
         }),
@@ -1094,7 +1094,7 @@ async fn list_assets(
         .map(|asset| AssetResponse {
             id: asset.id,
             note_id: asset.note_id,
-            location: asset.location,
+            location: PathBuf::from(asset.location),
             description: asset.description,
             created_at: asset.created_at,
         })
@@ -1138,11 +1138,11 @@ async fn download_asset_by_filename(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Get the upload directory from environment or use a default
     let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
-    let base_path = FilePath::new(&upload_dir);
+    let base_path = PathBuf::from(&upload_dir);
 
     // Sanitize the filename for security
     let safe_filename = sanitize_filename::sanitize(&filename);
-    let file_path = base_path.join(&safe_filename);
+    let file_path = base_path.join(safe_filename);
 
     // Check if file exists
     if !file_path.exists() {
