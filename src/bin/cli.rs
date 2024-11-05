@@ -90,6 +90,11 @@ enum NotesCommands {
         #[arg(short = 't', long, value_enum, default_value_t = RenderType::Md)]
         render_type: RenderType,
     },
+    /// Full text search notes by content
+    Fts {
+        /// Search query
+        query: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -407,55 +412,105 @@ async fn main() {
                     output,
                     render_type,
                 } => {
-                    if let Some(note_id) = id {
-                        // Fetch the note
-                        match rust_cli_app::client::fetch_note(&url, note_id, false).await {
-                            Ok(note) => {
-                                // TODO, given that the note has come from the api
-                                // Should this simply pull the rendered content from the api?
-                                // That way there is a single source of truth for the rendered
-                                // content
-                                // Convert note content based on render type
-                                let rendered_output = match render_type {
-                                    RenderType::Html => {
-                                        draftsmith_render::parse_md_to_html(&note.content)
+                    let rendered_output = if let Some(note_id) = id {
+                        // Render single note
+                        let rendered_content = match render_type {
+                            RenderType::Html => {
+                                match rust_cli_app::client::get_note_rendered_html(&url, note_id)
+                                    .await
+                                {
+                                    Ok(html) => html,
+                                    Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                        eprintln!("Error: Note with id {} not found", id);
+                                        std::process::exit(1);
                                     }
-                                    RenderType::Md => draftsmith_render::process_md(&note.content),
-                                };
-
-                                // Write output to file or stdout
-                                if let Some(output_path) = output {
-                                    match std::fs::write(output_path.clone(), rendered_output) {
-                                        Ok(_) => println!(
-                                            "Rendered note {} to {}",
-                                            note_id,
-                                            output_path.display()
-                                        ),
-                                        Err(e) => {
-                                            eprintln!(
-                                                "Error writing to file {}: {}",
-                                                output_path.display(),
-                                                e
-                                            );
-                                            std::process::exit(1);
-                                        }
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
                                     }
-                                } else {
-                                    println!("{}", rendered_output);
                                 }
                             }
-                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
-                                eprintln!("Error: Note with id {} not found", id);
-                                std::process::exit(1);
+                            RenderType::Md => {
+                                match rust_cli_app::client::get_note_rendered_md(&url, note_id)
+                                    .await
+                                {
+                                    Ok(md) => md,
+                                    Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                        eprintln!("Error: Note with id {} not found", id);
+                                        std::process::exit(1);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                }
+                            }
+                        };
+                        // For single note, create a JSON structure
+                        serde_json::to_string_pretty(&rust_cli_app::client::RenderedNote {
+                            id: note_id,
+                            rendered_content,
+                        })
+                        .unwrap()
+                    } else {
+                        // Render all notes
+                        let rendered_notes = match render_type {
+                            RenderType::Html => {
+                                match rust_cli_app::client::get_all_notes_rendered_html(&url).await
+                                {
+                                    Ok(notes) => notes,
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                }
+                            }
+                            RenderType::Md => {
+                                match rust_cli_app::client::get_all_notes_rendered_md(&url).await {
+                                    Ok(notes) => notes,
+                                    Err(e) => {
+                                        eprintln!("Error: {}", e);
+                                        std::process::exit(1);
+                                    }
+                                }
+                            }
+                        };
+                        // Convert to JSON
+                        serde_json::to_string_pretty(&rendered_notes).unwrap()
+                    };
+
+                    // Write output to file or stdout
+                    if let Some(output_path) = output {
+                        match std::fs::write(output_path.clone(), rendered_output) {
+                            Ok(_) => {
+                                if let Some(note_id) = id {
+                                    println!(
+                                        "Rendered note {} to {}",
+                                        note_id,
+                                        output_path.display()
+                                    );
+                                } else {
+                                    println!("Rendered all notes to {}", output_path.display());
+                                }
                             }
                             Err(e) => {
-                                eprintln!("Error: {}", e);
+                                eprintln!("Error writing to file {}: {}", output_path.display(), e);
                                 std::process::exit(1);
                             }
                         }
                     } else {
-                        eprintln!("Error: --id is required for render command");
-                        std::process::exit(1);
+                        println!("{}", rendered_output);
+                    }
+                }
+                NotesCommands::Fts { query } => {
+                    match rust_cli_app::client::fts_search_notes(&url, &query).await {
+                        Ok(notes) => {
+                            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             },

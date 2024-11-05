@@ -1,6 +1,7 @@
 use crate::client::NoteError;
 use crate::tables::{HierarchyMapping, NoteWithParent};
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
+use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
@@ -55,6 +56,11 @@ pub struct NoteMetadataResponse {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct AttachChildRequest {
     pub child_note_id: i32,
@@ -73,6 +79,37 @@ pub struct NoteTreeNode {
     pub children: Vec<NoteTreeNode>,
 }
 
+async fn fts_search_notes(
+    State(state): State<AppState>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<NoteWithoutFts>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+    use diesel::dsl::sql;
+    use diesel::prelude::*;
+    use diesel::sql_types::{Bool, Float8};
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Convert the search query to a tsquery, escaping single quotes
+    let tsquery = format!(
+        "plainto_tsquery('english', '{}')",
+        query.q.replace('\'', "''")
+    );
+
+    // Perform the full text search using ts_rank
+    let results = notes
+        .select((id, title, content, created_at, modified_at))
+        .filter(sql::<Bool>(&format!("fts @@ {}", tsquery)))
+        .order_by(sql::<Float8>(&format!("ts_rank(fts, {}) DESC", tsquery)))
+        .load::<NoteWithoutFts>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(results))
+}
+
 pub fn create_router(pool: Pool) -> Router {
     let state = AppState {
         pool: Arc::new(pool),
@@ -82,9 +119,13 @@ pub fn create_router(pool: Pool) -> Router {
 
     Router::new()
         .layer(DefaultBodyLimit::max(max_body_size))
+        .route(format!("/{SEARCH_FTS_API}").as_str(), get(fts_search_notes))
+        .route("/notes/search/semantic", get(fts_search_notes))
+        .route("/notes/search/hybrid", get(fts_search_notes))
+        .route("/notes/search/typesense", get(fts_search_notes))
         .route("/notes/flat", get(list_notes).post(create_note))
         .route(
-            "/notes/flat/:id",
+            format!("/{FLAT_API}/:id").as_str(),
             get(get_note).put(update_note).delete(delete_note),
         )
         .route("/notes/flat/:id/hash", get(get_note_hash))

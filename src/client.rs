@@ -4,13 +4,13 @@ pub use crate::api::{
     CreateNoteRequest, NoteHash, NoteTreeNode, UpdateNoteRequest,
 };
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct RenderedNote {
     pub id: i32,
     pub rendered_content: String,
 }
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
-use crate::FLAT_API;
+use crate::{FLAT_API, SEARCH_FTS_API};
 use futures::future::join_all;
 use reqwest::Error as ReqwestError;
 use reqwest::StatusCode;
@@ -303,6 +303,20 @@ pub async fn get_all_notes_rendered_md(base_url: &str) -> Result<Vec<RenderedNot
     let response = reqwest::get(url).await?.error_for_status()?;
     let rendered_notes = response.json::<Vec<RenderedNote>>().await?;
     Ok(rendered_notes)
+}
+
+pub async fn fts_search_notes(
+    base_url: &str,
+    query: &str,
+) -> Result<Vec<NoteWithoutFts>, NoteError> {
+    let url = format!(
+        "{}/{SEARCH_FTS_API}?q={}",
+        base_url,
+        urlencoding::encode(query)
+    );
+    let response = reqwest::get(&url).await?.error_for_status()?;
+    let notes = response.json::<Vec<NoteWithoutFts>>().await?;
+    Ok(notes)
 }
 
 pub async fn batch_update_notes(
@@ -1336,6 +1350,63 @@ mod tests {
             hash1.hash, updated_hash1.hash,
             "Hash should change when note content changes"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fts_search_notes() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create test notes with specific content
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 1".to_string(),
+                content: "The quick brown fox jumps over the lazy dog".to_string(),
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Test Note 2".to_string(),
+                content: "Pack my box with five dozen liquor jugs".to_string(),
+            },
+        )
+        .await?;
+
+        // Give the database time to update the FTS index
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Test exact word match
+        let results = fts_search_notes(base_url, "fox").await?;
+        assert!(!results.is_empty());
+        assert!(results.iter().any(|n| n.id == note1.id));
+        assert!(!results.iter().any(|n| n.id == note2.id));
+
+        // Test partial word match (should not match due to FTS tokenization)
+        let results = fts_search_notes(base_url, "fo").await?;
+        assert!(results.is_empty());
+
+        // Test multiple word search
+        let results = fts_search_notes(base_url, "quick brown").await?;
+        assert!(!results.is_empty());
+        assert!(results.iter().any(|n| n.id == note1.id));
+
+        // Test stemming (searching for "jumping" should find "jumps")
+        let results = fts_search_notes(base_url, "jumping").await?;
+        assert!(!results.is_empty());
+        assert!(results.iter().any(|n| n.id == note1.id));
+
+        // Test stop word handling ("the" should be ignored)
+        let results = fts_search_notes(base_url, "the").await?;
+        assert!(results.is_empty());
+
+        // Test non-existent term
+        let results = fts_search_notes(base_url, "nonexistentterm").await?;
+        assert!(results.is_empty());
 
         Ok(())
     }
