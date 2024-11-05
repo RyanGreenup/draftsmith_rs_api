@@ -81,7 +81,14 @@ pub struct UpdateAssetRequest {
     pub description: Option<String>,
 }
 
-pub type AssetResponse = AssetWithoutFts;
+#[derive(Serialize, Deserialize)]
+pub struct AssetResponse {
+    pub id: i32,
+    pub note_id: Option<i32>,
+    pub location: PathBuf,
+    pub description: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 
 #[derive(Deserialize)]
 pub struct ListAssetsParams {
