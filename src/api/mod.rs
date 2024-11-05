@@ -25,7 +25,7 @@ struct RenderedNote {
     id: i32,
     rendered_content: String,
 }
-use hierarchy::is_circular_hierarchy;
+use hierarchy::{is_circular_hierarchy, attach_child_note};
 use sha2::{Digest, Sha256};
 use state::{AppState, Pool};
 use std::collections::{HashMap, HashSet};
@@ -484,57 +484,6 @@ async fn delete_note(
     }
 }
 
-async fn attach_child_note(
-    State(state): State<AppState>,
-    Json(payload): Json<AttachChildRequest>,
-) -> Result<StatusCode, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::*;
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Prevent circular hierarchy
-    if let Some(parent_id) = payload.parent_note_id {
-        if is_circular_hierarchy(&mut conn, payload.child_note_id, Some(parent_id))
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        {
-            return Err(StatusCode::BAD_REQUEST); // Circular hierarchy detected
-        }
-    }
-
-    // Check if a hierarchy entry already exists for the child
-    let existing_entry = note_hierarchy
-        .filter(child_note_id.eq(payload.child_note_id))
-        .first::<NoteHierarchy>(&mut conn)
-        .optional()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if existing_entry.is_some() {
-        // Update the existing hierarchy entry
-        diesel::update(note_hierarchy.filter(child_note_id.eq(payload.child_note_id)))
-            .set((
-                parent_note_id.eq(payload.parent_note_id),
-                hierarchy_type.eq(payload.hierarchy_type.clone()),
-            ))
-            .execute(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    } else {
-        // Create a new hierarchy entry
-        let new_entry = NewNoteHierarchy {
-            child_note_id: Some(payload.child_note_id),
-            parent_note_id: payload.parent_note_id,
-            hierarchy_type: payload.hierarchy_type.as_deref(),
-        };
-
-        diesel::insert_into(note_hierarchy)
-            .values(&new_entry)
-            .execute(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
-
-    Ok(StatusCode::OK)
-}
 
 async fn detach_child_note(
     State(state): State<AppState>,
