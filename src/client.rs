@@ -417,13 +417,14 @@ pub async fn create_asset(
     file_path: &std::path::Path,
     note_id: Option<i32>,
     description: Option<String>,
+    filename: Option<String>,
 ) -> Result<AssetResponse, NoteError> {
     let client = reqwest::Client::new();
     let url = format!("{}/assets", base_url);
 
     // Read file content
     let file_content = tokio::fs::read(file_path).await?;
-    let file_name = file_path
+    let default_filename = file_path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("file")
@@ -431,7 +432,7 @@ pub async fn create_asset(
 
     // Create multipart form
     let file_part = reqwest::multipart::Part::bytes(file_content)
-        .file_name(file_name)
+        .file_name(default_filename)
         .mime_str("application/octet-stream")?;
 
     let mut form = reqwest::multipart::Form::new().part("file", file_part);
@@ -442,6 +443,9 @@ pub async fn create_asset(
     }
     if let Some(desc) = description {
         form = form.text("description", desc);
+    }
+    if let Some(fname) = filename {
+        form = form.text("filename", fname);
     }
 
     // Send request
@@ -1557,20 +1561,36 @@ mod tests {
         let mut temp_file = tempfile::NamedTempFile::new()?;
         write!(temp_file, "test content")?;
 
-        // Create asset
-        let asset = create_asset(
+        // Test with default filename
+        let asset1 = create_asset(
             base_url,
             temp_file.path(),
             None,
             Some("Test asset".to_string()),
+            None,  // No custom filename
         )
         .await?;
 
-        // Verify response
-        assert!(asset.id > 0);
-        assert!(!asset.location.is_empty());
-        assert_eq!(asset.description, Some("Test asset".to_string()));
-        assert!(asset.created_at.is_some());
+        // Test with custom filename
+        let asset2 = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset with custom filename".to_string()),
+            Some("custom/path/test.txt".to_string()),
+        )
+        .await?;
+
+        // Verify responses
+        assert!(asset1.id > 0);
+        assert!(!asset1.location.is_empty());
+        assert_eq!(asset1.description, Some("Test asset".to_string()));
+        assert!(asset1.created_at.is_some());
+
+        assert!(asset2.id > 0);
+        assert!(asset2.location.contains("custom/path/test.txt"));
+        assert_eq!(asset2.description, Some("Test asset with custom filename".to_string()));
+        assert!(asset2.created_at.is_some());
 
         Ok(())
     }
@@ -1589,6 +1609,7 @@ mod tests {
             temp_file.path(),
             None,
             Some("Test asset".to_string()),
+            None,
         )
         .await?;
 
@@ -1626,6 +1647,7 @@ mod tests {
             temp_file.path(),
             None,
             Some("Test asset for listing".to_string()),
+            None,
         )
         .await?;
 
@@ -1663,6 +1685,7 @@ mod tests {
             temp_file.path(),
             None,
             Some("Test asset".to_string()),
+            None,
         )
         .await?;
 
