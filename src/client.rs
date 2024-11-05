@@ -1768,6 +1768,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_delete_asset() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // First create a test file and asset
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "test content")?;
+
+        let created_asset = create_asset(
+            base_url,
+            temp_file.path(),
+            None,
+            Some("Test asset for deletion".to_string()),
+            None,
+        )
+        .await?;
+
+        // Delete the asset
+        delete_asset(base_url, created_asset.id).await?;
+
+        // Verify the asset was deleted by trying to get it
+        let output_path = std::env::temp_dir().join("deleted_asset_test.tmp");
+        let result = get_asset(base_url, created_asset.id, &output_path).await;
+        assert!(matches!(result, Err(NoteError::NotFound(_))));
+
+        // Test deleting non-existent asset
+        let result = delete_asset(base_url, -1).await;
+        assert!(matches!(result, Err(AssetError::NotFound(-1))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_create_asset_with_options() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = crate::BASE_URL;
 
