@@ -195,7 +195,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
         .route(
-            "/assets/download/:filename",
+            "/assets/download/*filepath",
             get(download_asset_by_filename),
         )
         .with_state(state)
