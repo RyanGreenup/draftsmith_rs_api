@@ -32,7 +32,7 @@ where
     }
 
     // Create a map of item id to data for easy lookup
-    let items_map: HashMap<_, _> = items.iter().map(|(id, data)| (*id, data)).collect();
+    let items_map: HashMap<_, _> = items.iter().map(|(item_id, data)| (*item_id, data)).collect();
 
     // Function to recursively build the tree
     fn build_subtree<T: Clone>(
@@ -60,8 +60,8 @@ where
     // Build trees starting from root items (items that aren't children)
     let mut tree: Vec<BasicTreeNode<T>> = items
         .iter()
-        .filter(|(id, _)| !child_items.contains(id))
-        .map(|(id, _)| build_subtree(*id, &items_map, &parent_to_children))
+        .filter(|(item_id, _)| !child_items.contains(item_id))
+        .map(|(item_id, _)| build_subtree(*item_id, &items_map, &parent_to_children))
         .collect();
 
     // Sort the tree by item ID for consistent ordering
