@@ -223,7 +223,7 @@ pub async fn create_asset(
     // Add file
     let file_content = tokio::fs::read(file_path).await?;
     let file_part = reqwest::multipart::Part::bytes(file_content)
-        .file_name(filename.unwrap_or_else(|| {
+        .file_name(filename.clone().unwrap_or_else(|| {
             file_path
                 .file_name()
                 .and_then(|n| n.to_str())
