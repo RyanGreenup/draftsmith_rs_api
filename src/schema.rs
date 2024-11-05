@@ -50,7 +50,6 @@ diesel::table! {
         id -> Int4,
         parent_note_id -> Nullable<Int4>,
         child_note_id -> Nullable<Int4>,
-        hierarchy_type -> Nullable<Text>,
     }
 }
 
@@ -124,6 +123,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    task_hierarchy (id) {
+        id -> Int4,
+        parent_task_id -> Nullable<Int4>,
+        child_task_id -> Nullable<Int4>,
+    }
+}
+
+diesel::table! {
     task_schedules (id) {
         id -> Int4,
         task_id -> Int4,
@@ -175,6 +182,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     tag_hierarchy,
     tags,
     task_clocks,
+    task_hierarchy,
     task_schedules,
     tasks,
 );

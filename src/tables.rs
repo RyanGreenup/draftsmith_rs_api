@@ -104,7 +104,6 @@ pub struct NewNoteAttribute<'a> {
 pub struct HierarchyMapping {
     pub parent_id: Option<i32>,
     pub child_id: i32,
-    pub hierarchy_type: Option<String>,
 }
 
 #[derive(Debug, Queryable, Selectable)]
@@ -113,7 +112,6 @@ pub struct NoteHierarchy {
     pub id: i32,
     pub parent_note_id: Option<i32>,
     pub child_note_id: Option<i32>,
-    pub hierarchy_type: Option<String>,
 }
 
 impl NoteHierarchy {
@@ -123,16 +121,15 @@ impl NoteHierarchy {
         use crate::schema::note_hierarchy::dsl::*;
 
         let hierarchies = note_hierarchy
-            .select((parent_note_id, child_note_id, hierarchy_type))
-            .load::<(Option<i32>, Option<i32>, Option<String>)>(conn)?;
+            .select((parent_note_id, child_note_id))
+            .load::<(Option<i32>, Option<i32>)>(conn)?;
 
         Ok(hierarchies
             .into_iter()
-            .filter_map(|(parent, child, h_type)| {
+            .filter_map(|(parent, child)| {
                 child.map(|c| HierarchyMapping {
                     parent_id: parent,
                     child_id: c,
-                    hierarchy_type: h_type,
                 })
             })
             .collect())
@@ -141,10 +138,9 @@ impl NoteHierarchy {
 
 #[derive(Insertable)]
 #[diesel(table_name = note_hierarchy)]
-pub struct NewNoteHierarchy<'a> {
+pub struct NewNoteHierarchy {
     pub parent_note_id: Option<i32>,
     pub child_note_id: Option<i32>,
-    pub hierarchy_type: Option<&'a str>,
 }
 
 #[derive(Debug, Queryable, Selectable)]
@@ -218,7 +214,7 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable, Serialize, Deserialize)]
+#[derive(Debug, Queryable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
     pub id: i32,
@@ -348,6 +344,21 @@ pub struct Tag {
 #[diesel(table_name = crate::schema::tags)]
 pub struct NewTag<'a> {
     pub name: &'a str,
+}
+
+#[derive(Debug, Queryable, Selectable)]
+#[diesel(table_name = task_hierarchy)]
+pub struct TaskHierarchy {
+    pub id: i32,
+    pub parent_task_id: Option<i32>,
+    pub child_task_id: Option<i32>,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = task_hierarchy)]
+pub struct NewTaskHierarchy {
+    pub parent_task_id: Option<i32>,
+    pub child_task_id: Option<i32>,
 }
 
 #[derive(Debug, Queryable, Selectable)]
@@ -856,14 +867,10 @@ mod tests {
                 .get_result::<Note>(conn)
                 .expect("Error saving child note");
 
-            let hierarchy_type_var = "subpage";
-            let hierarchy_type_var2 = "block";
-
             // Test Create
             let new_hierarchy = NewNoteHierarchy {
                 parent_note_id: Some(created_parent.id),
                 child_note_id: Some(created_child.id),
-                hierarchy_type: Some(hierarchy_type_var),
             };
 
             let created_hierarchy = diesel::insert_into(note_hierarchy::table)
@@ -877,10 +884,6 @@ mod tests {
             ));
             assert_eq!(created_hierarchy.parent_note_id, Some(created_parent.id));
             assert_eq!(created_hierarchy.child_note_id, Some(created_child.id));
-            assert_eq!(
-                created_hierarchy.hierarchy_type,
-                Some(hierarchy_type_var.to_string())
-            );
 
             // Test Read
             let read_hierarchy = note_hierarchy::table
@@ -896,18 +899,6 @@ mod tests {
             assert_eq!(
                 read_hierarchy.child_note_id,
                 created_hierarchy.child_note_id
-            );
-
-            // Test Update
-            let updated_hierarchy =
-                diesel::update(note_hierarchy::table.find(created_hierarchy.id))
-                    .set(note_hierarchy::hierarchy_type.eq(Some(hierarchy_type_var2)))
-                    .get_result::<NoteHierarchy>(conn)
-                    .expect("Error updating note hierarchy");
-
-            assert_eq!(
-                updated_hierarchy.hierarchy_type,
-                Some(hierarchy_type_var2.to_string())
             );
 
             dbg!(format!(
@@ -1590,6 +1581,141 @@ mod tests {
             let find_result = task_schedules::table
                 .find(created_schedule.id)
                 .first::<TaskSchedule>(conn);
+
+            assert!(matches!(find_result, Err(DieselError::NotFound)));
+
+            Ok::<(), diesel::result::Error>(())
+        });
+    }
+
+    #[test]
+    fn test_task_hierarchy_crud() {
+        let conn = &mut establish_connection();
+
+        conn.test_transaction(|conn| {
+            // First create two tasks to work with
+            let new_note1 = NewNote {
+                title: "Parent Task Note",
+                content: "This is a parent task note for hierarchy testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note1 = diesel::insert_into(notes::table)
+                .values(&new_note1)
+                .get_result::<Note>(conn)
+                .expect("Error saving parent note");
+
+            let new_note2 = NewNote {
+                title: "Child Task Note",
+                content: "This is a child task note for hierarchy testing",
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+            };
+
+            let created_note2 = diesel::insert_into(notes::table)
+                .values(&new_note2)
+                .get_result::<Note>(conn)
+                .expect("Error saving child note");
+
+            let new_parent_task = NewTask {
+                note_id: Some(created_note1.id),
+                status: "todo",
+                effort_estimate: Some(bigdecimal::BigDecimal::from(2)),
+                actual_effort: None,
+                deadline: Some(chrono::Utc::now().naive_utc()),
+                priority: Some(1),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: Some(1),
+            };
+
+            let created_parent = diesel::insert_into(tasks::table)
+                .values(&new_parent_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving parent task");
+
+            let new_child_task = NewTask {
+                note_id: Some(created_note2.id),
+                status: "todo",
+                effort_estimate: Some(bigdecimal::BigDecimal::from(1)),
+                actual_effort: None,
+                deadline: Some(chrono::Utc::now().naive_utc()),
+                priority: Some(2),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: Some(1),
+            };
+
+            let created_child = diesel::insert_into(tasks::table)
+                .values(&new_child_task)
+                .get_result::<Task>(conn)
+                .expect("Error saving child task");
+
+            // Test Create
+            let new_hierarchy = NewTaskHierarchy {
+                parent_task_id: Some(created_parent.id),
+                child_task_id: Some(created_child.id),
+            };
+
+            let created_hierarchy = diesel::insert_into(task_hierarchy::table)
+                .values(&new_hierarchy)
+                .get_result::<TaskHierarchy>(conn)
+                .expect("Error saving new task hierarchy");
+
+            dbg!(format!(
+                "Created Task Hierarchy #: {:?}",
+                created_hierarchy.id
+            ));
+            assert_eq!(created_hierarchy.parent_task_id, Some(created_parent.id));
+            assert_eq!(created_hierarchy.child_task_id, Some(created_child.id));
+
+            // Test Read
+            let read_hierarchy = task_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<TaskHierarchy>(conn)
+                .expect("Error loading task hierarchy");
+
+            assert_eq!(read_hierarchy.id, created_hierarchy.id);
+            assert_eq!(
+                read_hierarchy.parent_task_id,
+                created_hierarchy.parent_task_id
+            );
+            assert_eq!(
+                read_hierarchy.child_task_id,
+                created_hierarchy.child_task_id
+            );
+
+            // Test Update - Switch parent and child
+            let updated_hierarchy =
+                diesel::update(task_hierarchy::table.find(created_hierarchy.id))
+                    .set((
+                        task_hierarchy::parent_task_id.eq(Some(created_child.id)),
+                        task_hierarchy::child_task_id.eq(Some(created_parent.id)),
+                    ))
+                    .get_result::<TaskHierarchy>(conn)
+                    .expect("Error updating task hierarchy");
+
+            assert_eq!(updated_hierarchy.parent_task_id, Some(created_child.id));
+            assert_eq!(updated_hierarchy.child_task_id, Some(created_parent.id));
+
+            dbg!(format!(
+                "Deleting Task Hierarchy #: {:?}",
+                created_hierarchy.id
+            ));
+            // Test Delete
+            let deleted_count = diesel::delete(task_hierarchy::table.find(created_hierarchy.id))
+                .execute(conn)
+                .expect("Error deleting task hierarchy");
+
+            assert_eq!(deleted_count, 1);
+
+            // Verify deletion
+            let find_result = task_hierarchy::table
+                .find(created_hierarchy.id)
+                .first::<TaskHierarchy>(conn);
 
             assert!(matches!(find_result, Err(DieselError::NotFound)));
 

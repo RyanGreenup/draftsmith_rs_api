@@ -550,7 +550,6 @@ pub struct SimpleNode {
     pub id: i32,
     #[allow(unused)]
     pub title: String,
-    pub hierarchy_type: Option<String>,
     pub children: Vec<SimpleNode>,
 }
 
@@ -558,7 +557,6 @@ fn simplify_tree(node: &NoteTreeNode) -> SimpleNode {
     SimpleNode {
         id: node.id,
         title: node.title.clone().expect("Node title should not be None"),
-        hierarchy_type: node.hierarchy_type.clone(),
         children: node.children.iter().map(simplify_tree).collect(),
     }
 }
@@ -571,7 +569,6 @@ pub fn write_hierarchy_to_yaml(
         SimpleNode {
             id: node.id,
             title: node.title.clone().expect("Node title should not be None"),
-            hierarchy_type: node.hierarchy_type.clone(),
             children: node.children.iter().map(simplify_tree).collect(),
         }
     }
@@ -592,7 +589,6 @@ fn simple_node_to_note_tree_node(
         content: content_map.get(&simple_node.id).cloned(),
         created_at: None,
         modified_at: None,
-        hierarchy_type: simple_node.hierarchy_type.clone(),
         children: simple_node
             .children
             .iter()
@@ -886,7 +882,6 @@ mod tests {
         let attach_request = AttachChildRequest {
             child_note_id: child_note.id,
             parent_note_id: Some(parent_note.id),
-            hierarchy_type: Some("block".to_string()),
         };
         let attach_result = attach_child_note(base_url, attach_request).await;
         assert!(attach_result.is_ok(), "Failed to attach child note");
@@ -987,7 +982,6 @@ mod tests {
             content: Some("Updated root content".to_string()),
             created_at: None,
             modified_at: None,
-            hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
                     id: child1_note.id,
@@ -995,7 +989,6 @@ mod tests {
                     content: Some("Updated child 1 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -1004,7 +997,6 @@ mod tests {
                     content: Some("Updated child 2 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
             ],
@@ -1042,7 +1034,6 @@ mod tests {
             .expect("Could not find child1");
         // assert_eq!(child1.title, "Updated Child 1");
         assert_eq!(child1.content, Some("Updated child 1 content".to_string()));
-        assert_eq!(child1.hierarchy_type, Some("block".to_string()));
 
         let child2 = updated_tree
             .children
@@ -1051,47 +1042,6 @@ mod tests {
             .expect("Could not find child2");
         // assert_eq!(child2.title, "Updated Child 2");
         assert_eq!(child2.content, Some("Updated child 2 content".to_string()));
-        assert_eq!(child2.hierarchy_type, Some("block".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_attach_child_note_invalid_hierarchy_type() {
-        let base_url = BASE_URL;
-
-        // Create parent and child notes
-        let parent_note = create_note(
-            base_url,
-            CreateNoteRequest {
-                title: "Parent Note".to_string(),
-                content: "This is the parent note".to_string(),
-            },
-        )
-        .await
-        .unwrap();
-
-        let child_note = create_note(
-            base_url,
-            CreateNoteRequest {
-                title: "Child Note".to_string(),
-                content: "This is the child note".to_string(),
-            },
-        )
-        .await
-        .unwrap();
-
-        // Attempt to attach with an invalid hierarchy type
-        let attach_request = AttachChildRequest {
-            child_note_id: child_note.id,
-            parent_note_id: Some(parent_note.id),
-            hierarchy_type: Some("invalid_type".to_string()),
-        };
-        let attach_result = attach_child_note(base_url, attach_request).await;
-
-        // Expecting an error due to invalid hierarchy type
-        assert!(
-            attach_result.is_err(),
-            "Attachment should fail with invalid hierarchy type"
-        );
     }
 
     #[tokio::test]
@@ -1124,7 +1074,6 @@ mod tests {
         let attach_request = AttachChildRequest {
             child_note_id: note2.id,
             parent_note_id: Some(note1.id),
-            hierarchy_type: Some("block".to_string()),
         };
         attach_child_note(base_url, attach_request).await?;
 
@@ -1193,7 +1142,6 @@ mod tests {
         let attach_request = AttachChildRequest {
             child_note_id: note2.id,
             parent_note_id: Some(note1.id),
-            hierarchy_type: Some("block".to_string()),
         };
         attach_child_note(base_url, attach_request).await?;
 
@@ -1256,7 +1204,6 @@ mod tests {
         let root = restored_tree.iter().find(|n| n.id == note1.id).unwrap();
         assert_eq!(root.children.len(), 1);
         assert_eq!(root.children[0].id, note2.id);
-        assert_eq!(root.children[0].hierarchy_type, Some("block".to_string()));
 
         Ok(())
     }
@@ -1313,7 +1260,6 @@ mod tests {
         let attach_request = AttachChildRequest {
             child_note_id: child_note.id,
             parent_note_id: Some(root_note.id),
-            hierarchy_type: Some("block".to_string()),
         };
         attach_child_note(base_url, attach_request).await?;
 

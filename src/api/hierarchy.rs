@@ -12,13 +12,13 @@ pub struct BasicTreeNode<T> {
 pub fn build_generic_tree<T>(
     items: &[(i32, T)],
     hierarchies: &[(i32, i32)], // (child_id, parent_id)
-) -> Vec<BasicTreeNode<T>> 
+) -> Vec<BasicTreeNode<T>>
 where
     T: Clone,
 {
     // Create a map of parent_id to children
     let mut parent_to_children: HashMap<Option<i32>, Vec<i32>> = HashMap::new();
-    
+
     // Track which items are children
     let mut child_items: HashSet<i32> = HashSet::new();
 
@@ -32,7 +32,10 @@ where
     }
 
     // Create a map of item id to data for easy lookup
-    let items_map: HashMap<_, _> = items.iter().map(|(item_id, data)| (*item_id, data)).collect();
+    let items_map: HashMap<_, _> = items
+        .iter()
+        .map(|(item_id, data)| (*item_id, data))
+        .collect();
 
     // Function to recursively build the tree
     fn build_subtree<T: Clone>(
@@ -106,7 +109,6 @@ pub struct NoteTreeNode {
     pub content: Option<String>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
-    pub hierarchy_type: Option<String>,
     pub children: Vec<NoteTreeNode>,
 }
 
@@ -140,10 +142,7 @@ pub async fn attach_child_note(
     if existing_entry.is_some() {
         // Update the existing hierarchy entry
         diesel::update(note_hierarchy.filter(child_note_id.eq(payload.child_note_id)))
-            .set((
-                parent_note_id.eq(payload.parent_note_id),
-                hierarchy_type.eq(payload.hierarchy_type.clone()),
-            ))
+            .set(parent_note_id.eq(payload.parent_note_id))
             .execute(&mut conn)
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     } else {
@@ -151,7 +150,6 @@ pub async fn attach_child_note(
         let new_entry = NewNoteHierarchy {
             child_note_id: Some(payload.child_note_id),
             parent_note_id: payload.parent_note_id,
-            hierarchy_type: payload.hierarchy_type.as_deref(),
         };
 
         diesel::insert_into(note_hierarchy)
@@ -195,8 +193,8 @@ pub async fn get_note_tree(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all notes
-    let all_notes = NoteWithoutFts::get_all(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let all_notes =
+        NoteWithoutFts::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all hierarchies
     let hierarchies: Vec<NoteHierarchy> = note_hierarchy
@@ -204,10 +202,8 @@ pub async fn get_note_tree(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Prepare data for generic tree building
-    let note_data: Vec<(i32, NoteWithoutFts)> = all_notes
-        .into_iter()
-        .map(|note| (note.id, note))
-        .collect();
+    let note_data: Vec<(i32, NoteWithoutFts)> =
+        all_notes.into_iter().map(|note| (note.id, note)).collect();
 
     let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
         .iter()
@@ -229,8 +225,11 @@ pub async fn get_note_tree(
             content: Some(basic_node.data.content),
             created_at: basic_node.data.created_at,
             modified_at: basic_node.data.modified_at,
-            hierarchy_type: None, // This will be handled separately if needed
-            children: basic_node.children.into_iter().map(convert_to_note_tree).collect(),
+            children: basic_node
+                .children
+                .into_iter()
+                .map(convert_to_note_tree)
+                .collect(),
         }
     }
 
@@ -259,7 +258,7 @@ pub async fn update_database_from_notetreenode(
     // Recursive function to process each node
     fn process_node(
         conn: &mut PgConnection,
-        mut node: NoteTreeNode,
+        node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
         eprintln!("Processing node: id={}, title={:?}", node.id, node.title);
@@ -301,23 +300,6 @@ pub async fn update_database_from_notetreenode(
             node.id
         };
 
-        // After determining 'node_id', but before deleting the existing hierarchy
-        // NOTE this is because hierarchy_type is still not a core component.
-        if node.hierarchy_type.is_none() {
-            use crate::schema::note_hierarchy::dsl::*;
-
-            // Retrieve the existing hierarchy_type from the database
-            let existing_hierarchy = note_hierarchy
-                .filter(child_note_id.eq(node_id))
-                .first::<NoteHierarchy>(conn)
-                .optional()?;
-
-            if let Some(existing_h) = existing_hierarchy {
-                // Assign the existing hierarchy_type to the node
-                node.hierarchy_type = existing_h.hierarchy_type.clone();
-            }
-        }
-
         // Update hierarchy
 
         // Update hierarchy only if there is a parent
@@ -329,7 +311,6 @@ pub async fn update_database_from_notetreenode(
             let new_hierarchy = NewNoteHierarchy {
                 child_note_id: Some(node_id),
                 parent_note_id: Some(p_id),
-                hierarchy_type: node.hierarchy_type.as_deref(),
             };
             diesel::insert_into(note_hierarchy)
                 .values(&new_hierarchy)
@@ -382,7 +363,6 @@ mod note_hierarchy_tests {
             content: Some(root_content.clone()),
             created_at: None,
             modified_at: None,
-            hierarchy_type: None,
             children: vec![
                 NoteTreeNode {
                     id: 0,
@@ -390,7 +370,6 @@ mod note_hierarchy_tests {
                     content: Some(child1_content.clone()),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -399,7 +378,6 @@ mod note_hierarchy_tests {
                     content: Some(child2_content.clone()),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 },
             ],
@@ -547,7 +525,6 @@ mod note_hierarchy_tests {
             .values(&NewNoteHierarchy {
                 child_note_id: Some(child1_note.id),
                 parent_note_id: Some(root_note.id),
-                hierarchy_type: Some("block"),
             })
             .execute(&mut conn)
             .expect("Failed to create first hierarchy link");
@@ -556,7 +533,6 @@ mod note_hierarchy_tests {
             .values(&NewNoteHierarchy {
                 child_note_id: Some(child2_note.id),
                 parent_note_id: Some(child1_note.id),
-                hierarchy_type: Some("block"),
             })
             .execute(&mut conn)
             .expect("Failed to create second hierarchy link");
@@ -578,21 +554,18 @@ mod note_hierarchy_tests {
             content: Some(note_root_content_updated.to_string()),
             created_at: None,
             modified_at: None,
-            hierarchy_type: None,
             children: vec![NoteTreeNode {
                 id: child2_id,
                 title: Some(child2_title),
                 content: Some(note_2_content_updated.to_string()),
                 created_at: None,
                 modified_at: None,
-                hierarchy_type: Some("block".to_string()),
                 children: vec![NoteTreeNode {
                     id: child1_id,
                     title: Some(child1_title),
                     content: Some(note_1_content_updated.to_string()),
                     created_at: None,
                     modified_at: None,
-                    hierarchy_type: Some("block".to_string()),
                     children: vec![],
                 }],
             }],
@@ -613,7 +586,6 @@ mod note_hierarchy_tests {
             .expect("Failed to load root children");
         assert_eq!(root_children.len(), 1);
         assert_eq!(root_children[0].child_note_id, Some(child2_id));
-        assert_eq!(root_children[0].hierarchy_type, Some("block".to_string()));
 
         // Check child1 is now under child2
         let child2_children = note_hierarchy
@@ -622,7 +594,6 @@ mod note_hierarchy_tests {
             .expect("Failed to load child2 children");
         assert_eq!(child2_children.len(), 1);
         assert_eq!(child2_children[0].child_note_id, Some(child1_id));
-        assert_eq!(child2_children[0].hierarchy_type, Some("block".to_string()));
 
         // Check child1 has no children
         let child1_children = note_hierarchy

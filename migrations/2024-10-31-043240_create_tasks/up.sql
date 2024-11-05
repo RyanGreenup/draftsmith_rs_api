@@ -26,6 +26,8 @@ CREATE TABLE tasks (
     UNIQUE (note_id)
 );
 
+
+
 -- Auto update the modified_at column
 CREATE OR REPLACE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_TASKS()
 RETURNS TRIGGER AS $$
@@ -39,6 +41,15 @@ CREATE TRIGGER set_modified_at
 BEFORE UPDATE ON tasks
 FOR EACH ROW
 EXECUTE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_TASKS();
+
+-- Tasks can have hierarchy
+
+CREATE TABLE task_hierarchy (
+    id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    parent_task_id INT REFERENCES tags (id),
+    child_task_id INT REFERENCES tags (id),
+    UNIQUE (child_task_id)  -- Tags can only have one parent
+);
 
 -- Schedule tasks over certain days
 CREATE TABLE task_schedules (

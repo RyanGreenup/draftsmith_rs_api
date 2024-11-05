@@ -145,13 +145,11 @@ VALUES
 -- Create note hierarchies
 INSERT INTO note_hierarchy (
     parent_note_id,
-    child_note_id,
-    hierarchy_type
+    child_note_id
 )
 SELECT
     p.id AS parent_note_id,
-    c.id AS child_note_id,
-    'subpage' AS hierarchy_type
+    c.id AS child_note_id
 FROM notes AS p, notes AS c
 WHERE
     p.title = 'Welcome to DraftSmith'

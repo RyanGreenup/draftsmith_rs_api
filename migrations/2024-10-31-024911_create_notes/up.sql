@@ -102,10 +102,17 @@ CREATE TABLE note_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     parent_note_id INT REFERENCES notes (id) ON DELETE CASCADE,
     child_note_id INT REFERENCES notes (id) ON DELETE CASCADE,
-    hierarchy_type TEXT CHECK (hierarchy_type IN ('page', 'block', 'subpage')),
     -- This enforces that each child note can only have one parent
     UNIQUE (child_note_id)
 );
+
+-- In the future, consider another table for mapping a note_id
+-- or a hierarchy_id to a specific type of relationship
+-- e.g.: hierarchy_type TEXT CHECK (hierarchy_type IN ('page', 'block', 'subpage')),
+-- This must be a separate table because the  tags_hierarchy
+-- and task_hierarchy tables must have a common structure
+-- for shared logic.
+
 
 -- *** Track Modification Dates -----------------------------------------------
 -- **** Modification Table ----------------------------------------------------

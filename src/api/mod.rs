@@ -96,7 +96,6 @@ pub struct ListAssetsParams {
 pub struct AttachChildRequest {
     pub child_note_id: i32,
     pub parent_note_id: Option<i32>,
-    pub hierarchy_type: Option<String>,
 }
 
 async fn fts_search_notes(

@@ -317,7 +317,6 @@ async fn main() {
                             let request = rust_cli_app::client::AttachChildRequest {
                                 child_note_id: child_id,
                                 parent_note_id: Some(parent_id),
-                                hierarchy_type: Some("block".to_string()),
                             };
                             match rust_cli_app::client::attach_child_note(&url, request).await {
                                 Ok(_) => println!(
