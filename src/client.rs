@@ -1583,12 +1583,12 @@ mod tests {
 
         // Verify responses
         assert!(asset1.id > 0);
-        assert!(!asset1.location.is_empty());
+        assert!(!asset1.location.to_string_lossy().is_empty());
         assert_eq!(asset1.description, Some("Test asset".to_string()));
         assert!(asset1.created_at.is_some());
 
         assert!(asset2.id > 0);
-        assert!(asset2.location.contains("custom/path/test.txt"));
+        assert!(asset2.location.to_string_lossy().contains("custom/path/test.txt"));
         assert_eq!(asset2.description, Some("Test asset with custom filename".to_string()));
         assert!(asset2.created_at.is_some());
 

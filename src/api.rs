@@ -921,7 +921,7 @@ async fn create_asset(
     let base_path = PathBuf::from(&upload_dir);
 
     // Create upload directory if it doesn't exist
-    fs::create_dir_all(base_path)
+    fs::create_dir_all(&base_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1015,7 +1015,7 @@ async fn create_asset(
         Json(AssetResponse {
             id: asset.id,
             note_id: asset.note_id,
-            location: PathBuf::from(asset.location),
+            location: PathBuf::from(&asset.location),
             description: asset.description,
             created_at: asset.created_at,
         }),
@@ -1094,7 +1094,7 @@ async fn list_assets(
         .map(|asset| AssetResponse {
             id: asset.id,
             note_id: asset.note_id,
-            location: PathBuf::from(asset.location),
+            location: PathBuf::from(&asset.location),
             description: asset.description,
             created_at: asset.created_at,
         })
@@ -1142,7 +1142,7 @@ async fn download_asset_by_filename(
 
     // Sanitize the filename for security
     let safe_filename = sanitize_filename::sanitize(&filename);
-    let file_path = base_path.join(safe_filename);
+    let file_path = base_path.join(&safe_filename);
 
     // Check if file exists
     if !file_path.exists() {
