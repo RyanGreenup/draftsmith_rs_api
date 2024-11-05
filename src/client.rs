@@ -412,53 +412,6 @@ pub async fn list_assets(
     Ok(assets)
 }
 
-pub async fn create_asset(
-    base_url: &str,
-    file_path: &std::path::Path,
-    note_id: Option<i32>,
-    description: Option<String>,
-    filename: Option<String>,
-) -> Result<AssetResponse, NoteError> {
-    let client = reqwest::Client::new();
-    let url = format!("{}/assets", base_url);
-
-    // Read file content
-    let file_content = tokio::fs::read(file_path).await?;
-    let default_filename = file_path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("file")
-        .to_string();
-
-    // Create multipart form
-    let file_part = reqwest::multipart::Part::bytes(file_content)
-        .file_name(default_filename)
-        .mime_str("application/octet-stream")?;
-
-    let mut form = reqwest::multipart::Form::new().part("file", file_part);
-
-    // Add optional fields
-    if let Some(id) = note_id {
-        form = form.text("note_id", id.to_string());
-    }
-    if let Some(desc) = description {
-        form = form.text("description", desc);
-    }
-    if let Some(fname) = filename {
-        form = form.text("filename", fname);
-    }
-
-    // Send request
-    let response = client
-        .post(url)
-        .multipart(form)
-        .send()
-        .await?
-        .error_for_status()?;
-
-    let asset = response.json::<AssetResponse>().await?;
-    Ok(asset)
-}
 
 pub async fn batch_update_notes(
     base_url: &str,
@@ -1553,47 +1506,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_create_asset() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = BASE_URL;
 
-        // Create a temporary test file
-        let mut temp_file = tempfile::NamedTempFile::new()?;
-        write!(temp_file, "test content")?;
-
-        // Test with default filename
-        let asset1 = create_asset(
-            base_url,
-            temp_file.path(),
-            None,
-            Some("Test asset".to_string()),
-            None,  // No custom filename
-        )
-        .await?;
-
-        // Test with custom filename
-        let asset2 = create_asset(
-            base_url,
-            temp_file.path(),
-            None,
-            Some("Test asset with custom filename".to_string()),
-            Some("custom/path/test.txt".to_string()),
-        )
-        .await?;
-
-        // Verify responses
-        assert!(asset1.id > 0);
-        assert!(!asset1.location.to_string_lossy().is_empty());
-        assert_eq!(asset1.description, Some("Test asset".to_string()));
-        assert!(asset1.created_at.is_some());
-
-        assert!(asset2.id > 0);
-        assert!(asset2.location.to_string_lossy().contains("custom/path/test.txt"));
-        assert_eq!(asset2.description, Some("Test asset with custom filename".to_string()));
-        assert!(asset2.created_at.is_some());
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_get_asset() -> Result<(), Box<dyn std::error::Error>> {
