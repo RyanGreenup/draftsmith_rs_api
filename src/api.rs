@@ -1,5 +1,5 @@
 use crate::client::NoteError;
-use crate::tables::{Asset, AssetWithoutFts, HierarchyMapping, NewAsset, NoteWithParent};
+use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent}; 
 use crate::tables::{NewNote, NewNoteHierarchy, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
 use axum::extract::Multipart;
@@ -1126,14 +1126,14 @@ async fn update_asset(
     Ok(Json(AssetResponse {
         id: asset.id,
         note_id: asset.note_id,
-        location: asset.location,
+        location: PathBuf::from(asset.location),
         description: asset.description,
         created_at: asset.created_at,
     }))
 }
 
 async fn download_asset_by_filename(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Path(filename): Path<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Get the upload directory from environment or use a default
