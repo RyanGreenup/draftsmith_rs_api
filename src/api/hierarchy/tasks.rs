@@ -8,7 +8,7 @@ use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AttachChildRequest {
     pub parent_task_id: Option<i32>,
     pub child_task_id: i32,
