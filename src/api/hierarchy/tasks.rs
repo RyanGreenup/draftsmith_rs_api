@@ -166,9 +166,19 @@ pub async fn attach_child_task(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // Define function to get parent ID from task hierarchy
+    let get_parent_fn = |conn: &mut PgConnection, child_id: i32| -> QueryResult<Option<i32>> {
+        use crate::schema::task_hierarchy::dsl::*;
+        task_hierarchy
+            .filter(child_task_id.eq(Some(child_id)))
+            .select(parent_task_id)
+            .first(conn)
+            .optional()
+    };
+
     // Define the is_circular function specific to tasks
     let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-        is_circular_hierarchy(conn, child_id, parent_id)
+        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
     };
 
     // Create a TaskHierarchy item
