@@ -54,8 +54,12 @@ impl HierarchyItem for TaskHierarchy {
 
     fn insert_new(conn: &mut PgConnection, item: &Self) -> QueryResult<()> {
         use crate::schema::task_hierarchy::dsl::*;
+        let new_item = NewTaskHierarchy {
+            parent_task_id: item.parent_task_id,
+            child_task_id: item.child_task_id,
+        };
         diesel::insert_into(task_hierarchy)
-            .values(item)
+            .values(&new_item)
             .execute(conn)
             .map(|_| ())
     }
