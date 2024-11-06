@@ -8,7 +8,7 @@ use rust_cli_app::client::tasks::{
     TaskTreeNode, TaskError, CreateTaskRequest, UpdateTaskRequest, AttachChildRequest,
 };
 use rust_cli_app::client::{
-    NoteTreeNode, RenderedNote, NoteError,
+    NoteTreeNode,
 };
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -671,7 +671,36 @@ async fn main() {
                 }
             },
             ClientCommands::Assets { command } => match command {
-                // ... existing Assets match arms ...
+                AssetCommands::Create { file, note_id, description, filename } => {
+                    // TODO: Implement asset creation logic
+                    eprintln!("Asset creation not yet implemented");
+                    std::process::exit(1);
+                }
+                AssetCommands::List { note_id } => {
+                    // TODO: Implement asset listing logic
+                    eprintln!("Asset listing not yet implemented");
+                    std::process::exit(1);
+                }
+                AssetCommands::Get { id, output } => {
+                    // TODO: Implement get asset logic
+                    eprintln!("Asset retrieval not yet implemented");
+                    std::process::exit(1);
+                }
+                AssetCommands::GetByName { path, output } => {
+                    // TODO: Implement get by name logic
+                    eprintln!("Asset retrieval by name not yet implemented");
+                    std::process::exit(1);
+                }
+                AssetCommands::Update { id, note_id, description } => {
+                    // TODO: Implement update logic
+                    eprintln!("Asset update not yet implemented");
+                    std::process::exit(1);
+                }
+                AssetCommands::Delete { id } => {
+                    // TODO: Implement delete logic
+                    eprintln!("Asset deletion not yet implemented");
+                    std::process::exit(1);
+                }
             },
             ClientCommands::Tasks { id, command } => match command {
                 TasksCommands::List => {
@@ -887,7 +916,12 @@ async fn main() {
 
 fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
     for node in nodes {
-        println!("{}- Note ID: {}, Title: {}", "  ".repeat(depth), node.id, node.title);
+        println!(
+            "{}- Note ID: {}, Title: {}", 
+            "  ".repeat(depth),
+            node.id,
+            node.title.as_deref().unwrap_or("Untitled")
+        );
         if !node.children.is_empty() {
             print_simple_tree(&node.children, depth + 1);
         }
@@ -897,15 +931,12 @@ fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
 fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
     for node in nodes {
         print!("{}", "  ".repeat(depth));
-        println!("Task ID: {}, Title: {}", node.id, node.title.as_deref().unwrap_or("Untitled"));
+        println!("Task ID: {}, Status: {}", node.id, node.status);
         
         if let Some(note_id) = node.note_id {
             print!("{}", "  ".repeat(depth + 1));
             println!("Note ID: {}", note_id);
         }
-        
-        print!("{}", "  ".repeat(depth + 1));
-        println!("Status: {}", node.status);
         
         if let Some(priority) = node.priority {
             print!("{}", "  ".repeat(depth + 1));
