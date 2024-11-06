@@ -1,5 +1,5 @@
 use super::generics::{
-    attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
+    attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode, HierarchyItem,
 };
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
@@ -22,6 +22,70 @@ pub struct NoteTreeNode {
     pub children: Vec<NoteTreeNode>,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TagTreeNode {
+    pub id: i32,
+    pub name: String,
+    pub children: Vec<TagTreeNode>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TaskTreeNode {
+    pub id: i32,
+    pub title: String,
+    pub description: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub children: Vec<TaskTreeNode>,
+}
+
+impl HierarchyItem for NoteHierarchy {
+    type Id = i32;
+
+    fn get_parent_id(&self) -> Option<i32> {
+        self.parent_note_id
+    }
+
+    fn get_child_id(&self) -> i32 {
+        self.child_note_id.expect("child_note_id should not be None")
+    }
+
+    fn set_parent_id(&mut self, parent_id: Option<i32>) {
+        self.parent_note_id = parent_id;
+    }
+
+    fn set_child_id(&mut self, child_id: i32) {
+        self.child_note_id = Some(child_id);
+    }
+
+    fn find_by_child_id(conn: &mut PgConnection, child_id: i32) -> QueryResult<Option<Self>> {
+        use crate::schema::note_hierarchy::dsl::*;
+
+        note_hierarchy
+            .filter(child_note_id.eq(child_id))
+            .first::<NoteHierarchy>(conn)
+            .optional()
+    }
+
+    fn insert_new(conn: &mut PgConnection, item: &Self) -> QueryResult<()> {
+        use crate::schema::note_hierarchy;
+
+        diesel::insert_into(note_hierarchy::table)
+            .values(item)
+            .execute(conn)
+            .map(|_| ())
+    }
+
+    fn update_existing(conn: &mut PgConnection, item: &Self) -> QueryResult<()> {
+        use crate::schema::note_hierarchy::dsl::*;
+
+        diesel::update(note_hierarchy.filter(child_note_id.eq(item.get_child_id())))
+            .set(parent_note_id.eq(item.get_parent_id()))
+            .execute(conn)
+            .map(|_| ())
+    }
+}
+
 // Modify Note Hierarchy
 
 pub async fn attach_child_note(
@@ -38,48 +102,16 @@ pub async fn attach_child_note(
         is_circular_hierarchy(conn, child_id, parent_id)
     };
 
-    // Define the attach function
-    let attach_fn = |conn: &mut PgConnection,
-                     child_id: i32,
-                     parent_id: Option<i32>|
-     -> Result<(), DieselError> {
-        use crate::schema::note_hierarchy::dsl::*;
-        use crate::tables::{NewNoteHierarchy, NoteHierarchy};
-
-        // Check if hierarchy entry exists
-        let existing_entry = note_hierarchy
-            .filter(child_note_id.eq(child_id))
-            .first::<NoteHierarchy>(conn)
-            .optional()?;
-
-        if existing_entry.is_some() {
-            // Update existing hierarchy entry
-            diesel::update(note_hierarchy.filter(child_note_id.eq(child_id)))
-                .set(parent_note_id.eq(parent_id))
-                .execute(conn)
-                .map(|_| ())
-        } else {
-            // Insert new hierarchy entry
-            let new_entry = NewNoteHierarchy {
-                child_note_id: Some(child_id),
-                parent_note_id: parent_id,
-            };
-            diesel::insert_into(note_hierarchy)
-                .values(&new_entry)
-                .execute(conn)
-                .map(|_| ())
-        }
+    // Create a NoteHierarchy item
+    let item = NoteHierarchy {
+        id: 0,
+        parent_note_id: payload.parent_note_id,
+        child_note_id: Some(payload.child_note_id),
     };
 
     // Call the generic attach_child function
-    attach_child(
-        is_circular_fn,
-        attach_fn,
-        payload.child_note_id,
-        payload.parent_note_id,
-        &mut conn,
-    )
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    attach_child(is_circular_fn, item, &mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
