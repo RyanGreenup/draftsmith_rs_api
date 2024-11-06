@@ -90,9 +90,19 @@ pub async fn attach_child_note(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // Define function to get parent ID from note hierarchy
+    let get_parent_fn = |conn: &mut PgConnection, child_id: i32| -> QueryResult<Option<i32>> {
+        use crate::schema::note_hierarchy::dsl::*;
+        note_hierarchy
+            .filter(child_note_id.eq(child_id))
+            .select(parent_note_id)
+            .first(conn)
+            .optional()
+    };
+
     // Define the is_circular function specific to notes
     let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-        is_circular_hierarchy(conn, child_id, parent_id)
+        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
     };
 
     // Create a NoteHierarchy item
