@@ -2,7 +2,7 @@ pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 pub mod assets;
 pub mod notes;
 pub mod tags;
-// pub mod tasks;
+pub mod tasks;
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
     CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, UpdateAssetRequest,
