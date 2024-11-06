@@ -1,123 +1,16 @@
+use super::generics::{
+    attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
+};
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
 use crate::api::Path;
-use crate::schema::note_hierarchy::dsl::*;
-use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
+use crate::tables::{
+    NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts, TagHierarchy, TaskHierarchy,
+};
 use axum::{extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-
-#[derive(Debug)]
-pub struct BasicTreeNode<T> {
-    pub id: i32,
-    pub data: T,
-    pub children: Vec<BasicTreeNode<T>>,
-}
-
-// Generic function that builds a basic tree structure
-pub fn build_generic_tree<T>(
-    items: &[(i32, T)],
-    hierarchies: &[(i32, i32)], // (child_id, parent_id)
-) -> Vec<BasicTreeNode<T>>
-where
-    T: Clone,
-{
-    // Create a map of parent_id to children
-    let mut parent_to_children: HashMap<Option<i32>, Vec<i32>> = HashMap::new();
-
-    // Track which items are children
-    let mut child_items: HashSet<i32> = HashSet::new();
-
-    // Build the parent-to-children mapping
-    for (child_id, parent_id) in hierarchies {
-        parent_to_children
-            .entry(Some(*parent_id))
-            .or_default()
-            .push(*child_id);
-        child_items.insert(*child_id);
-    }
-
-    // Create a map of item id to data for easy lookup
-    let items_map: HashMap<_, _> = items
-        .iter()
-        .map(|(item_id, data)| (*item_id, data))
-        .collect();
-
-    // Function to recursively build the tree
-    fn build_subtree<T: Clone>(
-        item_id: i32,
-        items_map: &HashMap<i32, &T>,
-        parent_to_children: &HashMap<Option<i32>, Vec<i32>>,
-    ) -> BasicTreeNode<T> {
-        let children = parent_to_children
-            .get(&Some(item_id))
-            .map(|children| {
-                children
-                    .iter()
-                    .map(|child_id| build_subtree(*child_id, items_map, parent_to_children))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        BasicTreeNode {
-            id: item_id,
-            data: (*items_map.get(&item_id).unwrap()).clone(),
-            children,
-        }
-    }
-
-    // Build trees starting from root items (items that aren't children)
-    let mut tree: Vec<BasicTreeNode<T>> = items
-        .iter()
-        .filter(|(item_id, _)| !child_items.contains(item_id))
-        .map(|(item_id, _)| build_subtree(*item_id, &items_map, &parent_to_children))
-        .collect();
-
-    // Sort the tree by item ID for consistent ordering
-    tree.sort_by_key(|node| node.id);
-
-    tree
-}
-
-// Generic function to detect circular references
-fn is_circular_reference<F, T>(start_id: T, mut get_parent_fn: F) -> Result<bool, DieselError>
-where
-    F: FnMut(T) -> Result<Option<T>, DieselError>,
-    T: PartialEq + Clone,
-{
-    let mut current_parent_id = Some(start_id.clone());
-    while let Some(pid) = current_parent_id {
-        current_parent_id = get_parent_fn(pid)?;
-        if current_parent_id == Some(start_id.clone()) {
-            return Ok(true); // Circular reference detected
-        }
-    }
-    Ok(false)
-}
-
-// Concrete implementation specific to your use case
-fn is_circular_hierarchy(
-    conn: &mut PgConnection,
-    _child_id: i32,
-    potential_parent_id: Option<i32>,
-) -> Result<bool, DieselError> {
-    use crate::schema::note_hierarchy::dsl::*;
-
-    if let Some(potential_pid) = potential_parent_id {
-        is_circular_reference(potential_pid, |pid| {
-            note_hierarchy
-                .filter(child_note_id.eq(pid))
-                .select(parent_note_id)
-                .first::<Option<i32>>(conn)
-                .optional()
-                .map(|opt| opt.flatten())
-        })
-    } else {
-        Ok(false)
-    }
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NoteTreeNode {
@@ -131,45 +24,6 @@ pub struct NoteTreeNode {
 
 // Modify Note Hierarchy
 
-pub struct HierarchyDbOps<F, U, I> {
-    pub is_circular_fn: F,
-    pub update_existing_fn: U,
-    pub insert_new_fn: I,
-}
-
-fn attach_child<F, U, I>(
-    db_ops: HierarchyDbOps<F, U, I>,
-    child_id: i32,
-    parent_id: Option<i32>,
-    conn: &mut PgConnection,
-) -> Result<(), DieselError>
-where
-    F: Fn(&mut PgConnection, i32, Option<i32>) -> Result<bool, DieselError>,
-    U: Fn(&mut PgConnection, i32, Option<i32>) -> Result<(), DieselError>,
-    I: Fn(&mut PgConnection, i32, Option<i32>) -> Result<(), DieselError>,
-{
-    // Prevent circular hierarchy
-    if let Some(parent_id) = parent_id {
-        if (db_ops.is_circular_fn)(conn, child_id, Some(parent_id))? {
-            return Err(DieselError::NotFound); // Handle appropriately
-        }
-    }
-
-    // Check if hierarchy entry exists
-    let existing_entry = note_hierarchy
-        .filter(child_note_id.eq(child_id))
-        .first::<NoteHierarchy>(conn)
-        .optional()?;
-
-    if existing_entry.is_some() {
-        (db_ops.update_existing_fn)(conn, child_id, parent_id)?;
-    } else {
-        (db_ops.insert_new_fn)(conn, child_id, parent_id)?;
-    }
-
-    Ok(())
-}
-
 pub async fn attach_child_note(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
@@ -179,17 +33,33 @@ pub async fn attach_child_note(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let db_ops = HierarchyDbOps {
-        is_circular_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-            is_circular_hierarchy(conn, child_id, parent_id)
-        },
-        update_existing_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+    // Define the is_circular function
+    let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+        is_circular_hierarchy(conn, child_id, parent_id)
+    };
+
+    // Define the attach function
+    let attach_fn = |conn: &mut PgConnection,
+                     child_id: i32,
+                     parent_id: Option<i32>|
+     -> Result<(), DieselError> {
+        use crate::schema::note_hierarchy::dsl::*;
+        use crate::tables::{NewNoteHierarchy, NoteHierarchy};
+
+        // Check if hierarchy entry exists
+        let existing_entry = note_hierarchy
+            .filter(child_note_id.eq(child_id))
+            .first::<NoteHierarchy>(conn)
+            .optional()?;
+
+        if existing_entry.is_some() {
+            // Update existing hierarchy entry
             diesel::update(note_hierarchy.filter(child_note_id.eq(child_id)))
                 .set(parent_note_id.eq(parent_id))
                 .execute(conn)
                 .map(|_| ())
-        },
-        insert_new_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+        } else {
+            // Insert new hierarchy entry
             let new_entry = NewNoteHierarchy {
                 child_note_id: Some(child_id),
                 parent_note_id: parent_id,
@@ -198,11 +68,13 @@ pub async fn attach_child_note(
                 .values(&new_entry)
                 .execute(conn)
                 .map(|_| ())
-        },
+        }
     };
 
+    // Call the generic attach_child function
     attach_child(
-        db_ops,
+        is_circular_fn,
+        attach_fn,
         payload.child_note_id,
         payload.parent_note_id,
         &mut conn,
@@ -210,28 +82,6 @@ pub async fn attach_child_note(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
-}
-
-pub async fn detach_child_note(
-    State(state): State<AppState>,
-    Path(child_id): Path<i32>,
-) -> Result<StatusCode, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::*;
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Delete the hierarchy entry for this child note
-    let num_deleted = diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id)))
-        .execute(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if num_deleted == 0 {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn get_note_tree(
@@ -679,6 +529,27 @@ mod note_hierarchy_tests {
         assert_eq!(updated_child1.content, note_1_content_updated);
         assert_eq!(updated_child2.content, note_2_content_updated);
     }
+}
+
+pub async fn detach_child_note(
+    State(state): State<AppState>,
+    Path(child_id): Path<i32>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::note_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Define specific delete logic for the note hierarchy
+    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
+        diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id))).execute(conn)
+    };
+
+    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // Modify Tag Hierarchy
