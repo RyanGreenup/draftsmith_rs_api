@@ -179,7 +179,8 @@ mod task_hierarchy_tests {
             .read_write()
             .run::<_, DieselError, _>(|conn| {
                 // Create test tasks
-                let root_task = diesel::insert_into(tasks)
+                use crate::schema::tasks::dsl::*;
+                let root_task = diesel::insert_into(crate::schema::tasks::table)
                     .values(NewTask {
                         note_id: None,
                         status: "todo",
@@ -194,7 +195,7 @@ mod task_hierarchy_tests {
                     })
                     .get_result::<Task>(conn)?;
 
-                let child_task = diesel::insert_into(tasks)
+                let child_task = diesel::insert_into(crate::schema::tasks::table)
                     .values(NewTask {
                         note_id: None,
                         status: "todo",
@@ -218,7 +219,6 @@ mod task_hierarchy_tests {
                     .execute(conn)?;
 
                 // Get all tasks and hierarchies directly instead of using the async handler
-                use crate::schema::tasks::dsl::*;
                 use crate::schema::tasks::dsl::*;
                 let all_tasks = tasks
                     .filter(id.eq_any(vec![root_task.id, child_task.id]))
