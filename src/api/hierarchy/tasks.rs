@@ -2,7 +2,7 @@ use super::generics::{attach_child, is_circular_hierarchy};
 use crate::schema::tasks::dsl::{tasks, id as task_id};
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::state::AppState;
-use crate::tables::{Task, TaskHierarchy};
+use crate::tables::{Task, TaskHierarchy, NewTaskHierarchy};
 use axum::{extract::Path, extract::State, http::StatusCode, Json};
 use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
