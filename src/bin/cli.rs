@@ -882,8 +882,8 @@ async fn main() {
                 TasksCommands::Attach { parent_id } => {
                     if let Some(child_id) = id {
                         let request = AttachChildRequest {
-                            parent_id: Some(parent_id),
-                            child_id: child_id,
+                            parent_task_id: Some(parent_id),
+                            child_task_id: child_id,
                         };
                         match attach_child_task(&url, request).await {
                             Ok(_) => {
