@@ -60,10 +60,16 @@ pub async fn get_hierarchy_mappings(
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskTreeNode {
     pub id: i32,
-    pub title: String,
-    pub description: Option<String>,
+    pub note_id: Option<i32>,
+    pub status: String,
+    pub effort_estimate: Option<bigdecimal::BigDecimal>,
+    pub actual_effort: Option<bigdecimal::BigDecimal>,
+    pub deadline: Option<chrono::NaiveDateTime>,
+    pub priority: Option<i32>,
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
+    pub all_day: Option<bool>,
+    pub goal_relationship: Option<i32>,
     pub children: Vec<TaskTreeNode>,
 }
 
@@ -120,20 +126,18 @@ impl HierarchyItem for TaskHierarchy {
 }
 
 fn convert_to_task_tree(basic_node: BasicTreeNode<Task>) -> TaskTreeNode {
-    // For tasks, we'll use the associated note's content as title/description
-    let (title, description) = if let Some(_note_id) = basic_node.data.note_id {
-        // TODO: Fetch note details from database
-        (format!("Task #{}", basic_node.data.id), None)
-    } else {
-        (format!("Task #{}", basic_node.data.id), None)
-    };
-
     TaskTreeNode {
         id: basic_node.id,
-        title,
-        description,
+        note_id: basic_node.data.note_id,
+        status: basic_node.data.status,
+        effort_estimate: basic_node.data.effort_estimate,
+        actual_effort: basic_node.data.actual_effort,
+        deadline: basic_node.data.deadline,
+        priority: basic_node.data.priority,
         created_at: basic_node.data.created_at,
         modified_at: basic_node.data.modified_at,
+        all_day: basic_node.data.all_day,
+        goal_relationship: basic_node.data.goal_relationship,
         children: basic_node
             .children
             .into_iter()
