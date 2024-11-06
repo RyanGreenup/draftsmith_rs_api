@@ -2,7 +2,7 @@ use super::generics::{attach_child, build_generic_tree, is_circular_hierarchy, H
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
 use crate::tables::{NewTaskHierarchy, TaskHierarchy};
-use axum::{extract::Json, http::StatusCode, extract::State};
+use axum::{extract::{Json, Path}, http::StatusCode, extract::State};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +55,103 @@ impl HierarchyItem for TaskHierarchy {
             .set(parent_task_id.eq(item.get_parent_id()))
             .execute(conn)
             .map(|_| ())
+    }
+
+    #[tokio::test]
+    async fn test_detach_child_task() {
+        let state = setup_test_state();
+        let mut conn = state
+            .pool
+            .get()
+            .expect("Failed to get database connection");
+
+        conn.test_transaction::<_, DieselError, _>(|conn| {
+            // Create parent note and task
+            let parent_note = diesel::insert_into(crate::schema::notes::table)
+                .values(NewNote {
+                    title: "Parent Note",
+                    content: "Parent content",
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                })
+                .get_result::<Note>(conn)
+                .expect("Error creating parent note");
+
+            let parent_task = diesel::insert_into(crate::schema::tasks::table)
+                .values(NewTask {
+                    note_id: Some(parent_note.id),
+                    status: "todo",
+                    effort_estimate: Some(BigDecimal::from(1)),
+                    actual_effort: None,
+                    deadline: None,
+                    priority: Some(1),
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                    all_day: Some(false),
+                    goal_relationship: None,
+                })
+                .get_result::<Task>(conn)
+                .expect("Error creating parent task");
+
+            // Create child note and task
+            let child_note = diesel::insert_into(crate::schema::notes::table)
+                .values(NewNote {
+                    title: "Child Note",
+                    content: "Child content",
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                })
+                .get_result::<Note>(conn)
+                .expect("Error creating child note");
+
+            let child_task = diesel::insert_into(crate::schema::tasks::table)
+                .values(NewTask {
+                    note_id: Some(child_note.id),
+                    status: "todo",
+                    effort_estimate: Some(BigDecimal::from(1)),
+                    actual_effort: None,
+                    deadline: None,
+                    priority: Some(2),
+                    created_at: Some(chrono::Utc::now().naive_utc()),
+                    modified_at: Some(chrono::Utc::now().naive_utc()),
+                    all_day: Some(false),
+                    goal_relationship: None,
+                })
+                .get_result::<Task>(conn)
+                .expect("Error creating child task");
+
+            // Create initial hierarchy
+            let hierarchy = diesel::insert_into(crate::schema::task_hierarchy::table)
+                .values(NewTaskHierarchy {
+                    parent_task_id: Some(parent_task.id),
+                    child_task_id: Some(child_task.id),
+                })
+                .get_result::<TaskHierarchy>(conn)
+                .expect("Error creating task hierarchy");
+
+            // Verify hierarchy exists
+            assert_eq!(hierarchy.parent_task_id, Some(parent_task.id));
+            assert_eq!(hierarchy.child_task_id, Some(child_task.id));
+
+            // Test detaching child
+            tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(detach_child_task(
+                    State(state.clone()),
+                    Path(child_task.id),
+                ))
+                .expect("Failed to detach child task");
+
+            // Verify hierarchy was removed
+            use crate::schema::task_hierarchy::dsl::*;
+            let remaining_hierarchy = task_hierarchy
+                .filter(child_task_id.eq(child_task.id))
+                .first::<TaskHierarchy>(conn);
+
+            assert!(matches!(remaining_hierarchy, Err(DieselError::NotFound)));
+
+            Ok(())
+        });
     }
 }
 
@@ -185,6 +282,27 @@ mod task_hierarchy_tests {
             Ok(())
         });
     }
+}
+
+pub async fn detach_child_task(
+    State(state): State<AppState>,
+    Path(child_id): Path<i32>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::task_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Define specific delete logic for the task hierarchy
+    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
+        diesel::delete(task_hierarchy.filter(child_task_id.eq(child_id))).execute(conn)
+    };
+
+    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
