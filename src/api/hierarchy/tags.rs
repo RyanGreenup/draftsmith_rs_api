@@ -90,7 +90,6 @@ pub async fn detach_child_tag(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[debug_handler]
 pub async fn attach_child_tag(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
