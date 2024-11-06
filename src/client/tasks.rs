@@ -1,5 +1,6 @@
 use crate::tables::Task;
 use crate::TASK_API;
+pub use crate::api::hierarchy::tasks::{AttachChildRequest, TaskTreeNode};
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,22 +47,6 @@ pub struct UpdateTaskRequest {
 pub struct HierarchyMapping {
     pub parent_id: Option<i32>,
     pub child_id: i32,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TaskTreeNode {
-    pub id: i32,
-    pub note_id: Option<i32>,
-    pub status: String,
-    pub effort_estimate: Option<String>,
-    pub actual_effort: Option<String>,
-    pub deadline: Option<chrono::NaiveDateTime>,
-    pub priority: Option<i32>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub all_day: Option<bool>,
-    pub goal_relationship: Option<String>,
-    pub children: Vec<TaskTreeNode>,
 }
 
 // * Client ...................................................................
@@ -130,12 +115,6 @@ pub async fn delete_task(base_url: &str, id: i32) -> Result<(), TaskError> {
 }
 
 // ** Hierarchical Functions ..................................................
-
-#[derive(Debug, Serialize)]
-pub struct AttachChildRequest {
-    pub parent_id: Option<i32>,
-    pub child_id: i32,
-}
 
 pub async fn attach_child_task(
     base_url: &str,
@@ -299,16 +278,21 @@ mod tests {
     async fn test_task_tree_operations() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
+        dbg!("Running task tree operations test");
         // Clean up by fetching and deleting all existing tasks
         let existing_tasks = fetch_tasks(base_url).await?;
         for task in existing_tasks {
+            dbg!("Deleting task");
             delete_task(base_url, task.id).await?;
         }
+        dbg!("Finished cleaning up tasks");
 
+        dbg!("Creating parent task");
         // Verify initial hierarchy mappings are empty
         let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
         assert!(initial_mappings.is_empty());
 
+        dbg!("Creating parent task");
         // Create parent task
         let parent_task = CreateTaskRequest {
             note_id: None,
@@ -322,6 +306,7 @@ mod tests {
         };
         let created_parent = create_task(base_url, parent_task).await?;
 
+        dbg!("Creating child task");
         // Create child task
         let child_task = CreateTaskRequest {
             note_id: None,
@@ -335,30 +320,36 @@ mod tests {
         };
         let created_child = create_task(base_url, child_task).await?;
 
+        dbg!("Attaching child to parent");
         // Attach child to parent
         let attach_request = AttachChildRequest {
-            parent_id: Some(created_parent.id),
-            child_id: created_child.id,
+            parent_task_id: Some(created_parent.id),
+            child_task_id: created_child.id,
         };
         attach_child_task(base_url, attach_request).await?;
 
+        dbg!("Fetching task tree");
         // Verify tree structure
         let tree = fetch_task_tree(base_url).await?;
+        dbg!(&tree);
         assert_eq!(tree.len(), 1); // Only parent should be at root level
         let parent_node = &tree[0];
         assert_eq!(parent_node.id, created_parent.id);
         assert_eq!(parent_node.children.len(), 1);
         assert_eq!(parent_node.children[0].id, created_child.id);
 
+        dbg!("Fetching hierarchy mappings");
         // Verify hierarchy mappings
         let mappings = fetch_hierarchy_mappings(base_url).await?;
         assert_eq!(mappings.len(), 1);
         assert_eq!(mappings[0].parent_id, Some(created_parent.id));
         assert_eq!(mappings[0].child_id, created_child.id);
 
+        dbg!("Detaching child from parent");
         // Detach child
         detach_child_task(base_url, created_child.id).await?;
 
+        dbg!("Fetching task tree after detach");
         // Verify detachment
         let tree_after_detach = fetch_task_tree(base_url).await?;
         assert_eq!(tree_after_detach.len(), 2); // Both tasks should now be at root level
