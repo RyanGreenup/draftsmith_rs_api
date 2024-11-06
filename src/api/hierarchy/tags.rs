@@ -124,69 +124,54 @@ mod tests {
             .get()
             .expect("Failed to get database connection");
 
-        // Clean up any existing test data first
-        diesel::delete(crate::schema::tag_hierarchy::table)
-            .execute(&mut conn)
-            .expect("Failed to clean up existing tag hierarchies");
-        diesel::delete(crate::schema::tags::table)
-            .execute(&mut conn)
-            .expect("Failed to clean up existing tags");
+        conn.build_transaction()
+            .read_write()
+            .run(|conn| {
+                // Create test tags
+                let root_tag = diesel::insert_into(crate::schema::tags::table)
+                    .values(NewTag {
+                        name: "test_root_tag",
+                    })
+                    .get_result::<Tag>(conn)
+                    .expect("Failed to create root tag");
 
-        // Create test tags
-        let root_tag = diesel::insert_into(crate::schema::tags::table)
-            .values(NewTag {
-                name: "test_root_tag",
+                let child1_tag = diesel::insert_into(crate::schema::tags::table)
+                    .values(NewTag {
+                        name: "test_child1_tag",
+                    })
+                    .get_result::<Tag>(conn)
+                    .expect("Failed to create child1 tag");
+
+                let child2_tag = diesel::insert_into(crate::schema::tags::table)
+                    .values(NewTag {
+                        name: "test_child2_tag",
+                    })
+                    .get_result::<Tag>(conn)
+                    .expect("Failed to create child2 tag");
+
+                // Create hierarchy: root -> child1 -> child2
+                diesel::insert_into(crate::schema::tag_hierarchy::table)
+                    .values(NewTagHierarchy {
+                        child_tag_id: Some(child1_tag.id),
+                        parent_tag_id: Some(root_tag.id),
+                    })
+                    .execute(conn)
+                    .expect("Failed to create first hierarchy link");
+
+                diesel::insert_into(crate::schema::tag_hierarchy::table)
+                    .values(NewTagHierarchy {
+                        child_tag_id: Some(child2_tag.id),
+                        parent_tag_id: Some(child1_tag.id),
+                    })
+                    .execute(conn)
+                    .expect("Failed to create second hierarchy link");
+
+                Ok(())
             })
-            .get_result::<Tag>(&mut conn)
-            .expect("Failed to create root tag");
-
-        let child1_tag = diesel::insert_into(crate::schema::tags::table)
-            .values(NewTag {
-                name: "test_child1_tag",
-            })
-            .get_result::<Tag>(&mut conn)
-            .expect("Failed to create child1 tag");
-
-        let child2_tag = diesel::insert_into(crate::schema::tags::table)
-            .values(NewTag {
-                name: "test_child2_tag",
-            })
-            .get_result::<Tag>(&mut conn)
-            .expect("Failed to create child2 tag");
-
-        // Use a cleanup guard to ensure we clean up even if the test fails
-        struct CleanupGuard<'a> {
-            conn: &'a mut PgConnection,
-        }
-
-        impl<'a> Drop for CleanupGuard<'a> {
-            fn drop(&mut self) {
-                let _ = diesel::delete(crate::schema::tag_hierarchy::table).execute(self.conn);
-                let _ = diesel::delete(crate::schema::tags::table).execute(self.conn);
-            }
-        }
-
-        let _guard = CleanupGuard { conn: &mut conn };
-
-        // Create hierarchy: root -> child1 -> child2
-        diesel::insert_into(crate::schema::tag_hierarchy::table)
-            .values(NewTagHierarchy {
-                child_tag_id: Some(child1_tag.id),
-                parent_tag_id: Some(root_tag.id),
-            })
-            .execute(&mut conn)
-            .expect("Failed to create first hierarchy link");
-
-        diesel::insert_into(crate::schema::tag_hierarchy::table)
-            .values(NewTagHierarchy {
-                child_tag_id: Some(child2_tag.id),
-                parent_tag_id: Some(child1_tag.id),
-            })
-            .execute(&mut conn)
-            .expect("Failed to create second hierarchy link");
+            .expect("Transaction failed");
 
         // Call get_tag_tree
-        let response = get_tag_tree(State(state.clone())).await.unwrap();
+        let response = get_tag_tree(State(state)).await.unwrap();
         let tree = response.0;
 
         // Find our test root tag in the tree
