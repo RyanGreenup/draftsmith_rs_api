@@ -154,6 +154,7 @@ pub fn create_router(pool: Pool) -> Router {
     Router::new()
         .layer(DefaultBodyLimit::max(max_body_size))
         .merge(tags::create_router())
+        .merge(tasks::create_router())
         .route("/assets", post(create_asset).get(list_assets))
         .route(
             "/assets/:id",

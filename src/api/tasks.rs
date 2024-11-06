@@ -177,7 +177,10 @@ async fn delete_task(
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route(format!("/{TASK_API}").as_str(), get(list_tasks).post(create_task))
+        .route(
+            format!("/{TASK_API}").as_str(),
+            get(list_tasks).post(create_task),
+        )
         .route(
             format!("/{TASK_API}/:id").as_str(),
             get(get_task).put(update_task).delete(delete_task),
