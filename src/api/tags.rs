@@ -1,5 +1,6 @@
 use super::AppState;
 use crate::tables::{NewTag, Tag};
+use crate::TAGS_API;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -36,8 +37,14 @@ impl From<Tag> for TagResponse {
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/tags", get(list_tags).post(create_tag))
-        .route("/tags/:id", get(get_tag).put(update_tag).delete(delete_tag))
+        .route(
+            format!("/{TAGS_API}").as_str(),
+            get(list_tags).post(create_tag),
+        )
+        .route(
+            format!("/{TAGS_API}/:id").as_str(),
+            get(get_tag).put(update_tag).delete(delete_tag),
+        )
 }
 
 async fn list_tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, StatusCode> {

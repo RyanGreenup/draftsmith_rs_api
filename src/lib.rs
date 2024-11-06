@@ -5,7 +5,7 @@ pub mod tables;
 pub const BASE_URL: &str = "http://localhost:37240";
 pub const NOTES_API: &str = "notes";
 pub const FLAT_API: &str = "notes/flat";
-pub const TAGS_API: &str = "notes";
+pub const TAGS_API: &str = "tags";
 pub const SEARCH_FTS_API: &str = "notes/search/fts";
 pub const SEARCH_SEM_API: &str = "notes/search/semantic";
 pub const SEARCH_HYB_API: &str = "notes/search/hybrid";
