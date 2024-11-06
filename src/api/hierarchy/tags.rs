@@ -126,7 +126,7 @@ mod tests {
 
         conn.build_transaction()
             .read_write()
-            .run(|conn| {
+            .run::<_, diesel::result::Error, _>(|conn| {
                 // Create test tags
                 let root_tag = diesel::insert_into(crate::schema::tags::table)
                     .values(NewTag {
