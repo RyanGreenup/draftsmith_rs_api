@@ -97,7 +97,7 @@ fn convert_to_task_tree(basic_node: BasicTreeNode<Task>) -> TaskTreeNode {
 
 pub async fn get_task_tree(
     State(state): State<AppState>,
-) -> Result<Json<Vec<TaskTreeNode>>, StatusCode> {
+) -> Result<(StatusCode, Json<Vec<TaskTreeNode>>), StatusCode> {
     use crate::schema::task_hierarchy::dsl::task_hierarchy;
     let mut conn = state
         .pool
@@ -130,7 +130,7 @@ pub async fn get_task_tree(
         .map(convert_to_task_tree)
         .collect();
 
-    Ok(Json(tree))
+    Ok((StatusCode::OK, Json(tree)))
 }
 
 pub async fn detach_child_task(
@@ -160,7 +160,7 @@ pub async fn detach_child_task(
 pub async fn attach_child_task(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<(StatusCode, Json<AttachChildRequest>), StatusCode> {
     let mut conn = state
         .pool
         .get()
@@ -190,7 +190,7 @@ pub async fn attach_child_task(
     // Call the generic attach_child function with the specific implementation
     attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok(StatusCode::OK)
+    Ok((StatusCode::OK, Json(payload)))
 }
 
 #[cfg(test)]
