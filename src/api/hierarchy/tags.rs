@@ -73,11 +73,15 @@ pub async fn get_tag_tree(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Get all tags
-    let all_tags = Tag::get_all(&mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    use crate::schema::tags::dsl::*;
+    let all_tags = tags
+        .filter(id.eq_any(vec![root_tag.id, child1_tag.id, child2_tag.id]))
+        .load::<Tag>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all hierarchies
     let hierarchies: Vec<TagHierarchy> = tag_hierarchy
+        .filter(child_tag_id.eq_any(vec![Some(child1_tag.id), Some(child2_tag.id)]))
         .load::<TagHierarchy>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
