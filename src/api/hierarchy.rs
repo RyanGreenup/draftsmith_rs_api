@@ -1,12 +1,11 @@
 use super::generics::{
-    attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode, HierarchyItem,
+    attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
+    HierarchyItem,
 };
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
 use crate::api::Path;
-use crate::tables::{
-    NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts, TagHierarchy, TaskHierarchy,
-};
+use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
 use axum::{extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
@@ -47,7 +46,8 @@ impl HierarchyItem for NoteHierarchy {
     }
 
     fn get_child_id(&self) -> i32 {
-        self.child_note_id.expect("child_note_id should not be None")
+        self.child_note_id
+            .expect("child_note_id should not be None")
     }
 
     fn set_parent_id(&mut self, parent_id: Option<i32>) {
@@ -70,8 +70,13 @@ impl HierarchyItem for NoteHierarchy {
     fn insert_new(conn: &mut PgConnection, item: &Self) -> QueryResult<()> {
         use crate::schema::note_hierarchy;
 
+        let new_item = NewNoteHierarchy {
+            parent_note_id: item.parent_note_id,
+            child_note_id: item.child_note_id,
+        };
+
         diesel::insert_into(note_hierarchy::table)
-            .values(item)
+            .values(&new_item)
             .execute(conn)
             .map(|_| ())
     }
@@ -110,8 +115,7 @@ pub async fn attach_child_note(
     };
 
     // Call the generic attach_child function with the specific implementation
-    attach_child(is_circular_fn, item, &mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }

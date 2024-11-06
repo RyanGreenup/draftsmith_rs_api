@@ -133,7 +133,7 @@ pub fn is_circular_hierarchy(
 
 pub fn attach_child<H>(
     is_circular_fn: impl Fn(&mut PgConnection, H::Id, Option<H::Id>) -> Result<bool, DieselError>,
-    mut item: H,
+    item: H,
     conn: &mut PgConnection,
 ) -> Result<(), DieselError>
 where
