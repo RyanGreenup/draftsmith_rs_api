@@ -1,4 +1,4 @@
-use super::hierarchy::tasks::{attach_child_task, detach_child_task, get_task_tree};
+use super::hierarchy::tasks::{attach_child_task, detach_child_task, get_hierarchy_mappings, get_task_tree};
 use super::AppState;
 use crate::schema::tasks::{self, dsl::*};
 use crate::tables::{NewTask, Task};
@@ -202,6 +202,7 @@ pub fn create_router() -> Router<AppState> {
             get(get_task).put(update_task).delete(delete_task),
         )
         .route(format!("/{TASK_API}/tree").as_str(), get(get_task_tree))
+        .route(format!("/{TASK_API}/hierarchy").as_str(), get(get_hierarchy_mappings))
         .route(
             format!("/{TASK_API}/hierarchy/attach").as_str(),
             post(attach_child_task),

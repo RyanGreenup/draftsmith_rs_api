@@ -14,6 +14,49 @@ pub struct AttachChildRequest {
     pub child_task_id: i32,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct HierarchyMapping {
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
+}
+
+impl TaskHierarchy {
+    pub fn get_hierarchy_mappings(conn: &mut PgConnection) -> QueryResult<Vec<HierarchyMapping>> {
+        use crate::schema::task_hierarchy::dsl::*;
+
+        task_hierarchy
+            .select((parent_task_id, child_task_id))
+            .load::<(Option<i32>, Option<i32>)>(conn)
+            .map(|results| {
+                results
+                    .into_iter()
+                    .filter_map(|(p, c)| {
+                        c.map(|child| HierarchyMapping {
+                            parent_id: p,
+                            child_id: child,
+                        })
+                    })
+                    .collect()
+            })
+    }
+}
+
+pub async fn get_hierarchy_mappings(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<HierarchyMapping>>, StatusCode> {
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let response = TaskHierarchy::get_hierarchy_mappings(&mut conn).map_err(|e| {
+        tracing::error!("Error getting hierarchy mappings: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(response))
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskTreeNode {
     pub id: i32,
