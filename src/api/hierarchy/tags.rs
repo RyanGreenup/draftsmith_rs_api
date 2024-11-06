@@ -128,25 +128,31 @@ mod tests {
         let state = setup_test_state();
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
+        // Import only necessary items and alias conflicting names
+        use crate::schema::tags::dsl::{tags, id as tags_id};
+        use crate::schema::tag_hierarchy::dsl::{
+            tag_hierarchy, id as hierarchy_id, child_tag_id, parent_tag_id,
+        };
+
         conn.build_transaction()
             .read_write()
             .run::<_, diesel::result::Error, _>(|conn| {
                 // Create test tags
-                let root_tag = diesel::insert_into(crate::schema::tags::table)
+                let root_tag = diesel::insert_into(tags)
                     .values(NewTag {
                         name: "test_root_tag",
                     })
                     .get_result::<Tag>(conn)
                     .expect("Failed to create root tag");
 
-                let child1_tag = diesel::insert_into(crate::schema::tags::table)
+                let child1_tag = diesel::insert_into(tags)
                     .values(NewTag {
                         name: "test_child1_tag",
                     })
                     .get_result::<Tag>(conn)
                     .expect("Failed to create child1 tag");
 
-                let child2_tag = diesel::insert_into(crate::schema::tags::table)
+                let child2_tag = diesel::insert_into(tags)
                     .values(NewTag {
                         name: "test_child2_tag",
                     })
@@ -154,7 +160,7 @@ mod tests {
                     .expect("Failed to create child2 tag");
 
                 // Create hierarchy: root -> child1 -> child2
-                diesel::insert_into(crate::schema::tag_hierarchy::table)
+                diesel::insert_into(tag_hierarchy)
                     .values(NewTagHierarchy {
                         child_tag_id: Some(child1_tag.id),
                         parent_tag_id: Some(root_tag.id),
@@ -162,7 +168,7 @@ mod tests {
                     .execute(conn)
                     .expect("Failed to create first hierarchy link");
 
-                diesel::insert_into(crate::schema::tag_hierarchy::table)
+                diesel::insert_into(tag_hierarchy)
                     .values(NewTagHierarchy {
                         child_tag_id: Some(child2_tag.id),
                         parent_tag_id: Some(child1_tag.id),
