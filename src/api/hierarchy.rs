@@ -97,19 +97,19 @@ pub async fn attach_child_note(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Define the is_circular function
+    // Define the is_circular function specific to notes
     let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
         is_circular_hierarchy(conn, child_id, parent_id)
     };
 
     // Create a NoteHierarchy item
     let item = NoteHierarchy {
-        id: 0,
+        id: 0, // Assuming 'id' is auto-generated
         parent_note_id: payload.parent_note_id,
         child_note_id: Some(payload.child_note_id),
     };
 
-    // Call the generic attach_child function
+    // Call the generic attach_child function with the specific implementation
     attach_child(is_circular_fn, item, &mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

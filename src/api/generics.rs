@@ -2,7 +2,10 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use std::collections::{HashMap, HashSet};
 
-pub trait HierarchyItem {
+pub trait HierarchyItem
+where
+    Self: Sized,
+{
     type Id: Copy + Eq;
 
     fn get_parent_id(&self) -> Option<Self::Id>;
@@ -11,11 +14,10 @@ pub trait HierarchyItem {
     fn set_parent_id(&mut self, parent_id: Option<Self::Id>);
     fn set_child_id(&mut self, child_id: Self::Id);
 
-    fn find_by_child_id(conn: &mut PgConnection, child_id: Self::Id) -> QueryResult<Option<Self>>
-    where
-        Self: Sized;
+    fn find_by_child_id(conn: &mut PgConnection, child_id: Self::Id) -> QueryResult<Option<Self>>;
 
     fn insert_new(conn: &mut PgConnection, item: &Self) -> QueryResult<()>;
+
     fn update_existing(conn: &mut PgConnection, item: &Self) -> QueryResult<()>;
 }
 
@@ -129,21 +131,21 @@ pub fn is_circular_hierarchy(
     }
 }
 
-pub fn attach_child<F, A>(
-    is_circular_fn: F,
-    attach_fn: A,
-    child_id: i32,
-    parent_id: Option<i32>,
+pub fn attach_child<H>(
+    is_circular_fn: impl Fn(&mut PgConnection, H::Id, Option<H::Id>) -> Result<bool, DieselError>,
+    mut item: H,
     conn: &mut PgConnection,
 ) -> Result<(), DieselError>
 where
-    F: Fn(&mut PgConnection, i32, Option<i32>) -> Result<bool, DieselError>,
-    A: Fn(&mut PgConnection, i32, Option<i32>) -> Result<(), DieselError>,
+    H: HierarchyItem,
 {
+    let child_id = item.get_child_id();
+    let parent_id = item.get_parent_id();
+
     // Prevent circular hierarchy
-    if let Some(parent_id) = parent_id {
-        if is_circular_fn(conn, child_id, Some(parent_id))? {
-            return Err(DieselError::NotFound); // Handle appropriately
+    if let Some(pid) = parent_id {
+        if is_circular_fn(conn, child_id, Some(pid))? {
+            return Err(DieselError::RollbackTransaction);
         }
     }
 
