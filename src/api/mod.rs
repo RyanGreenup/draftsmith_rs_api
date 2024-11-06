@@ -5,6 +5,7 @@ use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
 mod hierarchy;
 mod state;
 pub mod tags;
+// pub mod tasks;
 
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};

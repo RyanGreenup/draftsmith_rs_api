@@ -1,6 +1,6 @@
 use crate::api::AttachChildRequest;
 use crate::tables::{Task, TaskHierarchy};
-use crate::{FLAT_API};
+use crate::TASK_API;
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -64,19 +64,19 @@ pub struct TaskTreeNode {
 
 pub async fn create_task(base_url: &str, task: CreateTaskRequest) -> Result<Task, TaskError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/{FLAT_API}", base_url);
+    let url = format!("{}/{TASK_API}", base_url);
     let response = client.post(url).json(&task).send().await?;
-    
+
     if response.status() == StatusCode::NOT_FOUND {
         return Err(TaskError::NotFound(-1));
     }
-    
+
     let created_task = response.error_for_status()?.json::<Task>().await?;
     Ok(created_task)
 }
 
 pub async fn fetch_task(base_url: &str, id: i32) -> Result<Task, TaskError> {
-    let url = format!("{}/{FLAT_API}/{}", base_url, id);
+    let url = format!("{}/{TASK_API}/{}", base_url, id);
     let response = reqwest::get(url).await?;
 
     if response.status() == StatusCode::NOT_FOUND {
@@ -88,15 +88,19 @@ pub async fn fetch_task(base_url: &str, id: i32) -> Result<Task, TaskError> {
 }
 
 pub async fn fetch_tasks(base_url: &str) -> Result<Vec<Task>, TaskError> {
-    let url = format!("{}/{FLAT_API}", base_url);
+    let url = format!("{}/{TASK_API}", base_url);
     let response = reqwest::get(url).await?.error_for_status()?;
     let tasks = response.json::<Vec<Task>>().await?;
     Ok(tasks)
 }
 
-pub async fn update_task(base_url: &str, id: i32, task: UpdateTaskRequest) -> Result<Task, TaskError> {
+pub async fn update_task(
+    base_url: &str,
+    id: i32,
+    task: UpdateTaskRequest,
+) -> Result<Task, TaskError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/{FLAT_API}/{}", base_url, id);
+    let url = format!("{}/{TASK_API}/{}", base_url, id);
     let response = client.put(url).json(&task).send().await?;
 
     if response.status() == StatusCode::NOT_FOUND {
@@ -109,7 +113,7 @@ pub async fn update_task(base_url: &str, id: i32, task: UpdateTaskRequest) -> Re
 
 pub async fn delete_task(base_url: &str, id: i32) -> Result<(), TaskError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/{FLAT_API}/{}", base_url, id);
+    let url = format!("{}/{TASK_API}/{}", base_url, id);
     let response = client.delete(url).send().await?;
 
     if response.status() == StatusCode::NOT_FOUND {
@@ -122,7 +126,10 @@ pub async fn delete_task(base_url: &str, id: i32) -> Result<(), TaskError> {
 
 // ** Hierarchical Functions ..................................................
 
-pub async fn attach_child_task(base_url: &str, payload: AttachChildRequest) -> Result<(), TaskError> {
+pub async fn attach_child_task(
+    base_url: &str,
+    payload: AttachChildRequest,
+) -> Result<(), TaskError> {
     let client = reqwest::Client::new();
     let url = format!("{}/tasks/hierarchy/attach", base_url);
     client
@@ -176,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_and_fetch_task() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
-        
+
         // Create a test task
         let task = CreateTaskRequest {
             note_id: None,
@@ -204,7 +211,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_task() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
-        
+
         // Create a task to update
         let task = CreateTaskRequest {
             note_id: None,
@@ -216,7 +223,7 @@ mod tests {
             all_day: Some(false),
             goal_relationship: None,
         };
-        
+
         let created_task = create_task(base_url, task).await?;
 
         // Update the task
@@ -233,7 +240,10 @@ mod tests {
 
         let updated_task = update_task(base_url, created_task.id, update).await?;
         assert_eq!(updated_task.status, "in_progress");
-        assert_eq!(updated_task.effort_estimate, Some(bigdecimal::BigDecimal::from(3)));
+        assert_eq!(
+            updated_task.effort_estimate,
+            Some(bigdecimal::BigDecimal::from(3))
+        );
         assert_eq!(updated_task.priority, Some(2));
 
         Ok(())
@@ -242,7 +252,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_task() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
-        
+
         // Create a task to delete
         let task = CreateTaskRequest {
             note_id: None,
@@ -254,7 +264,7 @@ mod tests {
             all_day: Some(false),
             goal_relationship: None,
         };
-        
+
         let created_task = create_task(base_url, task).await?;
 
         // Delete the task
@@ -284,7 +294,8 @@ mod tests {
                 all_day: Some(false),
                 goal_relationship: None,
             },
-        ).await?;
+        )
+        .await?;
 
         // Create child task
         let child_task = create_task(
@@ -299,7 +310,8 @@ mod tests {
                 all_day: Some(false),
                 goal_relationship: None,
             },
-        ).await?;
+        )
+        .await?;
 
         // Attach child to parent
         let attach_request = AttachChildRequest {
@@ -319,7 +331,10 @@ mod tests {
 
         // Verify detachment
         let updated_tree = fetch_task_tree(base_url).await?;
-        let parent_node = updated_tree.iter().find(|n| n.id == parent_task.id).unwrap();
+        let parent_node = updated_tree
+            .iter()
+            .find(|n| n.id == parent_task.id)
+            .unwrap();
         assert_eq!(parent_node.children.len(), 0);
 
         Ok(())

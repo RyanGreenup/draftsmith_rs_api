@@ -63,7 +63,6 @@ impl HierarchyItem for TagHierarchy {
             .execute(conn)
             .map(|_| ())
     }
-
 }
 
 #[debug_handler]
@@ -244,8 +243,8 @@ mod tests {
     use crate::api::tests::setup_test_state;
     use crate::tables::{NewTag, NewTagHierarchy};
     use axum::extract::State;
-    use axum::Json;
     use axum::http::StatusCode;
+    use axum::Json;
     use diesel::prelude::*;
 
     #[tokio::test]
