@@ -124,6 +124,7 @@ mod tests {
             .get()
             .expect("Failed to get database connection");
 
+
         // Create test tags
         let root_tag = diesel::insert_into(crate::schema::tags::table)
             .values(NewTag {
