@@ -63,6 +63,50 @@ impl HierarchyItem for TagHierarchy {
             .execute(conn)
             .map(|_| ())
     }
+
+    #[tokio::test]
+    async fn test_attach_child_tag_detects_cycle() {
+        let state = setup_test_state();
+        let mut conn = state.pool.get().expect("Failed to get database connection");
+
+        // Import necessary items
+        use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
+        use crate::schema::tags::dsl::tags;
+
+        // Create test tags within a transaction
+        let (tag1_id, tag2_id) = conn
+            .build_transaction()
+            .read_write()
+            .run::<_, diesel::result::Error, _>(|conn| {
+                // Create two tags
+                let tag1 = diesel::insert_into(tags)
+                    .values(NewTag { name: "Tag1" })
+                    .get_result::<Tag>(conn)?;
+                let tag2 = diesel::insert_into(tags)
+                    .values(NewTag { name: "Tag2" })
+                    .get_result::<Tag>(conn)?;
+                Ok((tag1.id, tag2.id))
+            })
+            .expect("Transaction failed");
+
+        // Attach tag2 as a child of tag1
+        let payload = AttachChildRequest {
+            parent_id: Some(tag1_id),
+            child_id: tag2_id,
+        };
+        let status = attach_child_tag(State(state.clone()), Json(payload))
+            .await
+            .expect("Failed to attach child tag");
+        assert_eq!(status, StatusCode::OK);
+
+        // Attempt to create a cycle by attaching tag1 as a child of tag2
+        let cyclic_payload = AttachChildRequest {
+            parent_id: Some(tag2_id),
+            child_id: tag1_id,
+        };
+        let result = attach_child_tag(State(state), Json(cyclic_payload)).await;
+        assert_eq!(result, Err(StatusCode::BAD_REQUEST));
+    }
 }
 
 #[debug_handler]
@@ -158,8 +202,13 @@ pub async fn attach_child_tag(
         child_tag_id: Some(payload.child_id),
     };
 
-    // Call the generic attach_child function
-    attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Call the generic attach_child function and handle cycle detection
+    attach_child(is_circular_fn, item, &mut conn).map_err(|err| {
+        match err {
+            diesel::result::Error::RollbackTransaction => StatusCode::BAD_REQUEST, // Cycle detected
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    })?;
 
     Ok(StatusCode::OK)
 }
