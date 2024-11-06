@@ -1090,8 +1090,8 @@ mod tests {
             std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
         let manager = ConnectionManager::<PgConnection>::new(&database_url);
         let pool = Pool::builder()
-            .max_size(5)  // This can cause tests to fail if too
-                          //   many connections are opened, they will exhaust postgres connections limit (200 usually)
+            .max_size(5) // This can cause tests to fail if too
+            //   many connections are opened, they will exhaust postgres connections limit (200 usually)
             .build(manager)
             .expect("Failed to create pool.");
         AppState {

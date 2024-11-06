@@ -187,11 +187,11 @@ pub async fn attach_child_task(
 #[cfg(test)]
 mod task_hierarchy_tests {
     use super::*;
+    use crate::api::tests::setup_test_state;
     use crate::tables::{NewTask, NewTaskHierarchy};
     use axum::extract::State;
     use axum::http::StatusCode;
     use diesel::result::Error as DieselError;
-    use crate::api::tests::setup_test_state;
 
     #[tokio::test]
     async fn test_get_task_tree() {
@@ -356,12 +356,9 @@ mod task_hierarchy_tests {
         assert!(hierarchy_exists, "Hierarchy should exist before detachment");
 
         // Call the detach_child_task function directly and await it
-        let response = detach_child_task(
-            State(state.clone()),
-            axum::extract::Path(child_task.id),
-        )
-        .await
-        .expect("detach_child_task failed");
+        let response = detach_child_task(State(state.clone()), axum::extract::Path(child_task.id))
+            .await
+            .expect("detach_child_task failed");
 
         assert_eq!(response, StatusCode::NO_CONTENT);
 
