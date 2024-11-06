@@ -4,7 +4,7 @@ use crate::tables::{NewNote, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
 mod hierarchy;
 mod state;
-mod tags;
+pub mod tags;
 
 use axum::extract::Multipart;
 use axum::http::{header, HeaderName, HeaderValue};

@@ -37,6 +37,7 @@ uuid = { version = "1.11.0", features = ["v4"] }
 mime_guess = "2.0.5"
 sanitize-filename = "0.5.0"
 tempfile = "3.13.0"
+thiserror = "2.0.0"
 
 [dependencies.clap]
 version = "4.5.20"

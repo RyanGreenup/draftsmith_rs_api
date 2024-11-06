@@ -1,14 +1,41 @@
+use super::hierarchy::tags::{attach_child_tag, detach_child_tag, get_tag_tree};
 use super::AppState;
 use crate::tables::{NewTag, Tag};
 use crate::TAGS_API;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     routing::{delete, get, post},
     Json, Router,
 };
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum TagError {
+    #[error("Database error: {0}")]
+    DatabaseError(#[from] diesel::result::Error),
+
+    #[error("Tag not found")]
+    NotFound,
+
+    #[error("Internal server error")]
+    InternalServerError,
+}
+
+impl IntoResponse for TagError {
+    fn into_response(self) -> Response {
+        let status_code = match self {
+            TagError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            TagError::NotFound => StatusCode::NOT_FOUND,
+            TagError::InternalServerError => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (status_code, self.to_string()).into_response()
+    }
+}
 
 #[derive(Deserialize)]
 pub struct CreateTagRequest {
@@ -45,31 +72,28 @@ pub fn create_router() -> Router<AppState> {
             format!("/{TAGS_API}/:id").as_str(),
             get(get_tag).put(update_tag).delete(delete_tag),
         )
-        .route(
-            format!("/{TAGS_API}/tree").as_str(),
-            get(super::hierarchy::tags::get_tag_tree),
-        )
+        .route(format!("/{TAGS_API}/tree").as_str(), get(get_tag_tree))
         .route(
             format!("/{TAGS_API}/attach").as_str(),
-            post(super::hierarchy::tags::attach_child_tag),
+            post(attach_child_tag),
         )
         .route(
             format!("/{TAGS_API}/detach/:id").as_str(),
-            delete(super::hierarchy::tags::detach_child_tag),
+            delete(detach_child_tag),
         )
 }
 
-async fn list_tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, StatusCode> {
+async fn list_tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse>>, TagError> {
     use crate::schema::tags::dsl::*;
 
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| TagError::InternalServerError)?;
 
     let results = tags
         .load::<Tag>(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(TagError::DatabaseError)?;
 
     Ok(Json(results.into_iter().map(Into::into).collect()))
 }
@@ -77,18 +101,21 @@ async fn list_tags(State(state): State<AppState>) -> Result<Json<Vec<TagResponse
 async fn get_tag(
     State(state): State<AppState>,
     Path(tag_id): Path<i32>,
-) -> Result<Json<TagResponse>, StatusCode> {
+) -> Result<Json<TagResponse>, TagError> {
     use crate::schema::tags::dsl::*;
 
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| TagError::InternalServerError)?;
 
     let tag = tags
         .find(tag_id)
         .first::<Tag>(&mut conn)
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+        .map_err(|err| match err {
+            diesel::result::Error::NotFound => TagError::NotFound,
+            _ => TagError::DatabaseError(err),
+        })?;
 
     Ok(Json(tag.into()))
 }
@@ -96,7 +123,7 @@ async fn get_tag(
 async fn create_tag(
     State(state): State<AppState>,
     Json(payload): Json<CreateTagRequest>,
-) -> Result<(StatusCode, Json<TagResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<TagResponse>), TagError> {
     use crate::schema::tags;
 
     let new_tag = NewTag {
@@ -106,12 +133,12 @@ async fn create_tag(
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| TagError::InternalServerError)?;
 
     let tag = diesel::insert_into(tags::table)
         .values(&new_tag)
         .get_result::<Tag>(&mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(TagError::DatabaseError)?;
 
     Ok((StatusCode::CREATED, Json(tag.into())))
 }
@@ -120,18 +147,21 @@ async fn update_tag(
     State(state): State<AppState>,
     Path(tag_id): Path<i32>,
     Json(payload): Json<UpdateTagRequest>,
-) -> Result<Json<TagResponse>, StatusCode> {
+) -> Result<Json<TagResponse>, TagError> {
     use crate::schema::tags::dsl::*;
 
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| TagError::InternalServerError)?;
 
     let tag = diesel::update(tags.find(tag_id))
         .set(name.eq(payload.name))
         .get_result::<Tag>(&mut conn)
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+        .map_err(|err| match err {
+            diesel::result::Error::NotFound => TagError::NotFound,
+            _ => TagError::DatabaseError(err),
+        })?;
 
     Ok(Json(tag.into()))
 }
@@ -139,22 +169,22 @@ async fn update_tag(
 async fn delete_tag(
     State(state): State<AppState>,
     Path(tag_id): Path<i32>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<StatusCode, TagError> {
     use crate::schema::tags::dsl::*;
 
     let mut conn = state
         .pool
         .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| TagError::InternalServerError)?;
 
     let result = diesel::delete(tags.find(tag_id))
         .execute(&mut conn)
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+        .map_err(TagError::DatabaseError)?;
 
     if result > 0 {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err(StatusCode::NOT_FOUND)
+        Err(TagError::NotFound)
     }
 }
 
@@ -219,6 +249,6 @@ mod tests {
 
         // Verify deletion
         let get_result = get_tag(State(state), Path(tag_id)).await;
-        assert!(get_result.is_err());
+        assert!(matches!(get_result, Err(TagError::NotFound)));
     }
 }
