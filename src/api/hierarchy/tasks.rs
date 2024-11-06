@@ -1,5 +1,5 @@
-use super::generics::attach_child;
-use super::generics::is_circular_hierarchy;
+use super::generics::{attach_child, is_circular_hierarchy};
+use crate::schema::tasks::dsl::{tasks, id as task_id};
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::state::AppState;
 use crate::tables::{Task, TaskHierarchy};
@@ -168,6 +168,28 @@ pub async fn attach_child_task(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // Check if the parent task exists (if provided)
+    if let Some(parent_id) = payload.parent_task_id {
+        let parent_exists = tasks
+            .filter(task_id.eq(parent_id))
+            .first::<Task>(&mut conn)
+            .optional()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if parent_exists.is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    // Check if the child task exists
+    let child_exists = tasks
+        .filter(task_id.eq(payload.child_task_id))
+        .first::<Task>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if child_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
     // Define function to get parent ID from task hierarchy
     let get_parent_fn = |conn: &mut PgConnection, child_id: i32| -> QueryResult<Option<i32>> {
         use crate::schema::task_hierarchy::dsl::*;
@@ -175,18 +197,29 @@ pub async fn attach_child_task(
             .filter(child_task_id.eq(Some(child_id)))
             .select(parent_task_id)
             .first::<Option<i32>>(conn)
+            .optional()
+            .map(|opt| opt.flatten())
     };
 
-    // Define the is_circular function specific to tasks
-    let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
-    };
+    // Check for circular reference before proceeding
+    if let Some(parent_id) = payload.parent_task_id {
+        if is_circular_hierarchy(&mut conn, payload.child_task_id, Some(parent_id), get_parent_fn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
 
     // Create a TaskHierarchy item
     let item = TaskHierarchy {
         id: 0, // Assuming 'id' is auto-generated
         parent_task_id: payload.parent_task_id,
         child_task_id: Some(payload.child_task_id),
+    };
+
+    // Define the is_circular function specific to tasks
+    let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
     };
 
     // Call the generic attach_child function with the specific implementation
@@ -203,6 +236,70 @@ mod task_hierarchy_tests {
     use axum::extract::State;
     use axum::http::StatusCode;
     use diesel::result::Error as DieselError;
+    use axum::Json;
+
+    #[tokio::test]
+    async fn test_attach_child_task_detects_cycle() {
+        let state = setup_test_state();
+        let mut conn = state
+            .pool
+            .get()
+            .expect("Failed to get connection from pool");
+
+        use crate::schema::tasks::dsl::{tasks, id as task_id};
+        use diesel::prelude::*;
+
+        // Create two tasks
+        let parent_task = diesel::insert_into(tasks)
+            .values(NewTask {
+                note_id: None,
+                status: "todo",
+                effort_estimate: None,
+                actual_effort: None,
+                deadline: None,
+                priority: Some(1),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: None,
+            })
+            .get_result::<Task>(&mut conn)
+            .expect("Failed to create parent task");
+
+        let child_task = diesel::insert_into(tasks)
+            .values(NewTask {
+                note_id: None,
+                status: "todo",
+                effort_estimate: None,
+                actual_effort: None,
+                deadline: None,
+                priority: Some(2),
+                created_at: Some(chrono::Utc::now().naive_utc()),
+                modified_at: Some(chrono::Utc::now().naive_utc()),
+                all_day: Some(false),
+                goal_relationship: None,
+            })
+            .get_result::<Task>(&mut conn)
+            .expect("Failed to create child task");
+
+        // Attach child_task to parent_task
+        let payload = AttachChildRequest {
+            parent_task_id: Some(parent_task.id),
+            child_task_id: child_task.id,
+        };
+        let status = attach_child_task(State(state.clone()), Json(payload))
+            .await
+            .expect("Failed to attach child task");
+        assert_eq!(status, StatusCode::OK);
+
+        // Attempt to create a cycle by attaching parent_task as a child of child_task
+        let cyclic_payload = AttachChildRequest {
+            parent_task_id: Some(child_task.id),
+            child_task_id: parent_task.id,
+        };
+        let result = attach_child_task(State(state), Json(cyclic_payload)).await;
+        assert_eq!(result, Err(StatusCode::BAD_REQUEST));
+    }
 
     #[tokio::test]
     async fn test_get_task_tree() {
