@@ -61,32 +61,22 @@ impl From<task> for TaskResponse {
     }
 }
 
+const TASK_API: &str = "tasks";
+
 pub fn create_router() -> Router<AppState> {
     Router::new()
+        .route(format!("/{TASK_API}").as_str(), get(list_tasks).post(create_task))
         .route(
-            format!("/{TASKS_API}").as_str(),
-            get(list_tasks).post(create_task),
-        )
-        .route(
-            format!("/{TASKS_API}/:id").as_str(),
+            format!("/{TASK_API}/:id").as_str(),
             get(get_task).put(update_task).delete(delete_task),
         )
-        .route(format!("/{TASKS_API}/tree").as_str(), get(get_task_tree))
+        .route(format!("/{TASK_API}/tree").as_str(), get(get_task_tree))
         .route(
-            format!("/{TASKS_API}/hierarchy/attach").as_str(),
+            format!("/{TASK_API}/hierarchy/attach").as_str(),
             post(attach_child_task),
         )
         .route(
-            format!("/{TASKS_API}/hierarchy/detach/:id").as_str(),
-            delete(detach_child_task),
-        )
-        .route(format!("/{TASKS_API}/tree").as_str(), get(get_task_tree))
-        .route(
-            format!("/{TASKS_API}/attach").as_str(),
-            post(attach_child_task),
-        )
-        .route(
-            format!("/{TASKS_API}/detach/:id").as_str(),
+            format!("/{TASK_API}/hierarchy/detach/:id").as_str(),
             delete(detach_child_task),
         )
 }
