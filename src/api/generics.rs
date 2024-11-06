@@ -2,6 +2,23 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use std::collections::{HashMap, HashSet};
 
+pub trait HierarchyItem {
+    type Id: Copy + Eq;
+
+    fn get_parent_id(&self) -> Option<Self::Id>;
+    fn get_child_id(&self) -> Self::Id;
+
+    fn set_parent_id(&mut self, parent_id: Option<Self::Id>);
+    fn set_child_id(&mut self, child_id: Self::Id);
+
+    fn find_by_child_id(conn: &mut PgConnection, child_id: Self::Id) -> QueryResult<Option<Self>>
+    where
+        Self: Sized;
+
+    fn insert_new(conn: &mut PgConnection, item: &Self) -> QueryResult<()>;
+    fn update_existing(conn: &mut PgConnection, item: &Self) -> QueryResult<()>;
+}
+
 #[derive(Debug)]
 pub struct BasicTreeNode<T> {
     pub id: i32,
@@ -130,8 +147,15 @@ where
         }
     }
 
-    // Perform the attachment using the provided closure
-    attach_fn(conn, child_id, parent_id)?;
+    // Check if hierarchy entry exists
+    if let Some(mut existing_item) = H::find_by_child_id(conn, child_id)? {
+        // Update existing hierarchy entry
+        existing_item.set_parent_id(parent_id);
+        H::update_existing(conn, &existing_item)?;
+    } else {
+        // Insert new hierarchy entry
+        H::insert_new(conn, &item)?;
+    }
 
     Ok(())
 }
