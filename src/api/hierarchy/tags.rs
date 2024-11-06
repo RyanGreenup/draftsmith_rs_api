@@ -6,8 +6,8 @@ use crate::schema::tags::dsl::{id as tag_id, tags};
 use crate::tables::{NewTagHierarchy, Tag, TagHierarchy};
 use axum::{debug_handler, extract::Path, extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize}; 
 use diesel::QueryResult;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagTreeNode {

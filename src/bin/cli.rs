@@ -1,18 +1,16 @@
+use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
-use rust_cli_app::{api, client::tasks::*};
 use rust_cli_app::client::tasks::{
-    fetch_task, fetch_tasks, create_task, update_task, delete_task,
-    fetch_task_tree, attach_child_task, detach_child_task,
-    TaskTreeNode, TaskError, CreateTaskRequest, UpdateTaskRequest, AttachChildRequest,
+    attach_child_task, create_task, delete_task, detach_child_task, fetch_task, fetch_task_tree,
+    fetch_tasks, update_task, AttachChildRequest, CreateTaskRequest, TaskError, TaskTreeNode,
+    UpdateTaskRequest,
 };
-use rust_cli_app::client::{
-    NoteTreeNode,
-};
+use rust_cli_app::client::NoteTreeNode;
+use rust_cli_app::{api, client::tasks::*};
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use chrono::NaiveDateTime;
 
 #[derive(Subcommand)]
 enum AssetCommands {
@@ -671,7 +669,12 @@ async fn main() {
                 }
             },
             ClientCommands::Assets { command } => match command {
-                AssetCommands::Create { file, note_id, description, filename } => {
+                AssetCommands::Create {
+                    file,
+                    note_id,
+                    description,
+                    filename,
+                } => {
                     // TODO: Implement asset creation logic
                     eprintln!("Asset creation not yet implemented");
                     std::process::exit(1);
@@ -691,7 +694,11 @@ async fn main() {
                     eprintln!("Asset retrieval by name not yet implemented");
                     std::process::exit(1);
                 }
-                AssetCommands::Update { id, note_id, description } => {
+                AssetCommands::Update {
+                    id,
+                    note_id,
+                    description,
+                } => {
                     // TODO: Implement update logic
                     eprintln!("Asset update not yet implemented");
                     std::process::exit(1);
@@ -703,17 +710,15 @@ async fn main() {
                 }
             },
             ClientCommands::Tasks { id, command } => match command {
-                TasksCommands::List => {
-                    match fetch_tasks(&url).await {
-                        Ok(tasks) => {
-                            println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
-                        }
-                        Err(e) => {
-                            eprintln!("Error fetching tasks: {}", e);
-                            std::process::exit(1);
-                        }
+                TasksCommands::List => match fetch_tasks(&url).await {
+                    Ok(tasks) => {
+                        println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
                     }
-                }
+                    Err(e) => {
+                        eprintln!("Error fetching tasks: {}", e);
+                        std::process::exit(1);
+                    }
+                },
                 TasksCommands::Get => {
                     if let Some(task_id) = id {
                         match fetch_task(&url, task_id).await {
@@ -745,13 +750,15 @@ async fn main() {
                     goal_relationship,
                 } => {
                     let deadline = match deadline {
-                        Some(date_str) => match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
-                            Ok(dt) => Some(dt),
-                            Err(e) => {
-                                eprintln!("Error parsing deadline: {}", e);
-                                std::process::exit(1);
+                        Some(date_str) => {
+                            match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
+                                Ok(dt) => Some(dt),
+                                Err(e) => {
+                                    eprintln!("Error parsing deadline: {}", e);
+                                    std::process::exit(1);
+                                }
                             }
-                        },
+                        }
                         None => None,
                     };
 
@@ -788,13 +795,16 @@ async fn main() {
                 } => {
                     if let Some(task_id) = id {
                         let deadline = match deadline {
-                            Some(date_str) => match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
-                                Ok(dt) => Some(dt),
-                                Err(e) => {
-                                    eprintln!("Error parsing deadline: {}", e);
-                                    std::process::exit(1);
+                            Some(date_str) => {
+                                match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S")
+                                {
+                                    Ok(dt) => Some(dt),
+                                    Err(e) => {
+                                        eprintln!("Error parsing deadline: {}", e);
+                                        std::process::exit(1);
+                                    }
                                 }
-                            },
+                            }
                             None => None,
                         };
 
@@ -847,32 +857,28 @@ async fn main() {
                         std::process::exit(1);
                     }
                 }
-                TasksCommands::Tree { simple } => {
-                    match fetch_task_tree(&url).await {
-                        Ok(tree) => {
-                            if simple {
-                                print_task_tree(&tree, 0);
-                            } else {
-                                println!("{}", serde_json::to_string_pretty(&tree).unwrap());
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
+                TasksCommands::Tree { simple } => match fetch_task_tree(&url).await {
+                    Ok(tree) => {
+                        if simple {
+                            print_task_tree(&tree, 0);
+                        } else {
+                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
                         }
                     }
-                }
-                TasksCommands::Mappings => {
-                    match fetch_hierarchy_mappings(&url).await {
-                        Ok(mappings) => {
-                            println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
-                        }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
                     }
-                }
+                },
+                TasksCommands::Mappings => match fetch_hierarchy_mappings(&url).await {
+                    Ok(mappings) => {
+                        println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
                 TasksCommands::Attach { parent_id } => {
                     if let Some(child_id) = id {
                         let request = AttachChildRequest {
@@ -881,7 +887,10 @@ async fn main() {
                         };
                         match attach_child_task(&url, request).await {
                             Ok(_) => {
-                                println!("Successfully attached task {} to parent {}", child_id, parent_id);
+                                println!(
+                                    "Successfully attached task {} to parent {}",
+                                    child_id, parent_id
+                                );
                             }
                             Err(e) => {
                                 eprintln!("Error: {}", e);
@@ -917,7 +926,7 @@ async fn main() {
 fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
     for node in nodes {
         println!(
-            "{}- Note ID: {}, Title: {}", 
+            "{}- Note ID: {}, Title: {}",
             "  ".repeat(depth),
             node.id,
             node.title.as_deref().unwrap_or("Untitled")
@@ -932,17 +941,17 @@ fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
     for node in nodes {
         print!("{}", "  ".repeat(depth));
         println!("Task ID: {}, Status: {}", node.id, node.status);
-        
+
         if let Some(note_id) = node.note_id {
             print!("{}", "  ".repeat(depth + 1));
             println!("Note ID: {}", note_id);
         }
-        
+
         if let Some(priority) = node.priority {
             print!("{}", "  ".repeat(depth + 1));
             println!("Priority: {}", priority);
         }
-        
+
         if !node.children.is_empty() {
             print!("{}", "  ".repeat(depth + 1));
             println!("Children:");
