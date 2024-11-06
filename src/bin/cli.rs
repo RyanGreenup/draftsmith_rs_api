@@ -813,7 +813,7 @@ async fn main() {
                             note_id,
                             status,
                             effort_estimate: effort_estimate.map(|e| BigDecimal::from(e)),
-                            actual_effort: actual_effort.map(|e| BigDecimal::from(e)), 
+                            actual_effort: actual_effort.map(|e| BigDecimal::from(e)),
                             deadline,
                             priority,
                             all_day,

@@ -47,7 +47,7 @@ EXECUTE FUNCTION UPDATE_MODIFIED_AT_COLUMN_ON_TASKS();
 CREATE TABLE task_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     parent_task_id INT REFERENCES tasks (id),
-    child_task_id INT REFERENCES tasks (id),
+    child_task_id INT REFERENCES tasks (id) ON DELETE CASCADE,
     UNIQUE (child_task_id)  -- Tags can only have one parent
 );
 

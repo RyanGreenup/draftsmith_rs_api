@@ -160,7 +160,7 @@ CREATE TABLE note_tags (
 CREATE TABLE tag_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     parent_tag_id INT REFERENCES tags (id),
-    child_tag_id INT REFERENCES tags (id),
+    child_tag_id INT REFERENCES tags (id) ON DELETE CASCADE,
     UNIQUE (child_tag_id)  -- Tags can only have one parent
 );
 

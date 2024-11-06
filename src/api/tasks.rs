@@ -42,7 +42,7 @@ impl IntoResponse for TaskError {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CreateTaskRequest {
     pub note_id: Option<i32>,
     pub status: String,
@@ -54,7 +54,7 @@ pub struct CreateTaskRequest {
     pub goal_relationship: Option<i32>,
 }
 
-#[derive(Deserialize, AsChangeset, Default)]
+#[derive(Deserialize, AsChangeset, Default, Serialize)]
 #[diesel(table_name = tasks)]
 pub struct UpdateTaskRequest {
     pub note_id: Option<i32>,

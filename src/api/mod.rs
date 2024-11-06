@@ -2,7 +2,7 @@ use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
-mod hierarchy;
+pub mod hierarchy;
 mod state;
 pub mod tags;
 pub mod tasks;

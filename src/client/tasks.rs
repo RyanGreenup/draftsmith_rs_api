@@ -1,7 +1,7 @@
-use crate::tables::Task;
-use crate::TASK_API;
 pub use crate::api::hierarchy::tasks::{AttachChildRequest, TaskTreeNode};
 pub use crate::api::tasks::{CreateTaskRequest, UpdateTaskRequest};
+use crate::tables::Task;
+use crate::TASK_API;
 use bigdecimal::BigDecimal;
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -21,8 +21,6 @@ pub enum TaskError {
 }
 
 // * Types ....................................................................
-
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HierarchyMapping {
@@ -188,8 +186,6 @@ mod tests {
         Ok(())
     }
 
-
-
     #[tokio::test]
     async fn test_delete_task() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
@@ -267,7 +263,7 @@ mod tests {
         let tree = fetch_task_tree(base_url).await?;
         // This might fail as other tests might have created tasks (async pain)
         // assert_eq!(tree.len(), initial_parents+1); // Should be one more parent as the child is not
-                                                   // at root
+        // at root
 
         // Verify the parent is at the root loevel
         let mut parent_found = false;
