@@ -61,80 +61,8 @@ impl HierarchyItem for TagHierarchy {
             .execute(conn)
             .map(|_| ())
     }
-
-    #[tokio::test]
-    async fn test_detach_child_tag() {
-        let state = setup_test_state();
-        let mut conn = state.pool.get().expect("Failed to get database connection");
-
-        // Import necessary items
-        use crate::schema::tags::dsl::tags;
-        use crate::schema::tag_hierarchy::dsl::{tag_hierarchy, child_tag_id};
-        use crate::tables::{NewTag, NewTagHierarchy};
-
-        // Declare variables to hold the tag IDs
-        let mut parent_tag_id: Option<i32> = None;
-        let mut child_tag_id_value: Option<i32> = None;
-
-        // Create test tags and hierarchy within a transaction
-        conn.build_transaction()
-            .read_write()
-            .run::<_, diesel::result::Error, _>(|conn| {
-                // Create parent tag
-                let parent_tag = diesel::insert_into(tags)
-                    .values(NewTag { name: "parent_tag" })
-                    .get_result::<Tag>(conn)?;
-
-                // Create child tag
-                let child_tag = diesel::insert_into(tags)
-                    .values(NewTag { name: "child_tag" })
-                    .get_result::<Tag>(conn)?;
-
-                // Store the tag IDs
-                parent_tag_id = Some(parent_tag.id);
-                child_tag_id_value = Some(child_tag.id);
-
-                // Create hierarchy link between parent and child
-                diesel::insert_into(tag_hierarchy)
-                    .values(NewTagHierarchy {
-                        parent_tag_id: Some(parent_tag.id),
-                        child_tag_id: Some(child_tag.id),
-                    })
-                    .execute(conn)?;
-
-                Ok(())
-            })
-            .expect("Transaction failed");
-
-        // Unwrap the tag IDs
-        let child_tag_id_value = child_tag_id_value.expect("Failed to retrieve child_tag_id");
-
-        // Call detach_child_tag to detach the child
-        let status = detach_child_tag(
-            State(state.clone()),
-            Path(child_tag_id_value),
-        )
-        .await
-        .expect("Failed to detach child tag");
-
-        assert_eq!(status, StatusCode::NO_CONTENT);
-
-        // Verify that the hierarchy link has been removed
-        let hierarchy_exists = tag_hierarchy
-            .filter(child_tag_id.eq(child_tag_id_value))
-            .first::<TagHierarchy>(&mut conn)
-            .optional()
-            .expect("Failed to query tag_hierarchy")
-            .is_some();
-
-        assert!(
-            !hierarchy_exists,
-            "Hierarchy link should be deleted after detaching child"
-        );
-    }
 }
 
-#[debug_handler]
 #[debug_handler]
 pub async fn detach_child_tag(
     State(state): State<AppState>,
@@ -219,7 +147,77 @@ pub async fn get_tag_tree(
 mod tests {
     use super::*;
     use crate::api::tests::setup_test_state;
-    use crate::tables::NewTag;
+    use crate::tables::{NewTag, NewTagHierarchy};
+
+    #[tokio::test]
+    async fn test_detach_child_tag() {
+        let state = setup_test_state();
+        let mut conn = state.pool.get().expect("Failed to get database connection");
+
+        // Import necessary items
+        use crate::schema::tags::dsl::tags;
+        use crate::schema::tag_hierarchy::dsl::{tag_hierarchy, child_tag_id};
+
+        // Declare variables to hold the tag IDs
+        let mut parent_tag_id: Option<i32> = None;
+        let mut child_tag_id_value: Option<i32> = None;
+
+        // Create test tags and hierarchy within a transaction
+        conn.build_transaction()
+            .read_write()
+            .run::<_, diesel::result::Error, _>(|conn| {
+                // Create parent tag
+                let parent_tag = diesel::insert_into(tags)
+                    .values(NewTag { name: "parent_tag" })
+                    .get_result::<Tag>(conn)?;
+
+                // Create child tag
+                let child_tag = diesel::insert_into(tags)
+                    .values(NewTag { name: "child_tag" })
+                    .get_result::<Tag>(conn)?;
+
+                // Store the tag IDs
+                parent_tag_id = Some(parent_tag.id);
+                child_tag_id_value = Some(child_tag.id);
+
+                // Create hierarchy link between parent and child
+                diesel::insert_into(tag_hierarchy)
+                    .values(NewTagHierarchy {
+                        parent_tag_id: Some(parent_tag.id),
+                        child_tag_id: Some(child_tag.id),
+                    })
+                    .execute(conn)?;
+
+                Ok(())
+            })
+            .expect("Transaction failed");
+
+        // Unwrap the tag IDs
+        let child_tag_id_value = child_tag_id_value.expect("Failed to retrieve child_tag_id");
+
+        // Call detach_child_tag to detach the child
+        let status = detach_child_tag(
+            State(state.clone()),
+            Path(child_tag_id_value),
+        )
+        .await
+        .expect("Failed to detach child tag");
+
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        // Verify that the hierarchy link has been removed
+        let hierarchy_exists = tag_hierarchy
+            .filter(child_tag_id.eq(child_tag_id_value))
+            .first::<TagHierarchy>(&mut conn)
+            .optional()
+            .expect("Failed to query tag_hierarchy")
+            .is_some();
+
+        assert!(
+            !hierarchy_exists,
+            "Hierarchy link should be deleted after detaching child"
+        );
+    }
 
     #[tokio::test]
     async fn test_get_tag_tree() {
