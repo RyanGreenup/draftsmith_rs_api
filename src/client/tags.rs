@@ -26,6 +26,11 @@ pub struct TagResponse {
     pub id: i32,
     pub name: String,
 }
+
+#[derive(Serialize)]
+pub struct UpdateTagRequest {
+    pub name: String,
+}
 // * Client ...................................................................
 // ** Flat Functions ..........................................................
 // *** Create .................................................................
@@ -120,6 +125,39 @@ pub async fn list_tags(base_url: &str) -> Result<Vec<TagResponse>, TagError> {
     Ok(tags)
 }
 // *** Update .................................................................
+pub async fn update_tag(
+    base_url: &str,
+    id: i32,
+    update: UpdateTagRequest,
+) -> Result<TagResponse, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/{}", base_url, id);
+
+    let response = client
+        .put(&url)
+        .json(&update)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let updated_tag = response
+        .json::<TagResponse>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(updated_tag)
+}
 // *** Delete .................................................................
 // ** Hierarchical Functions ..................................................
 // *** Attach Child ...........................................................
@@ -133,6 +171,8 @@ mod tests {
     use super::*;
     use crate::BASE_URL;
     use tokio;
+    // *** Functions ..........................................................
+    // **** Create ............................................................
 
     #[tokio::test]
     async fn test_create_tag() {
@@ -157,10 +197,11 @@ mod tests {
         }
     }
 
+    // **** Read ..............................................................
     #[tokio::test]
     async fn test_get_tag() {
         let base_url = BASE_URL;
-        
+
         // First create a tag to retrieve
         let new_tag = CreateTagRequest {
             name: "Test Tag for Get".to_string(),
@@ -208,10 +249,42 @@ mod tests {
             "Created tag not found in tags list"
         );
     }
+
+    #[tokio::test]
+    async fn test_update_tag() {
+        let base_url = BASE_URL;
+
+        // First create a tag to update
+        let new_tag = CreateTagRequest {
+            name: "Test Tag for Update".to_string(),
+        };
+
+        // Create a new tag
+        let created_tag = create_tag(base_url, new_tag)
+            .await
+            .expect("Failed to create tag for testing update");
+
+        // Update the tag
+        let update = UpdateTagRequest {
+            name: "Updated Test Tag".to_string(),
+        };
+
+        let updated_tag = update_tag(base_url, created_tag.id, update)
+            .await
+            .expect("Failed to update tag");
+
+        // Verify the update was successful
+        assert_eq!(updated_tag.id, created_tag.id);
+        assert_eq!(updated_tag.name, "Updated Test Tag");
+
+        // Test updating a non-existent tag
+        let non_existent_update = UpdateTagRequest {
+            name: "This should fail".to_string(),
+        };
+        let non_existent_result = update_tag(base_url, 99999, non_existent_update).await;
+        assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+    }
 }
-// *** Functions ..........................................................
-// **** Create ............................................................
-// **** Read ..............................................................
 // **** Update ............................................................
 // **** Delete ............................................................
 // **** Tree ..............................................................
