@@ -2,8 +2,10 @@ use crate::tables::Task;
 use crate::TASK_API;
 pub use crate::api::hierarchy::tasks::{AttachChildRequest, TaskTreeNode};
 pub use crate::api::tasks::{CreateTaskRequest, UpdateTaskRequest};
+use bigdecimal::BigDecimal;
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -164,7 +166,7 @@ mod tests {
         let task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some("2".to_string()),
+            effort_estimate: Some(BigDecimal::from_str("2").unwrap()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -196,7 +198,7 @@ mod tests {
         let task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some("2".to_string()),
+            effort_estimate: Some(BigDecimal::from_str("2").unwrap()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -229,7 +231,7 @@ mod tests {
         let parent_task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some("2".to_string()),
+            effort_estimate: Some(BigDecimal::from_str("2").unwrap()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -243,7 +245,7 @@ mod tests {
         let child_task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some("1".to_string()),
+            effort_estimate: Some(BigDecimal::from_str("1").unwrap()),
             actual_effort: None,
             deadline: None,
             priority: Some(2),
