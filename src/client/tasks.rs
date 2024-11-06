@@ -234,7 +234,7 @@ mod tests {
         let task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some(2),
+            effort_estimate: Some("2".to_string()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -275,7 +275,7 @@ mod tests {
         let task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some(2),
+            effort_estimate: Some("2".to_string()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -315,7 +315,7 @@ mod tests {
             CreateTaskRequest {
                 note_id: None,
                 status: "todo".to_string(),
-                effort_estimate: Some(2),
+                effort_estimate: Some("2".to_string()),
                 actual_effort: None,
                 deadline: None,
                 priority: Some(1),
@@ -331,7 +331,7 @@ mod tests {
             CreateTaskRequest {
                 note_id: None,
                 status: "todo".to_string(),
-                effort_estimate: Some(1),
+                effort_estimate: Some("1".to_string()),
                 actual_effort: None,
                 deadline: None,
                 priority: Some(2),
