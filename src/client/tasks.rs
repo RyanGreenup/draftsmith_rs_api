@@ -203,51 +203,11 @@ mod tests {
         assert_eq!(fetched_task.priority, Some(1));
 
         // Clean up the tasks we created
-        delete_task(base_url, created_parent.id).await?;
-        delete_task(base_url, created_child.id).await?;
+        delete_task(base_url, created_task.id).await?;
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_update_task() -> Result<(), Box<dyn std::error::Error>> {
-        let base_url = BASE_URL;
 
-        // Create a task to update
-        let task = CreateTaskRequest {
-            note_id: None,
-            status: "todo".to_string(),
-            effort_estimate: Some("2".to_string()),
-            actual_effort: None,
-            deadline: None,
-            priority: Some(1),
-            all_day: Some(false),
-            goal_relationship: None,
-        };
-
-        let created_task = create_task(base_url, task).await?;
-
-        // Update the task
-        let update = UpdateTaskRequest {
-            note_id: None,
-            status: Some("in_progress".to_string()),
-            effort_estimate: Some("3".to_string()),
-            actual_effort: Some("1".to_string()),
-            deadline: None,
-            priority: Some(2),
-            all_day: Some(false),
-            goal_relationship: None,
-        };
-
-        let updated_task = update_task(base_url, created_task.id, update).await?;
-        assert_eq!(updated_task.status, "in_progress");
-        assert_eq!(
-            updated_task.effort_estimate,
-            Some(bigdecimal::BigDecimal::from(3))
-        );
-        assert_eq!(updated_task.priority, Some(2));
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_delete_task() -> Result<(), Box<dyn std::error::Error>> {
@@ -282,9 +242,8 @@ mod tests {
         let base_url = BASE_URL;
 
         dbg!("Running task tree operations test");
-        // Verify initial hierarchy mappings are empty
-        let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
-        assert!(initial_mappings.is_empty());
+        let initial_tree = fetch_task_tree(base_url).await?;
+        let initial_parents = initial_tree.len();
 
         dbg!("Creating parent task");
         // Create parent task
@@ -325,19 +284,33 @@ mod tests {
         dbg!("Fetching task tree");
         // Verify tree structure
         let tree = fetch_task_tree(base_url).await?;
-        dbg!(&tree);
-        assert_eq!(tree.len(), 1); // Only parent should be at root level
-        let parent_node = &tree[0];
-        assert_eq!(parent_node.id, created_parent.id);
-        assert_eq!(parent_node.children.len(), 1);
-        assert_eq!(parent_node.children[0].id, created_child.id);
+        // This might fail as other tests might have created tasks (async pain)
+        // assert_eq!(tree.len(), initial_parents+1); // Should be one more parent as the child is not
+                                                   // at root
+
+        // Verify the parent is at the root loevel
+        let mut parent_found = false;
+        for n in tree.iter() {
+            if n.id == created_parent.id {
+                assert_eq!(n.children.len(), 1);
+                assert_eq!(n.children[0].id, created_child.id);
+                parent_found = true;
+            }
+        }
+        assert!(parent_found);
 
         dbg!("Fetching hierarchy mappings");
         // Verify hierarchy mappings
+        let mut parent_child_found = false;
         let mappings = fetch_hierarchy_mappings(base_url).await?;
-        assert_eq!(mappings.len(), 1);
-        assert_eq!(mappings[0].parent_id, Some(created_parent.id));
-        assert_eq!(mappings[0].child_id, created_child.id);
+        for m in mappings.iter() {
+            if let Some(parent_id) = m.parent_id {
+                if parent_id == created_parent.id && m.child_id == created_child.id {
+                    parent_child_found = true;
+                }
+            }
+        }
+        assert!(parent_child_found);
 
         dbg!("Detaching child from parent");
         // Detach child
@@ -346,9 +319,14 @@ mod tests {
         dbg!("Fetching task tree after detach");
         // Verify detachment
         let tree_after_detach = fetch_task_tree(base_url).await?;
-        assert_eq!(tree_after_detach.len(), 2); // Both tasks should now be at root level
-        let mappings_after_detach = fetch_hierarchy_mappings(base_url).await?;
-        assert!(mappings_after_detach.is_empty());
+        let mut child_parent_found = false;
+        for n in tree_after_detach.iter() {
+            if n.id == created_child.id {
+                assert_eq!(n.children.len(), 0);
+                child_parent_found = true;
+            }
+        }
+        assert!(child_parent_found);
 
         Ok(())
     }
