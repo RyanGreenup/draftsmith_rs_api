@@ -44,6 +44,13 @@ pub struct UpdateTaskRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct HierarchyMapping {
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskTreeNode {
     pub id: i32,
     pub note_id: Option<i32>,
@@ -174,6 +181,13 @@ pub async fn update_task_tree(base_url: &str, tree: TaskTreeNode) -> Result<(), 
     Ok(())
 }
 
+pub async fn fetch_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMapping>, TaskError> {
+    let url = format!("{}/tasks/hierarchy", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let mappings = response.json::<Vec<HierarchyMapping>>().await?;
+    Ok(mappings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +294,10 @@ mod tests {
     #[tokio::test]
     async fn test_task_tree_operations() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
+
+        // Test fetching hierarchy mappings (should be empty initially)
+        let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
+        assert!(initial_mappings.is_empty());
 
         // Create parent task
         let parent_task = create_task(
