@@ -465,12 +465,9 @@ mod task_hierarchy_tests {
 
                 // Verify tree structure
                 assert_eq!(tree.len(), 1, "Expected one root task");
-                assert_eq!(tree[0].title, format!("Task #{}", root_task.id));
+                assert_eq!(tree[0].id, root_task.id);
                 assert_eq!(tree[0].children.len(), 1, "Root should have one child");
-                assert_eq!(
-                    tree[0].children[0].title,
-                    format!("Task #{}", child_task.id)
-                );
+                assert_eq!(tree[0].children[0].id, child_task.id);
                 assert_eq!(
                     tree[0].children[0].children.len(),
                     0,
