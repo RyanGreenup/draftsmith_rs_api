@@ -615,7 +615,7 @@ async fn main() {
                         Ok(_) => {
                             println!("Asset downloaded to {}", output.display());
                         }
-                        Err(rust_cli_app::client::NoteError::NotFound(_)) => {
+                        Err(rust_cli_app::client::AssetError::NotFound(_)) => {
                             eprintln!("Error: Asset not found");
                             std::process::exit(1);
                         }
