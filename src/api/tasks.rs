@@ -1,4 +1,5 @@
 use super::hierarchy::tasks::{attach_child_task, detach_child_task, get_task_tree};
+use crate::TASK_API;
 use super::AppState;
 use crate::schema::tasks::dsl::*;
 use crate::tables::{Task, NewTask};
@@ -39,34 +40,25 @@ impl IntoResponse for TaskError {
 
 #[derive(Deserialize)]
 pub struct CreateTaskRequest {
-    pub status: String,
-    pub name: String,
+    // TODO
 }
 
 #[derive(Deserialize)]
 pub struct UpdateTaskRequest {
-    pub status: String,
-    pub name: String,
+    // TODO
 }
 
 #[derive(Serialize)]
 pub struct TaskResponse {
-    pub id: i32,
-    pub status: String,
-    pub name: String,
+    // TODO
 }
 
 impl From<Task> for TaskResponse {
     fn from(task: Task) -> Self {
-        Self {
-            id: task.id,
-            status: task.status,
-            name: task.name,
-        }
+        // TODO
     }
 }
 
-const TASK_API: &str = "tasks";
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -86,122 +78,6 @@ pub fn create_router() -> Router<AppState> {
         )
 }
 
-async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskResponse>>, TaskError> {
-    use crate::schema::tasks::dsl::*;
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| TaskError::InternalServerError)?;
-
-    let results = tasks
-        .load::<Task>(&mut conn)
-        .map_err(TaskError::DatabaseError)?;
-
-    Ok(Json(results.into_iter().map(Into::into).collect()))
-}
-
-async fn get_task(
-    State(state): State<AppState>,
-    Path(task_id): Path<i32>,
-) -> Result<Json<TaskResponse>, TaskError> {
-    use crate::schema::tasks::dsl::*;
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| TaskError::InternalServerError)?;
-
-    let task = tasks
-        .find(task_id)
-        .first::<Task>(&mut conn)
-        .map_err(|err| match err {
-            diesel::result::Error::NotFound => TaskError::NotFound,
-            _ => TaskError::DatabaseError(err),
-        })?;
-
-    Ok(Json(task.into()))
-}
-
-async fn create_task(
-    State(state): State<AppState>,
-    Json(payload): Json<CreateTaskRequest>,
-) -> Result<(StatusCode, Json<TaskResponse>), TaskError> {
-    use crate::schema::tasks;
-
-    let new_task = NewTask {
-        status: &payload.status,
-        name: &payload.name,
-        note_id: None,
-        effort_estimate: None,
-        actual_effort: None,
-        deadline: None,
-        priority: None,
-        created_at: chrono::Utc::now().naive_utc(),
-        modified_at: chrono::Utc::now().naive_utc(),
-        all_day: false,
-    };
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| TaskError::InternalServerError)?;
-
-    let task = diesel::insert_into(tasks::table)
-        .values(&new_task)
-        .get_result::<Task>(&mut conn)
-        .map_err(TaskError::DatabaseError)?;
-
-    Ok((StatusCode::CREATED, Json(task.into())))
-}
-
-async fn update_task(
-    State(state): State<AppState>,
-    Path(task_id): Path<i32>,
-    Json(payload): Json<UpdateTaskRequest>,
-) -> Result<Json<TaskResponse>, TaskError> {
-    use crate::schema::tasks::dsl::*;
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| TaskError::InternalServerError)?;
-
-    let task = diesel::update(tasks.find(task_id))
-        .set((
-            status.eq(payload.status),
-            name.eq(payload.name),
-        ))
-        .get_result::<Task>(&mut conn)
-        .map_err(|err| match err {
-            diesel::result::Error::NotFound => TaskError::NotFound,
-            _ => TaskError::DatabaseError(err),
-        })?;
-
-    Ok(Json(task.into()))
-}
-
-async fn delete_task(
-    State(state): State<AppState>,
-    Path(task_id): Path<i32>,
-) -> Result<StatusCode, TaskError> {
-    use crate::schema::tasks::dsl::*;
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| TaskError::InternalServerError)?;
-
-    let result = diesel::delete(tasks.find(task_id))
-        .execute(&mut conn)
-        .map_err(TaskError::DatabaseError)?;
-
-    if result > 0 {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(TaskError::NotFound)
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -209,63 +85,7 @@ mod tests {
     use diesel::r2d2::{self, ConnectionManager};
     use diesel::PgConnection;
     use std::sync::Arc;
+    use super::tests::setup_test_state;
 
-    fn setup_test_state() -> AppState {
-        dotenv::dotenv().ok();
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let manager = ConnectionManager::<PgConnection>::new(&database_url);
-        let pool = r2d2::Pool::builder()
-            .build(manager)
-            .expect("Failed to create pool.");
-        AppState {
-            pool: Arc::new(pool),
-        }
-    }
 
-    #[tokio::test]
-    async fn test_task_crud() {
-        let state = setup_test_state();
-
-        // Test create
-        let create_response = create_task(
-            State(state.clone()),
-            Json(CreateTaskRequest {
-                name: "Test task".to_string(),
-                status: "Pending".to_string(),
-            }),
-        )
-        .await
-        .expect("Failed to create task");
-
-        let task_id = create_response.1 .0.id;
-
-        // Test get
-        let get_response = get_task(State(state.clone()), Path(task_id))
-            .await
-            .expect("Failed to get task");
-        assert_eq!(get_response.0.name, "Test task");
-
-        // Test update
-        let update_response = update_task(
-            State(state.clone()),
-            Path(task_id),
-            Json(UpdateTaskRequest {
-                name: "Updated task".to_string(),
-                status: "Completed".to_string(),
-            }),
-        )
-        .await
-        .expect("Failed to update task");
-        assert_eq!(update_response.0.name, "Updated task");
-
-        // Test delete
-        let delete_response = delete_task(State(state.clone()), Path(task_id))
-            .await
-            .expect("Failed to delete task");
-        assert_eq!(delete_response, StatusCode::NO_CONTENT);
-
-        // Verify deletion
-        let get_result = get_task(State(state), Path(task_id)).await;
-        assert!(matches!(get_result, Err(TaskError::NotFound)));
-    }
 }
