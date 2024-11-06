@@ -44,45 +44,42 @@ where
     T: Clone,
 {
     // Create a map of parent_id to children
-    let mut parent_to_children: HashMap<Option<i32>, Vec<i32>> = HashMap::new();
+    let mut parent_to_children: HashMap<i32, Vec<i32>> = HashMap::with_capacity(hierarchies.len());
 
     // Track which items are children
-    let mut child_items: HashSet<i32> = HashSet::new();
+    let mut child_items: HashSet<i32> = HashSet::with_capacity(hierarchies.len());
 
     // Build the parent-to-children mapping
-    for (child_id, parent_id) in hierarchies {
+    for &(child_id, parent_id) in hierarchies {
         parent_to_children
-            .entry(Some(*parent_id))
+            .entry(parent_id)
             .or_default()
-            .push(*child_id);
-        child_items.insert(*child_id);
+            .push(child_id);
+        child_items.insert(child_id);
     }
 
     // Create a map of item id to data for easy lookup
-    let items_map: HashMap<_, _> = items
-        .iter()
-        .map(|(item_id, data)| (*item_id, data))
-        .collect();
+    let items_map: HashMap<i32, &T> = items.iter().map(|(id, data)| (*id, data)).collect();
 
     // Function to recursively build the tree
     fn build_subtree<T: Clone>(
         item_id: i32,
         items_map: &HashMap<i32, &T>,
-        parent_to_children: &HashMap<Option<i32>, Vec<i32>>,
+        parent_to_children: &HashMap<i32, Vec<i32>>,
     ) -> BasicTreeNode<T> {
-        let children = parent_to_children
-            .get(&Some(item_id))
-            .map(|children| {
-                children
-                    .iter()
-                    .map(|child_id| build_subtree(*child_id, items_map, parent_to_children))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let children = if let Some(child_ids) = parent_to_children.get(&item_id) {
+            let mut children_vec = Vec::with_capacity(child_ids.len());
+            for &child_id in child_ids {
+                children_vec.push(build_subtree(child_id, items_map, parent_to_children));
+            }
+            children_vec
+        } else {
+            Vec::new()
+        };
 
         BasicTreeNode {
             id: item_id,
-            data: (*items_map.get(&item_id).unwrap()).clone(),
+            data: items_map[&item_id].clone(),
             children,
         }
     }
@@ -90,8 +87,8 @@ where
     // Build trees starting from root items (items that aren't children)
     let mut tree: Vec<BasicTreeNode<T>> = items
         .iter()
-        .filter(|(item_id, _)| !child_items.contains(item_id))
-        .map(|(item_id, _)| build_subtree(*item_id, &items_map, &parent_to_children))
+        .filter(|(id, _)| !child_items.contains(id))
+        .map(|(id, _)| build_subtree(*id, &items_map, &parent_to_children))
         .collect();
 
     // Sort the tree by item ID for consistent ordering
