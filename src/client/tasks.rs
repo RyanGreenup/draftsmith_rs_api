@@ -205,7 +205,6 @@ mod tests {
         // Clean up the tasks we created
         delete_task(base_url, created_parent.id).await?;
         delete_task(base_url, created_child.id).await?;
-        
         Ok(())
     }
 
