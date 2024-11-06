@@ -8,8 +8,7 @@ use rust_cli_app::client::tasks::{
     TaskTreeNode, TaskError, CreateTaskRequest, UpdateTaskRequest, AttachChildRequest,
 };
 use rust_cli_app::client::{
-    NoteTreeNode, RenderedNote, NoteError, fetch_note_tree,
-    AssetError,
+    NoteTreeNode, RenderedNote, NoteError,
 };
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -848,8 +847,8 @@ async fn main() {
                 TasksCommands::Attach { parent_id } => {
                     if let Some(child_id) = id {
                         let request = AttachChildRequest {
-                            parent_task_id: Some(parent_id),
-                            child_task_id: child_id,
+                            parent_id: Some(parent_id),
+                            child_id: child_id,
                         };
                         match attach_child_task(&url, request).await {
                             Ok(_) => {
@@ -898,7 +897,7 @@ fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
 fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
     for node in nodes {
         print!("{}", "  ".repeat(depth));
-        println!("Task ID: {}", node.id);
+        println!("Task ID: {}, Title: {}", node.id, node.title.as_deref().unwrap_or("Untitled"));
         
         if let Some(note_id) = node.note_id {
             print!("{}", "  ".repeat(depth + 1));
