@@ -13,7 +13,7 @@ pub trait HierarchyItem
 where
     Self: Sized,
 {
-    type Id: Copy + Eq;
+    type Id: Copy + Eq + PartialEq + Clone;
 
     fn get_parent_id(&self) -> Option<Self::Id>;
     fn get_child_id(&self) -> Self::Id;
@@ -116,26 +116,32 @@ where
     Ok(false)
 }
 
-// Concrete implementation specific to your use case
-pub fn is_circular_hierarchy(
+pub fn is_circular_hierarchy<F, T>(
     conn: &mut PgConnection,
-    _child_id: i32,
-    potential_parent_id: Option<i32>,
-) -> Result<bool, DieselError> {
-    use crate::schema::note_hierarchy::dsl::*;
-
-    if let Some(potential_pid) = potential_parent_id {
-        is_circular_reference(potential_pid, |pid| {
-            note_hierarchy
-                .filter(child_note_id.eq(pid))
-                .select(parent_note_id)
-                .first::<Option<i32>>(conn)
-                .optional()
-                .map(|opt| opt.flatten())
-        })
-    } else {
-        Ok(false)
+    child_id: T,
+    potential_parent_id: Option<T>,
+    mut get_parent_fn: F,
+) -> Result<bool, DieselError>
+where
+    F: FnMut(&mut PgConnection, T) -> Result<Option<T>, DieselError>,
+    T: PartialEq + Clone,
+{
+    if let Some(p_id) = potential_parent_id {
+        if p_id == child_id {
+            // Immediate cycle detected
+            return Ok(true);
+        }
+        // Traverse up the hierarchy to check for cycles
+        let mut current_parent_id = Some(p_id);
+        while let Some(current_id) = current_parent_id {
+            if current_id == child_id {
+                // Cycle detected
+                return Ok(true);
+            }
+            current_parent_id = get_parent_fn(conn, current_id)?;
+        }
     }
+    Ok(false)
 }
 
 pub fn attach_child<H>(

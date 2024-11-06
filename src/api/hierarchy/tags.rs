@@ -190,9 +190,20 @@ pub async fn attach_child_tag(
         return Err(StatusCode::NOT_FOUND);
     }
 
+    // Define a function to get the parent ID of a given child ID from tag_hierarchy
+    let get_parent_fn = |conn: &mut PgConnection, child_id: i32| {
+        use crate::schema::tag_hierarchy::dsl::*;
+        tag_hierarchy
+            .filter(child_tag_id.eq(child_id))
+            .select(parent_tag_id)
+            .first::<Option<i32>>(conn)
+            .optional()
+            .map(|opt| opt.flatten())
+    };
+
     // Define the is_circular function specific to tags
     let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-        is_circular_hierarchy(conn, child_id, parent_id)
+        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
     };
 
     // Create a TagHierarchy item
