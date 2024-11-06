@@ -202,6 +202,10 @@ mod tests {
         assert_eq!(fetched_task.status, "todo");
         assert_eq!(fetched_task.priority, Some(1));
 
+        // Clean up the tasks we created
+        delete_task(base_url, created_parent.id).await?;
+        delete_task(base_url, created_child.id).await?;
+        
         Ok(())
     }
 
@@ -279,15 +283,6 @@ mod tests {
         let base_url = BASE_URL;
 
         dbg!("Running task tree operations test");
-        // Clean up by fetching and deleting all existing tasks
-        let existing_tasks = fetch_tasks(base_url).await?;
-        for task in existing_tasks {
-            dbg!("Deleting task");
-            delete_task(base_url, task.id).await?;
-        }
-        dbg!("Finished cleaning up tasks");
-
-        dbg!("Creating parent task");
         // Verify initial hierarchy mappings are empty
         let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
         assert!(initial_mappings.is_empty());
