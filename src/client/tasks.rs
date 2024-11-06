@@ -133,8 +133,8 @@ pub async fn delete_task(base_url: &str, id: i32) -> Result<(), TaskError> {
 
 #[derive(Debug, Serialize)]
 pub struct AttachChildRequest {
-    pub parent_task_id: Option<i32>,
-    pub child_task_id: i32,
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
 }
 
 pub async fn attach_child_task(
@@ -337,8 +337,8 @@ mod tests {
 
         // Attach child to parent
         let attach_request = AttachChildRequest {
-            parent_task_id: Some(parent_task.id),
-            child_task_id: child_task.id,
+            parent_id: Some(parent_task.id),
+            child_id: child_task.id,
         };
         attach_child_task(base_url, attach_request).await?;
 

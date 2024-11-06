@@ -109,8 +109,8 @@ pub async fn attach_child_note(
     // Create a NoteHierarchy item
     let item = NoteHierarchy {
         id: 0, // Assuming 'id' is auto-generated
-        parent_note_id: payload.parent_note_id,
-        child_note_id: Some(payload.child_note_id),
+        parent_note_id: payload.parent_id,
+        child_note_id: Some(payload.child_id),
     };
 
     // Call the generic attach_child function with the specific implementation
