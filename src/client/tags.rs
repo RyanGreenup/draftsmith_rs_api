@@ -31,6 +31,12 @@ pub struct TagResponse {
 pub struct UpdateTagRequest {
     pub name: String,
 }
+
+#[derive(Serialize)]
+pub struct AttachChildTagRequest {
+    pub parent_id: i32,
+    pub child_id: i32,
+}
 // * Client ...................................................................
 // ** Flat Functions ..........................................................
 // *** Create .................................................................
@@ -186,6 +192,41 @@ pub async fn delete_tag(base_url: &str, id: i32) -> Result<(), TagError> {
 
 // ** Hierarchical Functions ..................................................
 // *** Attach Child ...........................................................
+pub async fn attach_child_tag(
+    base_url: &str,
+    parent_id: i32,
+    child_id: i32,
+) -> Result<(), TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/attach", base_url);
+    
+    let request = AttachChildTagRequest {
+        parent_id,
+        child_id,
+    };
+
+    let response = client
+        .post(&url)
+        .json(&request)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    Ok(())
+}
+
 // *** Detach Child ...........................................................
 // *** Get Tree ...............................................................
 // *** Get Mappings ...........................................................
@@ -337,6 +378,44 @@ mod tests {
 
         // Test deleting a non-existent tag
         let non_existent_result = delete_tag(base_url, 99999).await;
+        assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_attach_child_tag() {
+        let base_url = BASE_URL;
+
+        // Create parent tag
+        let parent_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Parent Tag".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create parent tag");
+
+        // Create child tag
+        let child_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Child Tag".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create child tag");
+
+        // Test attaching child to parent
+        attach_child_tag(base_url, parent_tag.id, child_tag.id)
+            .await
+            .expect("Failed to attach child tag");
+
+        // Test attaching to non-existent parent
+        let non_existent_result = attach_child_tag(base_url, 99999, child_tag.id).await;
+        assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+
+        // Test attaching non-existent child
+        let non_existent_result = attach_child_tag(base_url, parent_tag.id, 99999).await;
         assert!(matches!(non_existent_result, Err(TagError::NotFound)));
     }
 }
