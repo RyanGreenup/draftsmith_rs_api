@@ -318,7 +318,7 @@ pub struct NewNote<'a> {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, Clone)]
 #[diesel(table_name = tag_hierarchy)]
 pub struct TagHierarchy {
     pub id: i32,
@@ -333,11 +333,18 @@ pub struct NewTagHierarchy {
     pub child_tag_id: Option<i32>,
 }
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, Clone)]
 #[diesel(table_name = crate::schema::tags)]
 pub struct Tag {
     pub id: i32,
     pub name: String,
+}
+
+impl Tag {
+    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<Tag>> {
+        use crate::schema::tags::dsl::*;
+        tags.load::<Tag>(conn)
+    }
 }
 
 #[derive(Insertable)]
