@@ -198,7 +198,7 @@ pub async fn attach_child_tag(
     child_id: i32,
 ) -> Result<(), TagError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/tags/attach", base_url);
+    let url = format!("{}/tags/hierarchy/attach", base_url);
 
     let request = AttachChildTagRequest {
         parent_id,
