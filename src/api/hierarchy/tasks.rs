@@ -144,12 +144,35 @@ pub async fn detach_child_task(
 ) -> Result<StatusCode, StatusCode> {
     use super::generics::detach_child;
     use crate::schema::task_hierarchy::dsl::{child_task_id, task_hierarchy};
+    use crate::schema::tasks::dsl::{id as task_id, tasks};
     use diesel::prelude::*;
 
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Check if the child task exists
+    let child_exists = tasks
+        .filter(task_id.eq(child_id))
+        .first::<Task>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if child_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Check if the hierarchy entry exists
+    let hierarchy_exists = task_hierarchy
+        .filter(child_task_id.eq(Some(child_id)))
+        .first::<TaskHierarchy>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if hierarchy_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // Define specific delete logic for the task hierarchy
     let delete_fn = |conn: &mut PgConnection, cid: i32| {
