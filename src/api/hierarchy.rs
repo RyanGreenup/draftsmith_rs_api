@@ -81,25 +81,42 @@ where
     tree
 }
 
+// Generic function to detect circular references
+fn is_circular_reference<F, T>(start_id: T, mut get_parent_fn: F) -> Result<bool, DieselError>
+where
+    F: FnMut(T) -> Result<Option<T>, DieselError>,
+    T: PartialEq + Clone,
+{
+    let mut current_parent_id = Some(start_id.clone());
+    while let Some(pid) = current_parent_id {
+        current_parent_id = get_parent_fn(pid)?;
+        if current_parent_id == Some(start_id.clone()) {
+            return Ok(true); // Circular reference detected
+        }
+    }
+    Ok(false)
+}
+
+// Concrete implementation specific to your use case
 fn is_circular_hierarchy(
     conn: &mut PgConnection,
-    child_id: i32,
+    _child_id: i32,
     potential_parent_id: Option<i32>,
 ) -> Result<bool, DieselError> {
     use crate::schema::note_hierarchy::dsl::*;
-    let mut current_parent_id = potential_parent_id;
-    while let Some(pid) = current_parent_id {
-        if pid == child_id {
-            return Ok(true); // Circular hierarchy detected
-        }
-        current_parent_id = note_hierarchy
-            .filter(child_note_id.eq(pid))
-            .select(parent_note_id)
-            .first::<Option<i32>>(conn)
-            .optional()?
-            .flatten();
+
+    if let Some(potential_pid) = potential_parent_id {
+        is_circular_reference(potential_pid, |pid| {
+            note_hierarchy
+                .filter(child_note_id.eq(pid))
+                .select(parent_note_id)
+                .first::<Option<i32>>(conn)
+                .optional()
+                .map(|opt| opt.flatten())
+        })
+    } else {
+        Ok(false)
     }
-    Ok(false)
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
