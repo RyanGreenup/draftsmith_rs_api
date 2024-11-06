@@ -131,6 +131,45 @@ pub struct NoteTreeNode {
 
 // Modify Note Hierarchy
 
+pub struct HierarchyDbOps<F, U, I> {
+    pub is_circular_fn: F,
+    pub update_existing_fn: U,
+    pub insert_new_fn: I,
+}
+
+fn attach_child<F, U, I>(
+    db_ops: HierarchyDbOps<F, U, I>,
+    child_id: i32,
+    parent_id: Option<i32>,
+    conn: &mut PgConnection,
+) -> Result<(), DieselError>
+where
+    F: Fn(&mut PgConnection, i32, Option<i32>) -> Result<bool, DieselError>,
+    U: Fn(&mut PgConnection, i32, Option<i32>) -> Result<(), DieselError>,
+    I: Fn(&mut PgConnection, i32, Option<i32>) -> Result<(), DieselError>,
+{
+    // Prevent circular hierarchy
+    if let Some(parent_id) = parent_id {
+        if (db_ops.is_circular_fn)(conn, child_id, Some(parent_id))? {
+            return Err(DieselError::NotFound); // Handle appropriately
+        }
+    }
+
+    // Check if hierarchy entry exists
+    let existing_entry = note_hierarchy
+        .filter(child_note_id.eq(child_id))
+        .first::<NoteHierarchy>(conn)
+        .optional()?;
+
+    if existing_entry.is_some() {
+        (db_ops.update_existing_fn)(conn, child_id, parent_id)?;
+    } else {
+        (db_ops.insert_new_fn)(conn, child_id, parent_id)?;
+    }
+
+    Ok(())
+}
+
 pub async fn attach_child_note(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
@@ -140,40 +179,35 @@ pub async fn attach_child_note(
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Prevent circular hierarchy
-    if let Some(parent_id) = payload.parent_note_id {
-        if is_circular_hierarchy(&mut conn, payload.child_note_id, Some(parent_id))
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        {
-            return Err(StatusCode::BAD_REQUEST); // Circular hierarchy detected
-        }
-    }
+    let db_ops = HierarchyDbOps {
+        is_circular_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+            is_circular_hierarchy(conn, child_id, parent_id)
+        },
+        update_existing_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+            diesel::update(note_hierarchy.filter(child_note_id.eq(child_id)))
+                .set(parent_note_id.eq(parent_id))
+                .execute(conn)
+                .map(|_| ())
+        },
+        insert_new_fn: |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+            let new_entry = NewNoteHierarchy {
+                child_note_id: Some(child_id),
+                parent_note_id: parent_id,
+            };
+            diesel::insert_into(note_hierarchy)
+                .values(&new_entry)
+                .execute(conn)
+                .map(|_| ())
+        },
+    };
 
-    // Check if a hierarchy entry already exists for the child
-    let existing_entry = note_hierarchy
-        .filter(child_note_id.eq(payload.child_note_id))
-        .first::<NoteHierarchy>(&mut conn)
-        .optional()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if existing_entry.is_some() {
-        // Update the existing hierarchy entry
-        diesel::update(note_hierarchy.filter(child_note_id.eq(payload.child_note_id)))
-            .set(parent_note_id.eq(payload.parent_note_id))
-            .execute(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    } else {
-        // Create a new hierarchy entry
-        let new_entry = NewNoteHierarchy {
-            child_note_id: Some(payload.child_note_id),
-            parent_note_id: payload.parent_note_id,
-        };
-
-        diesel::insert_into(note_hierarchy)
-            .values(&new_entry)
-            .execute(&mut conn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    attach_child(
+        db_ops,
+        payload.child_note_id,
+        payload.parent_note_id,
+        &mut conn,
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
