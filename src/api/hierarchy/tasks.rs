@@ -1,8 +1,8 @@
 use super::generics::{attach_child, is_circular_hierarchy};
-use crate::schema::tasks::dsl::{tasks, id as task_id};
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::state::AppState;
-use crate::tables::{Task, TaskHierarchy, NewTaskHierarchy};
+use crate::schema::tasks::dsl::{id as task_id, tasks};
+use crate::tables::{NewTaskHierarchy, Task, TaskHierarchy};
 use axum::{extract::Path, extract::State, http::StatusCode, Json};
 use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
@@ -230,8 +230,13 @@ pub async fn attach_child_task(
 
     // Check for circular reference before proceeding
     if let Some(parent_id) = payload.parent_task_id {
-        if is_circular_hierarchy(&mut conn, payload.child_task_id, Some(parent_id), get_parent_fn)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        if is_circular_hierarchy(
+            &mut conn,
+            payload.child_task_id,
+            Some(parent_id),
+            get_parent_fn,
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -262,8 +267,8 @@ mod task_hierarchy_tests {
     use crate::tables::{NewTask, NewTaskHierarchy};
     use axum::extract::State;
     use axum::http::StatusCode;
-    use diesel::result::Error as DieselError;
     use axum::Json;
+    use diesel::result::Error as DieselError;
 
     #[tokio::test]
     async fn test_attach_child_task_detects_cycle() {
@@ -273,7 +278,7 @@ mod task_hierarchy_tests {
             .get()
             .expect("Failed to get connection from pool");
 
-        use crate::schema::tasks::dsl::{tasks, id as task_id};
+        use crate::schema::tasks::dsl::{id as task_id, tasks};
         use diesel::prelude::*;
 
         // Create two tasks
