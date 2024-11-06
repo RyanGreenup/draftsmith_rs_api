@@ -1,6 +1,7 @@
 use crate::tables::Task;
 use crate::TASK_API;
 pub use crate::api::hierarchy::tasks::{AttachChildRequest, TaskTreeNode};
+pub use crate::api::tasks::{CreateTaskRequest, UpdateTaskRequest};
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -19,29 +20,7 @@ pub enum TaskError {
 
 // * Types ....................................................................
 
-#[derive(Debug, Serialize)]
-pub struct CreateTaskRequest {
-    pub note_id: Option<i32>,
-    pub status: String,
-    pub effort_estimate: Option<String>,
-    pub actual_effort: Option<String>,
-    pub deadline: Option<chrono::NaiveDateTime>,
-    pub priority: Option<i32>,
-    pub all_day: Option<bool>,
-    pub goal_relationship: Option<String>,
-}
 
-#[derive(Debug, Serialize)]
-pub struct UpdateTaskRequest {
-    pub note_id: Option<i32>,
-    pub status: Option<String>,
-    pub effort_estimate: Option<String>,
-    pub actual_effort: Option<String>,
-    pub deadline: Option<chrono::NaiveDateTime>,
-    pub priority: Option<i32>,
-    pub all_day: Option<bool>,
-    pub goal_relationship: Option<String>,
-}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HierarchyMapping {
