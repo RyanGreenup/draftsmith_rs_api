@@ -6,37 +6,7 @@ use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
 use crate::api::Path;
 use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
-use axum::{extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
-use diesel::result::Error as DieselError;
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct NoteTreeNode {
-    pub id: i32,
-    pub title: Option<String>,
-    pub content: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub children: Vec<NoteTreeNode>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TagTreeNode {
-    pub id: i32,
-    pub name: String,
-    pub children: Vec<TagTreeNode>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct TaskTreeNode {
-    pub id: i32,
-    pub title: String,
-    pub description: Option<String>,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub modified_at: Option<chrono::NaiveDateTime>,
-    pub children: Vec<TaskTreeNode>,
-}
 
 impl HierarchyItem for NoteHierarchy {
     type Id = i32;
@@ -90,6 +60,24 @@ impl HierarchyItem for NoteHierarchy {
             .map(|_| ())
     }
 }
+use axum::{
+    debug_handler,
+    extract::{Json, State},
+    http::StatusCode,
+};
+use diesel::prelude::*;
+use diesel::result::Error as DieselError;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct NoteTreeNode {
+    pub id: i32,
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+    pub children: Vec<NoteTreeNode>,
+}
 
 // Modify Note Hierarchy
 
@@ -120,6 +108,7 @@ pub async fn attach_child_note(
     Ok(StatusCode::OK)
 }
 
+#[debug_handler]
 pub async fn get_note_tree(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
@@ -176,6 +165,7 @@ pub async fn get_note_tree(
 }
 
 // Handler for the PUT /notes/tree endpoint
+#[debug_handler]
 pub async fn update_note_tree(
     State(state): State<AppState>,
     Json(note_tree): Json<NoteTreeNode>,
@@ -587,7 +577,3 @@ pub async fn detach_child_note(
 
     Ok(StatusCode::NO_CONTENT)
 }
-
-// Modify Tag Hierarchy
-
-// Modify Task Hierarchy

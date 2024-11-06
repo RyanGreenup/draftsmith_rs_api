@@ -18,7 +18,7 @@ diesel = { version = "2.2.4", features = ["chrono", "postgres", "numeric", "r2d2
 dotenv = "0.15.0"
 tracing-subscriber = "0.3.18"
 bigdecimal = { version = "0.4.2", features = ["serde"] }
-axum = { version = "0.7.7", features = ["http1", "multipart"] }
+axum = { version = "0.7.7", features = ["http1", "macros", "multipart"] }
 serde = { version = "1.0.214", features = ["derive"] }
 tokio = { version = "1.41.0", features = ["full"] }
 tracing = "0.1.40"

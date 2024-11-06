@@ -2,7 +2,6 @@ use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, Note, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
-mod generics;
 mod hierarchy;
 mod state;
 mod tags;
@@ -26,8 +25,10 @@ struct RenderedNote {
     id: i32,
     rendered_content: String,
 }
-pub use hierarchy::NoteTreeNode;
-use hierarchy::{attach_child_note, detach_child_note, get_note_tree, update_note_tree};
+use crate::api::hierarchy::notes::{
+    attach_child_note, detach_child_note, get_note_tree, update_note_tree,
+};
+pub use hierarchy::notes::NoteTreeNode;
 use sha2::{Digest, Sha256};
 use state::{AppState, Pool};
 use std::collections::{HashMap, HashSet};
