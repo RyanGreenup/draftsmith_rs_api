@@ -1,5 +1,5 @@
 use crate::api::AttachChildRequest;
-use crate::tables::{Task, TaskHierarchy};
+use crate::tables::Task;
 use crate::TASK_API;
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,6 @@ pub struct UpdateTaskRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Debug, Deserialize, Serialize)]
 pub struct HierarchyMapping {
     pub parent_id: Option<i32>,
     pub child_id: i32,
