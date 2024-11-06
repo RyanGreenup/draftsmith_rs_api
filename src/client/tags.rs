@@ -159,6 +159,31 @@ pub async fn update_tag(
     Ok(updated_tag)
 }
 // *** Delete .................................................................
+pub async fn delete_tag(base_url: &str, id: i32) -> Result<(), TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/{}", base_url, id);
+
+    let response = client
+        .delete(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    Ok(())
+}
+
 // ** Hierarchical Functions ..................................................
 // *** Attach Child ...........................................................
 // *** Detach Child ...........................................................
@@ -250,6 +275,7 @@ mod tests {
         );
     }
 
+    // **** Update ............................................................
     #[tokio::test]
     async fn test_update_tag() {
         let base_url = BASE_URL;
@@ -284,8 +310,35 @@ mod tests {
         let non_existent_result = update_tag(base_url, 99999, non_existent_update).await;
         assert!(matches!(non_existent_result, Err(TagError::NotFound)));
     }
+
+    // **** Delete ............................................................
+    #[tokio::test]
+    async fn test_delete_tag() {
+        let base_url = BASE_URL;
+
+        // First create a tag to delete
+        let new_tag = CreateTagRequest {
+            name: "Test Tag for Delete".to_string(),
+        };
+
+        // Create a new tag
+        let created_tag = create_tag(base_url, new_tag)
+            .await
+            .expect("Failed to create tag for testing delete");
+
+        // Delete the tag
+        delete_tag(base_url, created_tag.id)
+            .await
+            .expect("Failed to delete tag");
+
+        // Verify the tag was deleted by attempting to get it
+        let get_result = get_tag(base_url, created_tag.id).await;
+        assert!(matches!(get_result, Err(TagError::NotFound)));
+
+        // Test deleting a non-existent tag
+        let non_existent_result = delete_tag(base_url, 99999).await;
+        assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+    }
 }
-// **** Update ............................................................
-// **** Delete ............................................................
 // **** Tree ..............................................................
 // *** Utils ..............................................................
