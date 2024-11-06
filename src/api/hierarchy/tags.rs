@@ -21,7 +21,7 @@ impl HierarchyItem for TagHierarchy {
     }
 
     fn get_child_id(&self) -> i32 {
-        self.child_tag_id
+        self.child_tag_id.expect("child_tag_id should not be None")
     }
 
     fn set_parent_id(&mut self, parent_id: Option<i32>) {
@@ -29,7 +29,7 @@ impl HierarchyItem for TagHierarchy {
     }
 
     fn set_child_id(&mut self, child_id: i32) {
-        self.child_tag_id = child_id;
+        self.child_tag_id = Some(child_id);
     }
 
     fn find_by_child_id(conn: &mut PgConnection, child_id: i32) -> QueryResult<Option<Self>> {
@@ -86,7 +86,7 @@ pub async fn get_tag_tree(
 
     let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
         .iter()
-        .map(|h| (h.child_tag_id, h.parent_tag_id.unwrap_or(0)))
+        .map(|h| (h.child_tag_id.expect("child_tag_id should not be None"), h.parent_tag_id.unwrap_or(0)))
         .collect();
 
     // Build the basic tree
@@ -149,7 +149,7 @@ mod tests {
         // Create hierarchy: root -> child1 -> child2
         diesel::insert_into(crate::schema::tag_hierarchy::table)
             .values(NewTagHierarchy {
-                child_tag_id: child1_tag.id,
+                child_tag_id: Some(child1_tag.id),
                 parent_tag_id: Some(root_tag.id),
             })
             .execute(&mut conn)
@@ -157,7 +157,7 @@ mod tests {
 
         diesel::insert_into(crate::schema::tag_hierarchy::table)
             .values(NewTagHierarchy {
-                child_tag_id: child2_tag.id,
+                child_tag_id: Some(child2_tag.id),
                 parent_tag_id: Some(child1_tag.id),
             })
             .execute(&mut conn)
