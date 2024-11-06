@@ -6,7 +6,8 @@ use crate::schema::tags::dsl::{id as tag_id, tags};
 use crate::tables::{NewTagHierarchy, Tag, TagHierarchy};
 use axum::{debug_handler, extract::Path, extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize}; 
+use diesel::QueryResult;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagTreeNode {
@@ -235,6 +236,49 @@ pub async fn get_tag_tree(
     let tree = basic_tree.into_iter().map(convert_to_tag_tree).collect();
 
     Ok(Json(tree))
+}
+
+#[derive(Debug, Serialize)]
+pub struct HierarchyMapping {
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
+}
+
+impl TagHierarchy {
+    pub fn get_hierarchy_mappings(conn: &mut PgConnection) -> QueryResult<Vec<HierarchyMapping>> {
+        use crate::schema::tag_hierarchy::dsl::*;
+
+        tag_hierarchy
+            .select((parent_tag_id, child_tag_id))
+            .load::<(Option<i32>, Option<i32>)>(conn)
+            .map(|results| {
+                results
+                    .into_iter()
+                    .filter_map(|(p, c)| {
+                        c.map(|child| HierarchyMapping {
+                            parent_id: p,
+                            child_id: child,
+                        })
+                    })
+                    .collect()
+            })
+    }
+}
+
+pub async fn get_hierarchy_mappings(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<HierarchyMapping>>, StatusCode> {
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let response = TagHierarchy::get_hierarchy_mappings(&mut conn).map_err(|e| {
+        tracing::error!("Error getting hierarchy mappings: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    Ok(Json(response))
 }
 
 #[cfg(test)]

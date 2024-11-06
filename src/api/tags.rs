@@ -1,4 +1,4 @@
-use super::hierarchy::tags::{attach_child_tag, detach_child_tag, get_tag_tree};
+use super::hierarchy::tags::{attach_child_tag, detach_child_tag, get_tag_tree, get_hierarchy_mappings};
 use super::AppState;
 use crate::tables::{NewTag, Tag};
 use crate::TAGS_API;
@@ -73,6 +73,7 @@ pub fn create_router() -> Router<AppState> {
             get(get_tag).put(update_tag).delete(delete_tag),
         )
         .route(format!("/{TAGS_API}/tree").as_str(), get(get_tag_tree))
+        .route(format!("/{TAGS_API}/hierarchy").as_str(), get(get_hierarchy_mappings))
         .route(
             format!("/{TAGS_API}/hierarchy/attach").as_str(),
             post(attach_child_tag),
