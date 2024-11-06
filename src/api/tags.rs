@@ -74,11 +74,11 @@ pub fn create_router() -> Router<AppState> {
         )
         .route(format!("/{TAGS_API}/tree").as_str(), get(get_tag_tree))
         .route(
-            format!("/{TAGS_API}/attach").as_str(),
+            format!("/{TAGS_API}/hierarchy/attach").as_str(),
             post(attach_child_tag),
         )
         .route(
-            format!("/{TAGS_API}/detach/:id").as_str(),
+            format!("/{TAGS_API}/hierarchy/detach/:id").as_str(),
             delete(detach_child_tag),
         )
 }
