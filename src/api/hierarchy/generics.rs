@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
-use std::collections::{HashMap, HashSet};
 use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Deserialize)]
 pub struct AttachChildRequest {

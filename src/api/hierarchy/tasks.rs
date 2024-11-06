@@ -1,3 +1,5 @@
+use super::generics::attach_child;
+use super::generics::is_circular_hierarchy;
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::state::AppState;
 use crate::tables::{Task, TaskHierarchy};
@@ -5,8 +7,6 @@ use axum::{extract::State, http::StatusCode, Json};
 use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
-use super::generics::attach_child;
-use super::generics::is_circular_hierarchy;
 
 #[derive(Debug, Deserialize)]
 pub struct AttachChildRequest {
@@ -179,9 +179,11 @@ mod task_hierarchy_tests {
             .read_write()
             .run::<_, DieselError, _>(|conn| {
                 // Create test tasks
-                use crate::schema::tasks::dsl::{tasks, id as tasks_id};
-                use crate::schema::task_hierarchy::dsl::{task_hierarchy, id as hierarchy_id, child_task_id, parent_task_id};
-                
+                use crate::schema::task_hierarchy::dsl::{
+                    child_task_id, id as hierarchy_id, parent_task_id, task_hierarchy,
+                };
+                use crate::schema::tasks::dsl::{id as tasks_id, tasks};
+
                 let root_task = diesel::insert_into(crate::schema::tasks::table)
                     .values(NewTask {
                         note_id: None,

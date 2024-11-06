@@ -1,9 +1,9 @@
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
+use crate::api::hierarchy::generics::{attach_child, is_circular_hierarchy, AttachChildRequest};
 use crate::api::state::AppState;
 use crate::schema::tag_hierarchy;
 use crate::tables::{NewTagHierarchy, Tag, TagHierarchy};
-use axum::{debug_handler, extract::State, http::StatusCode, Json, extract::Path};
-use crate::api::hierarchy::generics::{attach_child, is_circular_hierarchy, AttachChildRequest};
+use axum::{debug_handler, extract::Path, extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -69,8 +69,8 @@ pub async fn detach_child_tag(
     State(state): State<AppState>,
     Path(child_id): Path<i32>,
 ) -> Result<StatusCode, StatusCode> {
-    use crate::schema::tag_hierarchy::dsl::{tag_hierarchy, child_tag_id};
     use super::generics::detach_child;
+    use crate::schema::tag_hierarchy::dsl::{child_tag_id, tag_hierarchy};
     use diesel::prelude::*;
 
     let mut conn = state
@@ -84,8 +84,7 @@ pub async fn detach_child_tag(
     };
 
     // Call the generic detach_child function
-    detach_child(delete_fn, child_id, &mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -112,8 +111,7 @@ pub async fn attach_child_tag(
     };
 
     // Call the generic attach_child function
-    attach_child(is_circular_fn, item, &mut conn)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -183,8 +181,8 @@ mod tests {
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
         // Import necessary items
+        use crate::schema::tag_hierarchy::dsl::{child_tag_id, tag_hierarchy};
         use crate::schema::tags::dsl::tags;
-        use crate::schema::tag_hierarchy::dsl::{tag_hierarchy, child_tag_id};
 
         // Declare variables to hold the tag IDs
         let mut parent_tag_id: Option<i32> = None;
@@ -224,12 +222,9 @@ mod tests {
         let child_tag_id_value = child_tag_id_value.expect("Failed to retrieve child_tag_id");
 
         // Call detach_child_tag to detach the child
-        let status = detach_child_tag(
-            State(state.clone()),
-            Path(child_tag_id_value),
-        )
-        .await
-        .expect("Failed to detach child tag");
+        let status = detach_child_tag(State(state.clone()), Path(child_tag_id_value))
+            .await
+            .expect("Failed to detach child tag");
 
         assert_eq!(status, StatusCode::NO_CONTENT);
 
@@ -253,8 +248,8 @@ mod tests {
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
         // Import necessary items
+        use crate::schema::tag_hierarchy::dsl::{child_tag_id, parent_tag_id, tag_hierarchy};
         use crate::schema::tags::dsl::tags;
-        use crate::schema::tag_hierarchy::dsl::{tag_hierarchy, child_tag_id, parent_tag_id};
         use crate::tables::{NewTag, Tag};
 
         // Create test tags within a transaction
@@ -283,12 +278,9 @@ mod tests {
         };
 
         // Call attach_child_tag
-        let status = attach_child_tag(
-            State(state.clone()),
-            Json(payload),
-        )
-        .await
-        .expect("Failed to attach child tag");
+        let status = attach_child_tag(State(state.clone()), Json(payload))
+            .await
+            .expect("Failed to attach child tag");
 
         assert_eq!(status, StatusCode::OK);
 
@@ -313,10 +305,10 @@ mod tests {
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
         // Import only necessary items and alias conflicting names
-        use crate::schema::tags::dsl::{tags, id as tags_id};
         use crate::schema::tag_hierarchy::dsl::{
-            tag_hierarchy, id as hierarchy_id, child_tag_id, parent_tag_id,
+            child_tag_id, id as hierarchy_id, parent_tag_id, tag_hierarchy,
         };
+        use crate::schema::tags::dsl::{id as tags_id, tags};
 
         // Declare variables to hold the tag IDs
         let mut root_tag_id: Option<i32> = None;
