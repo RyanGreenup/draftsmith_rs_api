@@ -2,6 +2,15 @@ use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::{api, client::tasks::*};
+use rust_cli_app::client::tasks::{
+    fetch_task, fetch_tasks, create_task, update_task, delete_task,
+    fetch_task_tree, attach_child_task, detach_child_task,
+    TaskTreeNode, TaskError, CreateTaskRequest, UpdateTaskRequest, AttachChildRequest,
+};
+use rust_cli_app::client::{
+    NoteTreeNode, RenderedNote, NoteError, fetch_note_tree,
+    AssetError,
+};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use chrono::NaiveDateTime;
@@ -877,8 +886,13 @@ async fn main() {
     }
 }
 
-fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize) {
-    // ... existing print_simple_tree implementation ...
+fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
+    for node in nodes {
+        println!("{}- Note ID: {}, Title: {}", "  ".repeat(depth), node.id, node.title);
+        if !node.children.is_empty() {
+            print_simple_tree(&node.children, depth + 1);
+        }
+    }
 }
 
 fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
