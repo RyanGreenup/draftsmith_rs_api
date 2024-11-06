@@ -337,8 +337,8 @@ mod tests {
 
         // Attach child to parent
         let attach_request = AttachChildRequest {
-            parent_note_id: Some(parent_task.id),
-            child_note_id: child_task.id,
+            parent_task_id: Some(parent_task.id),
+            child_task_id: child_task.id,
         };
         attach_child_task(base_url, attach_request).await?;
 
