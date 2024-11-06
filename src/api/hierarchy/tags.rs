@@ -64,49 +64,6 @@ impl HierarchyItem for TagHierarchy {
             .map(|_| ())
     }
 
-    #[tokio::test]
-    async fn test_attach_child_tag_detects_cycle() {
-        let state = setup_test_state();
-        let mut conn = state.pool.get().expect("Failed to get database connection");
-
-        // Import necessary items
-        use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
-        use crate::schema::tags::dsl::tags;
-
-        // Create test tags within a transaction
-        let (tag1_id, tag2_id) = conn
-            .build_transaction()
-            .read_write()
-            .run::<_, diesel::result::Error, _>(|conn| {
-                // Create two tags
-                let tag1 = diesel::insert_into(tags)
-                    .values(NewTag { name: "Tag1" })
-                    .get_result::<Tag>(conn)?;
-                let tag2 = diesel::insert_into(tags)
-                    .values(NewTag { name: "Tag2" })
-                    .get_result::<Tag>(conn)?;
-                Ok((tag1.id, tag2.id))
-            })
-            .expect("Transaction failed");
-
-        // Attach tag2 as a child of tag1
-        let payload = AttachChildRequest {
-            parent_id: Some(tag1_id),
-            child_id: tag2_id,
-        };
-        let status = attach_child_tag(State(state.clone()), Json(payload))
-            .await
-            .expect("Failed to attach child tag");
-        assert_eq!(status, StatusCode::OK);
-
-        // Attempt to create a cycle by attaching tag1 as a child of tag2
-        let cyclic_payload = AttachChildRequest {
-            parent_id: Some(tag2_id),
-            child_id: tag1_id,
-        };
-        let result = attach_child_tag(State(state), Json(cyclic_payload)).await;
-        assert_eq!(result, Err(StatusCode::BAD_REQUEST));
-    }
 }
 
 #[debug_handler]
@@ -201,10 +158,14 @@ pub async fn attach_child_tag(
             .map(|opt| opt.flatten())
     };
 
-    // Define the is_circular function specific to tags
-    let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
-        is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn)
-    };
+    // Check for circular reference before proceeding
+    if let Some(parent_id) = payload.parent_id {
+        if is_circular_hierarchy(&mut conn, payload.child_id, Some(parent_id), get_parent_fn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
 
     // Create a TagHierarchy item
     let item = TagHierarchy {
@@ -213,13 +174,13 @@ pub async fn attach_child_tag(
         child_tag_id: Some(payload.child_id),
     };
 
-    // Call the generic attach_child function and handle cycle detection
-    attach_child(is_circular_fn, item, &mut conn).map_err(|err| {
-        match err {
-            diesel::result::Error::RollbackTransaction => StatusCode::BAD_REQUEST, // Cycle detected
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    })?;
+    // Call the generic attach_child function
+    attach_child(
+        |conn, child_id, parent_id| is_circular_hierarchy(conn, child_id, parent_id, get_parent_fn),
+        item,
+        &mut conn,
+    )
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -282,8 +243,54 @@ mod tests {
     use super::*;
     use crate::api::tests::setup_test_state;
     use crate::tables::{NewTag, NewTagHierarchy};
+    use axum::extract::State;
+    use axum::Json;
+    use axum::http::StatusCode;
+    use diesel::prelude::*;
 
     #[tokio::test]
+    async fn test_attach_child_tag_detects_cycle() {
+        let state = setup_test_state();
+        let mut conn = state.pool.get().expect("Failed to get database connection");
+
+        // Import necessary items
+        use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
+        use crate::schema::tags::dsl::tags;
+
+        // Create test tags within a transaction
+        let (tag1_id, tag2_id) = conn
+            .build_transaction()
+            .read_write()
+            .run::<_, diesel::result::Error, _>(|conn| {
+                // Create two tags
+                let tag1 = diesel::insert_into(tags)
+                    .values(NewTag { name: "Tag1" })
+                    .get_result::<Tag>(conn)?;
+                let tag2 = diesel::insert_into(tags)
+                    .values(NewTag { name: "Tag2" })
+                    .get_result::<Tag>(conn)?;
+                Ok((tag1.id, tag2.id))
+            })
+            .expect("Transaction failed");
+
+        // Attach tag2 as a child of tag1
+        let payload = AttachChildRequest {
+            parent_id: Some(tag1_id),
+            child_id: tag2_id,
+        };
+        let status = attach_child_tag(State(state.clone()), Json(payload))
+            .await
+            .expect("Failed to attach child tag");
+        assert_eq!(status, StatusCode::OK);
+
+        // Attempt to create a cycle by attaching tag1 as a child of tag2
+        let cyclic_payload = AttachChildRequest {
+            parent_id: Some(tag2_id),
+            child_id: tag1_id,
+        };
+        let result = attach_child_tag(State(state), Json(cyclic_payload)).await;
+        assert_eq!(result, Err(StatusCode::BAD_REQUEST));
+    }
     async fn test_detach_child_tag() {
         let state = setup_test_state();
         let mut conn = state.pool.get().expect("Failed to get database connection");
