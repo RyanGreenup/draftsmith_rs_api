@@ -72,12 +72,35 @@ pub async fn detach_child_tag(
 ) -> Result<StatusCode, StatusCode> {
     use super::generics::detach_child;
     use crate::schema::tag_hierarchy::dsl::{child_tag_id, tag_hierarchy};
+    use crate::schema::tags::dsl::{id as tag_id, tags};
     use diesel::prelude::*;
 
     let mut conn = state
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Check if the child tag exists
+    let child_exists = tags
+        .filter(tag_id.eq(child_id))
+        .first::<Tag>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if child_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Check if the hierarchy entry exists
+    let hierarchy_exists = tag_hierarchy
+        .filter(child_tag_id.eq(child_id))
+        .first::<TagHierarchy>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if hierarchy_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // Define specific delete logic for the tag hierarchy
     let delete_fn = |conn: &mut PgConnection, cid: i32| {
