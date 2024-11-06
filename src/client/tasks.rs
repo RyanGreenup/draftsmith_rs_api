@@ -1,4 +1,3 @@
-use crate::api::AttachChildRequest;
 use crate::tables::Task;
 use crate::TASK_API;
 use reqwest::{self, StatusCode};
@@ -131,6 +130,12 @@ pub async fn delete_task(base_url: &str, id: i32) -> Result<(), TaskError> {
 }
 
 // ** Hierarchical Functions ..................................................
+
+#[derive(Debug, Serialize)]
+pub struct AttachChildRequest {
+    pub parent_task_id: Option<i32>,
+    pub child_task_id: i32,
+}
 
 pub async fn attach_child_task(
     base_url: &str,

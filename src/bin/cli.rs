@@ -839,8 +839,8 @@ async fn main() {
                 TasksCommands::Attach { parent_id } => {
                     if let Some(child_id) = id {
                         let request = AttachChildRequest {
-                            parent_note_id: Some(parent_id),
-                            child_note_id: child_id,
+                            parent_task_id: Some(parent_id),
+                            child_task_id: child_id,
                         };
                         match attach_child_task(&url, request).await {
                             Ok(_) => {
@@ -884,31 +884,25 @@ fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize)
 fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
     for node in nodes {
         print!("{}", "  ".repeat(depth));
-        println!("{}:", node.id);
-        print!("{}", "  ".repeat(depth + 1));
-        println!("status: {}", node.status);
-        if !node.children.is_empty() {
+        println!("Task ID: {}", node.id);
+        
+        if let Some(note_id) = node.note_id {
             print!("{}", "  ".repeat(depth + 1));
-            println!("children:");
-            print_task_tree(&node.children, depth + 2);
+            println!("Note ID: {}", note_id);
         }
-    }
-    for node in nodes {
-        // Print indentation
-        print!("{}", "  ".repeat(depth));
-        // Print node info in valid YAML format
-        println!("{}:", node.id);
-        // Print title with proper indentation
+        
         print!("{}", "  ".repeat(depth + 1));
-        println!(
-            "title: {}",
-            node.title.clone().expect("Node title should not be None")
-        );
-        // If there are children, print them as a nested list
+        println!("Status: {}", node.status);
+        
+        if let Some(priority) = node.priority {
+            print!("{}", "  ".repeat(depth + 1));
+            println!("Priority: {}", priority);
+        }
+        
         if !node.children.is_empty() {
             print!("{}", "  ".repeat(depth + 1));
-            println!("children:");
-            print_simple_tree(&node.children, depth + 2);
+            println!("Children:");
+            print_task_tree(&node.children, depth + 2);
         }
     }
 }
