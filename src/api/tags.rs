@@ -4,7 +4,7 @@ use crate::TAGS_API;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::get,
+    routing::{delete, get, post},
     Json, Router,
 };
 use diesel::prelude::*;
@@ -44,6 +44,18 @@ pub fn create_router() -> Router<AppState> {
         .route(
             format!("/{TAGS_API}/:id").as_str(),
             get(get_tag).put(update_tag).delete(delete_tag),
+        )
+        .route(
+            format!("/{TAGS_API}/tree").as_str(),
+            get(super::hierarchy::tags::get_tag_tree),
+        )
+        .route(
+            format!("/{TAGS_API}/attach").as_str(),
+            post(super::hierarchy::tags::attach_child_tag),
+        )
+        .route(
+            format!("/{TAGS_API}/detach/:id").as_str(),
+            delete(super::hierarchy::tags::detach_child_tag),
         )
 }
 
