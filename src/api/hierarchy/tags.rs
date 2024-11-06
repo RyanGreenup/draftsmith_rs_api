@@ -134,6 +134,11 @@ mod tests {
             tag_hierarchy, id as hierarchy_id, child_tag_id, parent_tag_id,
         };
 
+        // Declare variables to hold the tag IDs
+        let mut root_tag_id: Option<i32> = None;
+        let mut child1_tag_id: Option<i32> = None;
+        let mut child2_tag_id: Option<i32> = None;
+
         conn.build_transaction()
             .read_write()
             .run::<_, diesel::result::Error, _>(|conn| {
@@ -159,6 +164,11 @@ mod tests {
                     .get_result::<Tag>(conn)
                     .expect("Failed to create child2 tag");
 
+                // Store the IDs
+                root_tag_id = Some(root_tag.id);
+                child1_tag_id = Some(child1_tag.id);
+                child2_tag_id = Some(child2_tag.id);
+
                 // Create hierarchy: root -> child1 -> child2
                 diesel::insert_into(tag_hierarchy)
                     .values(NewTagHierarchy {
@@ -180,6 +190,11 @@ mod tests {
             })
             .expect("Transaction failed");
 
+        // Unwrap the tag IDs
+        let root_tag_id = root_tag_id.expect("Failed to retrieve root_tag_id");
+        let child1_tag_id = child1_tag_id.expect("Failed to retrieve child1_tag_id");
+        let child2_tag_id = child2_tag_id.expect("Failed to retrieve child2_tag_id");
+
         // Call get_tag_tree
         let response = get_tag_tree(State(state)).await.unwrap();
         let tree = response.0;
@@ -187,7 +202,7 @@ mod tests {
         // Find our test root tag in the tree by ID
         let test_tree: Vec<_> = tree
             .into_iter()
-            .filter(|node| node.id == root_tag.id)
+            .filter(|node| node.id == root_tag_id)
             .collect();
 
         assert_eq!(test_tree.len(), 1, "Should find exactly one test root tag");
@@ -195,11 +210,11 @@ mod tests {
         assert_eq!(root.children.len(), 1);
 
         let child1 = &root.children[0];
-        assert_eq!(child1.id, child1_tag.id);
+        assert_eq!(child1.id, child1_tag_id);
         assert_eq!(child1.children.len(), 1);
 
         let child2 = &child1.children[0];
-        assert_eq!(child2.id, child2_tag.id);
+        assert_eq!(child2.id, child2_tag_id);
         assert_eq!(child2.children.len(), 0);
     }
 }
