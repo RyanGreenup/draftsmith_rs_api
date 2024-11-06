@@ -1,7 +1,6 @@
 use super::hierarchy::tasks::{attach_child_task, detach_child_task, get_task_tree};
 use super::AppState;
-use crate::tables::{task, Newtask};
-use crate::TASKS_API;
+use crate::tables::{Task, NewTask};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -165,7 +164,7 @@ async fn update_task(
         .map_err(|_| TaskError::InternalServerError)?;
 
     let task = diesel::update(tasks.find(task_id))
-        .set(name.eq(payload.name))
+        .set(title.eq(payload.name))
         .get_result::<task>(&mut conn)
         .map_err(|err| match err {
             diesel::result::Error::NotFound => TaskError::NotFound,

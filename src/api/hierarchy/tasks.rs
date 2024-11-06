@@ -133,6 +133,7 @@ pub async fn get_task_tree(
     Ok((StatusCode::OK, Json(tree)))
 }
 
+#[axum::debug_handler]
 pub async fn detach_child_task(
     State(state): State<AppState>,
     Path(child_id): Path<i32>,
@@ -157,6 +158,7 @@ pub async fn detach_child_task(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[axum::debug_handler]
 pub async fn attach_child_task(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
