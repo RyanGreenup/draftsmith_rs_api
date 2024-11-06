@@ -233,7 +233,7 @@ mod tests {
 
         let updated_task = update_task(base_url, created_task.id, update).await?;
         assert_eq!(updated_task.status, "in_progress");
-        assert_eq!(updated_task.effort_estimate, Some(3));
+        assert_eq!(updated_task.effort_estimate, Some(bigdecimal::BigDecimal::from(3)));
         assert_eq!(updated_task.priority, Some(2));
 
         Ok(())
@@ -303,8 +303,8 @@ mod tests {
 
         // Attach child to parent
         let attach_request = AttachChildRequest {
-            parent_task_id: Some(parent_task.id),
-            child_task_id: child_task.id,
+            parent_id: Some(parent_task.id),
+            child_id: child_task.id,
         };
         attach_child_task(base_url, attach_request).await?;
 

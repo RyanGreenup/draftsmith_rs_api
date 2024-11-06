@@ -402,7 +402,7 @@ pub struct NewTaskSchedule {
     pub end_datetime: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Debug, Queryable, Selectable, Clone)]
+#[derive(Debug, Queryable, Selectable, Clone, Serialize, Deserialize)]
 #[diesel(table_name = crate::schema::tasks)]
 pub struct Task {
     pub id: i32,
