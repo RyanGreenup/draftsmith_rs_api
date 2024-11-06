@@ -172,7 +172,7 @@ pub async fn attach_child_task(
         task_hierarchy
             .filter(child_task_id.eq(Some(child_id)))
             .select(parent_task_id)
-            .first(conn)
+            .first::<Option<i32>>(conn)
             .optional()
     };
 
