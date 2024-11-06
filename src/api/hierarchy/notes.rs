@@ -4,9 +4,8 @@ use super::generics::{
 };
 use crate::api::state::AppState;
 use crate::api::Path;
-use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
     pub parent_note_id: Option<i32>,
     pub child_note_id: i32,
@@ -71,11 +70,10 @@ use axum::{
     extract::{Json, State},
     http::StatusCode,
 };
-use diesel::prelude::*;
 use diesel::result::Error as DieselError;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, serde::Deserialize, Serialize, Clone)]
 pub struct NoteTreeNode {
     pub id: i32,
     pub title: Option<String>,
