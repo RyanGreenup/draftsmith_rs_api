@@ -39,25 +39,25 @@ impl IntoResponse for TaskError {
 
 #[derive(Deserialize)]
 pub struct CreateTaskRequest {
-    pub name: String,
+    pub status: String,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateTaskRequest {
-    pub name: String,
+    pub status: String,
 }
 
 #[derive(Serialize)]
 pub struct TaskResponse {
     pub id: i32,
-    pub name: String,
+    pub status: String,
 }
 
 impl From<Task> for TaskResponse {
     fn from(task: Task) -> Self {
         Self {
             id: task.id,
-            name: task.name,
+            status: task.status,
         }
     }
 }
@@ -126,7 +126,7 @@ async fn create_task(
     use crate::schema::tasks;
 
     let new_task = NewTask {
-        name: &payload.name,
+        status: &payload.status,
     };
 
     let mut conn = state
@@ -155,7 +155,7 @@ async fn update_task(
         .map_err(|_| TaskError::InternalServerError)?;
 
     let task = diesel::update(tasks.find(task_id))
-        .set(name.eq(payload.name))
+        .set(status.eq(payload.status))
         .get_result::<Task>(&mut conn)
         .map_err(|err| match err {
             diesel::result::Error::NotFound => TaskError::NotFound,
