@@ -40,17 +40,20 @@ impl IntoResponse for TaskError {
 #[derive(Deserialize)]
 pub struct CreateTaskRequest {
     pub status: String,
+    pub name: String,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateTaskRequest {
     pub status: String,
+    pub name: String,
 }
 
 #[derive(Serialize)]
 pub struct TaskResponse {
     pub id: i32,
     pub status: String,
+    pub name: String,
 }
 
 impl From<Task> for TaskResponse {
@@ -58,6 +61,7 @@ impl From<Task> for TaskResponse {
         Self {
             id: task.id,
             status: task.status,
+            name: task.name,
         }
     }
 }
@@ -127,6 +131,15 @@ async fn create_task(
 
     let new_task = NewTask {
         status: &payload.status,
+        name: &payload.name,
+        note_id: None,
+        effort_estimate: None,
+        actual_effort: None,
+        deadline: None,
+        priority: None,
+        created_at: chrono::Utc::now().naive_utc(),
+        modified_at: chrono::Utc::now().naive_utc(),
+        all_day: false,
     };
 
     let mut conn = state
@@ -155,7 +168,10 @@ async fn update_task(
         .map_err(|_| TaskError::InternalServerError)?;
 
     let task = diesel::update(tasks.find(task_id))
-        .set(status.eq(payload.status))
+        .set((
+            status.eq(payload.status),
+            name.eq(payload.name),
+        ))
         .get_result::<Task>(&mut conn)
         .map_err(|err| match err {
             diesel::result::Error::NotFound => TaskError::NotFound,
@@ -215,6 +231,7 @@ mod tests {
             State(state.clone()),
             Json(CreateTaskRequest {
                 name: "Test task".to_string(),
+                status: "Pending".to_string(),
             }),
         )
         .await
@@ -234,6 +251,7 @@ mod tests {
             Path(task_id),
             Json(UpdateTaskRequest {
                 name: "Updated task".to_string(),
+                status: "Completed".to_string(),
             }),
         )
         .await
