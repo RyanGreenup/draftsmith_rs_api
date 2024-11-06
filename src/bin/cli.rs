@@ -801,8 +801,8 @@ async fn main() {
                         let request = UpdateTaskRequest {
                             note_id,
                             status,
-                            effort_estimate,
-                            actual_effort,
+                            effort_estimate: effort_estimate.map(|e| e.to_string()),
+                            actual_effort: actual_effort.map(|e| e.to_string()),
                             deadline,
                             priority,
                             all_day,
