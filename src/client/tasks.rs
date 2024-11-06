@@ -22,8 +22,8 @@ pub enum TaskError {
 pub struct CreateTaskRequest {
     pub note_id: Option<i32>,
     pub status: String,
-    pub effort_estimate: Option<i32>,
-    pub actual_effort: Option<i32>,
+    pub effort_estimate: Option<String>,
+    pub actual_effort: Option<String>,
     pub deadline: Option<chrono::NaiveDateTime>,
     pub priority: Option<i32>,
     pub all_day: Option<bool>,
@@ -34,8 +34,8 @@ pub struct CreateTaskRequest {
 pub struct UpdateTaskRequest {
     pub note_id: Option<i32>,
     pub status: Option<String>,
-    pub effort_estimate: Option<i32>,
-    pub actual_effort: Option<i32>,
+    pub effort_estimate: Option<String>,
+    pub actual_effort: Option<String>,
     pub deadline: Option<chrono::NaiveDateTime>,
     pub priority: Option<i32>,
     pub all_day: Option<bool>,
@@ -206,7 +206,7 @@ mod tests {
         let task = CreateTaskRequest {
             note_id: None,
             status: "todo".to_string(),
-            effort_estimate: Some(2),
+            effort_estimate: Some("2".to_string()),
             actual_effort: None,
             deadline: None,
             priority: Some(1),
@@ -248,8 +248,8 @@ mod tests {
         let update = UpdateTaskRequest {
             note_id: None,
             status: Some("in_progress".to_string()),
-            effort_estimate: Some(3),
-            actual_effort: Some(1),
+            effort_estimate: Some("3".to_string()),
+            actual_effort: Some("1".to_string()),
             deadline: None,
             priority: Some(2),
             all_day: Some(false),
@@ -298,6 +298,12 @@ mod tests {
     #[tokio::test]
     async fn test_task_tree_operations() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
+
+        // Clean up existing tasks and hierarchies first
+        let tasks = fetch_tasks(base_url).await?;
+        for task in tasks {
+            delete_task(base_url, task.id).await?;
+        }
 
         // Test fetching hierarchy mappings (should be empty initially)
         let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
