@@ -162,7 +162,7 @@ pub async fn detach_child_task(
 pub async fn attach_child_task(
     State(state): State<AppState>,
     Json(payload): Json<AttachChildRequest>,
-) -> Result<(StatusCode, Json<AttachChildRequest>), StatusCode> {
+) -> Result<StatusCode, StatusCode> {
     let mut conn = state
         .pool
         .get()
@@ -192,7 +192,7 @@ pub async fn attach_child_task(
     // Call the generic attach_child function with the specific implementation
     attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok((StatusCode::OK, Json(payload)))
+    Ok(StatusCode::OK)
 }
 
 #[cfg(test)]

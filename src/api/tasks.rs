@@ -1,5 +1,6 @@
 use super::hierarchy::tasks::{attach_child_task, detach_child_task, get_task_tree};
 use super::AppState;
+use crate::schema::tasks::dsl::*;
 use crate::tables::{Task, NewTask};
 use axum::{
     extract::{Path, State},
@@ -52,8 +53,8 @@ pub struct TaskResponse {
     pub name: String,
 }
 
-impl From<task> for TaskResponse {
-    fn from(task: task) -> Self {
+impl From<Task> for TaskResponse {
+    fn from(task: Task) -> Self {
         Self {
             id: task.id,
             name: task.name,
@@ -90,7 +91,7 @@ async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskRespon
         .map_err(|_| TaskError::InternalServerError)?;
 
     let results = tasks
-        .load::<task>(&mut conn)
+        .load::<Task>(&mut conn)
         .map_err(TaskError::DatabaseError)?;
 
     Ok(Json(results.into_iter().map(Into::into).collect()))
@@ -109,7 +110,7 @@ async fn get_task(
 
     let task = tasks
         .find(task_id)
-        .first::<task>(&mut conn)
+        .first::<Task>(&mut conn)
         .map_err(|err| match err {
             diesel::result::Error::NotFound => TaskError::NotFound,
             _ => TaskError::DatabaseError(err),
@@ -124,7 +125,7 @@ async fn create_task(
 ) -> Result<(StatusCode, Json<TaskResponse>), TaskError> {
     use crate::schema::tasks;
 
-    let new_task = Newtask {
+    let new_task = NewTask {
         name: &payload.name,
     };
 
@@ -135,7 +136,7 @@ async fn create_task(
 
     let task = diesel::insert_into(tasks::table)
         .values(&new_task)
-        .get_result::<task>(&mut conn)
+        .get_result::<Task>(&mut conn)
         .map_err(TaskError::DatabaseError)?;
 
     Ok((StatusCode::CREATED, Json(task.into())))
@@ -154,8 +155,8 @@ async fn update_task(
         .map_err(|_| TaskError::InternalServerError)?;
 
     let task = diesel::update(tasks.find(task_id))
-        .set(title.eq(payload.name))
-        .get_result::<task>(&mut conn)
+        .set(name.eq(payload.name))
+        .get_result::<Task>(&mut conn)
         .map_err(|err| match err {
             diesel::result::Error::NotFound => TaskError::NotFound,
             _ => TaskError::DatabaseError(err),
