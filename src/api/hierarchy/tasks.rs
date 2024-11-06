@@ -5,6 +5,14 @@ use axum::{extract::State, http::StatusCode, Json};
 use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
+use super::generics::attach_child;
+use super::generics::is_circular_hierarchy;
+
+#[derive(Debug, Deserialize)]
+pub struct AttachChildRequest {
+    pub parent_task_id: Option<i32>,
+    pub child_task_id: i32,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TaskTreeNode {
@@ -123,6 +131,33 @@ pub async fn get_task_tree(
         .collect();
 
     Ok(Json(tree))
+}
+
+pub async fn attach_child_task(
+    State(state): State<AppState>,
+    Json(payload): Json<AttachChildRequest>,
+) -> Result<StatusCode, StatusCode> {
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Define the is_circular function specific to tasks
+    let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
+        is_circular_hierarchy(conn, child_id, parent_id)
+    };
+
+    // Create a TaskHierarchy item
+    let item = TaskHierarchy {
+        id: 0, // Assuming 'id' is auto-generated
+        parent_task_id: payload.parent_task_id,
+        child_task_id: Some(payload.child_task_id),
+    };
+
+    // Call the generic attach_child function with the specific implementation
+    attach_child(is_circular_fn, item, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::OK)
 }
 
 #[cfg(test)]
