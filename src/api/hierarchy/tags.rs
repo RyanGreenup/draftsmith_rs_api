@@ -184,10 +184,10 @@ mod tests {
         let response = get_tag_tree(State(state)).await.unwrap();
         let tree = response.0;
 
-        // Find our test root tag in the tree
+        // Find our test root tag in the tree by ID
         let test_tree: Vec<_> = tree
             .into_iter()
-            .filter(|node| node.name == "test_root_tag")
+            .filter(|node| node.id == root_tag.id)
             .collect();
 
         assert_eq!(test_tree.len(), 1, "Should find exactly one test root tag");
@@ -195,11 +195,11 @@ mod tests {
         assert_eq!(root.children.len(), 1);
 
         let child1 = &root.children[0];
-        assert_eq!(child1.name, "test_child1_tag");
+        assert_eq!(child1.id, child1_tag.id);
         assert_eq!(child1.children.len(), 1);
 
         let child2 = &child1.children[0];
-        assert_eq!(child2.name, "test_child2_tag");
+        assert_eq!(child2.id, child2_tag.id);
         assert_eq!(child2.children.len(), 0);
     }
 }
