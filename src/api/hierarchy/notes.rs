@@ -96,8 +96,9 @@ pub async fn attach_child_note(
         note_hierarchy
             .filter(child_note_id.eq(child_id))
             .select(parent_note_id)
-            .first(conn)
+            .first::<Option<i32>>(conn)
             .optional()
+            .map(|opt| opt.flatten())
     };
 
     // Define the is_circular function specific to notes
