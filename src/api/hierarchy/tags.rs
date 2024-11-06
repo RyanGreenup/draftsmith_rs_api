@@ -2,6 +2,7 @@ use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::hierarchy::generics::{attach_child, is_circular_hierarchy, AttachChildRequest};
 use crate::api::state::AppState;
 use crate::schema::tag_hierarchy;
+use crate::schema::tags::dsl::{id as tag_id, tags};
 use crate::tables::{NewTagHierarchy, Tag, TagHierarchy};
 use axum::{debug_handler, extract::Path, extract::State, http::StatusCode, Json};
 use diesel::prelude::*;
@@ -97,6 +98,30 @@ pub async fn attach_child_tag(
         .pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Check if the parent tag exists (if parent_id is provided)
+    if let Some(parent_id) = payload.parent_id {
+        let parent_exists = tags
+            .filter(tag_id.eq(parent_id))
+            .first::<Tag>(&mut conn)
+            .optional()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        if parent_exists.is_none() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+    }
+
+    // Check if the child tag exists
+    let child_exists = tags
+        .filter(tag_id.eq(payload.child_id))
+        .first::<Tag>(&mut conn)
+        .optional()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if child_exists.is_none() {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // Define the is_circular function specific to tags
     let is_circular_fn = |conn: &mut PgConnection, child_id: i32, parent_id: Option<i32>| {
