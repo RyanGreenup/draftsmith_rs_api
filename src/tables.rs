@@ -353,7 +353,7 @@ pub struct NewTag<'a> {
     pub name: &'a str,
 }
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, Insertable)]
 #[diesel(table_name = task_hierarchy)]
 pub struct TaskHierarchy {
     pub id: i32,
@@ -402,7 +402,7 @@ pub struct NewTaskSchedule {
     pub end_datetime: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, Clone)]
 #[diesel(table_name = crate::schema::tasks)]
 pub struct Task {
     pub id: i32,
@@ -416,6 +416,13 @@ pub struct Task {
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub all_day: Option<bool>,
     pub goal_relationship: Option<i32>,
+}
+
+impl Task {
+    pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<Task>> {
+        use crate::schema::tasks::dsl::*;
+        tasks.load::<Task>(conn)
+    }
 }
 
 #[derive(Insertable)]

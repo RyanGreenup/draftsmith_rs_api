@@ -86,7 +86,12 @@ pub async fn get_tag_tree(
 
     let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
         .iter()
-        .map(|h| (h.child_tag_id.expect("child_tag_id should not be None"), h.parent_tag_id.unwrap_or(0)))
+        .map(|h| {
+            (
+                h.child_tag_id.expect("child_tag_id should not be None"),
+                h.parent_tag_id.unwrap_or(0),
+            )
+        })
         .collect();
 
     // Build the basic tree
@@ -119,10 +124,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_tag_tree() {
         let state = setup_test_state();
-        let mut conn = state
-            .pool
-            .get()
-            .expect("Failed to get database connection");
+        let mut conn = state.pool.get().expect("Failed to get database connection");
 
         conn.build_transaction()
             .read_write()
