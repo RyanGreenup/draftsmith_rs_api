@@ -1,5 +1,13 @@
 use crate::api::state::AppState;
 use crate::api::AttachChildRequest;
+use crate::api::Path;
+use crate::schema::note_hierarchy::dsl::*;
+use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
+use axum::{extract::State, http::StatusCode, Json};
+use diesel::prelude::*;
+use diesel::result::Error as DieselError;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct BasicTreeNode<T> {
@@ -72,14 +80,6 @@ where
 
     tree
 }
-use crate::api::Path;
-use crate::schema::note_hierarchy::dsl::*;
-use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
-use axum::{extract::State, http::StatusCode, Json};
-use diesel::prelude::*;
-use diesel::result::Error as DieselError;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
 
 fn is_circular_hierarchy(
     conn: &mut PgConnection,
