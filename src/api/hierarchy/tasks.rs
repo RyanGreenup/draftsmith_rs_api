@@ -219,10 +219,15 @@ mod task_hierarchy_tests {
 
                 // Get all tasks and hierarchies directly instead of using the async handler
                 use crate::schema::tasks::dsl::*;
-                let all_tasks = Task::get_all(conn)?;
+                use crate::schema::tasks::dsl::*;
+                let all_tasks = tasks
+                    .filter(id.eq_any(vec![root_task.id, child_task.id]))
+                    .load::<Task>(conn)?;
 
                 use crate::schema::task_hierarchy::dsl::*;
-                let hierarchies = task_hierarchy.load::<TaskHierarchy>(conn)?;
+                let hierarchies = task_hierarchy
+                    .filter(child_task_id.eq_any(vec![Some(child_task.id)]))
+                    .load::<TaskHierarchy>(conn)?;
 
                 // Build tree manually using the same logic as get_task_tree
                 let task_data: Vec<(i32, Task)> =
