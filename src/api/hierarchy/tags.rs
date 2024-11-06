@@ -124,28 +124,49 @@ mod tests {
             .get()
             .expect("Failed to get database connection");
 
+        // Clean up any existing test data first
+        diesel::delete(crate::schema::tag_hierarchy::table)
+            .execute(&mut conn)
+            .expect("Failed to clean up existing tag hierarchies");
+        diesel::delete(crate::schema::tags::table)
+            .execute(&mut conn)
+            .expect("Failed to clean up existing tags");
 
         // Create test tags
         let root_tag = diesel::insert_into(crate::schema::tags::table)
             .values(NewTag {
-                name: "root_tag",
+                name: "test_root_tag",
             })
             .get_result::<Tag>(&mut conn)
             .expect("Failed to create root tag");
 
         let child1_tag = diesel::insert_into(crate::schema::tags::table)
             .values(NewTag {
-                name: "child1_tag",
+                name: "test_child1_tag",
             })
             .get_result::<Tag>(&mut conn)
             .expect("Failed to create child1 tag");
 
         let child2_tag = diesel::insert_into(crate::schema::tags::table)
             .values(NewTag {
-                name: "child2_tag",
+                name: "test_child2_tag",
             })
             .get_result::<Tag>(&mut conn)
             .expect("Failed to create child2 tag");
+
+        // Use a cleanup guard to ensure we clean up even if the test fails
+        struct CleanupGuard<'a> {
+            conn: &'a mut PgConnection,
+        }
+
+        impl<'a> Drop for CleanupGuard<'a> {
+            fn drop(&mut self) {
+                let _ = diesel::delete(crate::schema::tag_hierarchy::table).execute(self.conn);
+                let _ = diesel::delete(crate::schema::tags::table).execute(self.conn);
+            }
+        }
+
+        let _guard = CleanupGuard { conn: &mut conn };
 
         // Create hierarchy: root -> child1 -> child2
         diesel::insert_into(crate::schema::tag_hierarchy::table)
@@ -168,26 +189,22 @@ mod tests {
         let response = get_tag_tree(State(state.clone())).await.unwrap();
         let tree = response.0;
 
-        // Clean up test data
-        diesel::delete(crate::schema::tag_hierarchy::table)
-            .execute(&mut conn)
-            .expect("Failed to clean up tag hierarchies");
-        diesel::delete(crate::schema::tags::table)
-            .execute(&mut conn)
-            .expect("Failed to clean up tags");
+        // Find our test root tag in the tree
+        let test_tree: Vec<_> = tree
+            .into_iter()
+            .filter(|node| node.name == "test_root_tag")
+            .collect();
 
-        // Verify the tree structure
-        assert_eq!(tree.len(), 1); // Should have one root node
-        let root = &tree[0];
-        assert_eq!(root.name, "root_tag");
+        assert_eq!(test_tree.len(), 1, "Should find exactly one test root tag");
+        let root = &test_tree[0];
         assert_eq!(root.children.len(), 1);
 
         let child1 = &root.children[0];
-        assert_eq!(child1.name, "child1_tag");
+        assert_eq!(child1.name, "test_child1_tag");
         assert_eq!(child1.children.len(), 1);
 
         let child2 = &child1.children[0];
-        assert_eq!(child2.name, "child2_tag");
+        assert_eq!(child2.name, "test_child2_tag");
         assert_eq!(child2.children.len(), 0);
     }
 }
