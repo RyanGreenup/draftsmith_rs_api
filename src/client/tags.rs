@@ -37,6 +37,12 @@ pub struct AttachChildTagRequest {
     pub parent_id: i32,
     pub child_id: i32,
 }
+
+#[derive(Debug, Deserialize, PartialEq)]
+pub struct HierarchyMapping {
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
+}
 // * Client ...................................................................
 // ** Flat Functions ..........................................................
 // *** Create .................................................................
@@ -254,7 +260,32 @@ pub async fn detach_child_tag(base_url: &str, child_id: i32) -> Result<(), TagEr
 }
 
 // *** Get Tree ...............................................................
+
 // *** Get Mappings ...........................................................
+pub async fn get_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMapping>, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/hierarchy", base_url);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let mappings = response
+        .json::<Vec<HierarchyMapping>>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(mappings)
+}
 #[cfg(test)]
 mod tests {
     // * Tests  ...................................................................
@@ -443,6 +474,47 @@ mod tests {
         // Test detaching a non-existent tag
         let non_existent_result = detach_child_tag(base_url, 99999).await;
         assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_get_hierarchy_mappings() {
+        let base_url = BASE_URL;
+
+        // Create parent tag
+        let parent_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Parent Tag for Mappings".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create parent tag");
+
+        // Create child tag
+        let child_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Child Tag for Mappings".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create child tag");
+
+        // Attach child to parent
+        attach_child_tag(base_url, parent_tag.id, child_tag.id)
+            .await
+            .expect("Failed to attach child tag");
+
+        // Get hierarchy mappings
+        let mappings = get_hierarchy_mappings(base_url)
+            .await
+            .expect("Failed to get hierarchy mappings");
+
+        // Verify the mapping exists
+        assert!(mappings
+            .iter()
+            .any(|mapping| mapping.parent_id == Some(parent_tag.id)
+                && mapping.child_id == child_tag.id));
     }
 
     #[tokio::test]
