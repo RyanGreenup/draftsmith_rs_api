@@ -60,6 +60,35 @@ pub async fn create_tag(base_url: &str, tag: CreateTagRequest) -> Result<TagResp
 }
 // *** Read ...................................................................
 // **** Get Tag ...............................................................
+pub async fn get_tag(base_url: &str, id: i32) -> Result<TagResponse, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/{}", base_url, id);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let tag = response
+        .json::<TagResponse>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(tag)
+}
+
 // **** List Tags .............................................................
 
 pub async fn list_tags(base_url: &str) -> Result<Vec<TagResponse>, TagError> {
@@ -126,6 +155,34 @@ mod tests {
                 panic!("An error occurred: {:?}", e);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_tag() {
+        let base_url = BASE_URL;
+        
+        // First create a tag to retrieve
+        let new_tag = CreateTagRequest {
+            name: "Test Tag for Get".to_string(),
+        };
+
+        // Create a new tag and get its ID
+        let created_tag = create_tag(base_url, new_tag)
+            .await
+            .expect("Failed to create tag for testing get");
+
+        // Test getting the tag
+        let retrieved_tag = get_tag(base_url, created_tag.id)
+            .await
+            .expect("Failed to retrieve tag");
+
+        // Verify the retrieved tag matches the created tag
+        assert_eq!(retrieved_tag.id, created_tag.id);
+        assert_eq!(retrieved_tag.name, created_tag.name);
+
+        // Test getting a non-existent tag
+        let non_existent_result = get_tag(base_url, 99999).await;
+        assert!(matches!(non_existent_result, Err(TagError::NotFound)));
     }
 
     #[tokio::test]
