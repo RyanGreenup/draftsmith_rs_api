@@ -1,9 +1,10 @@
 use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
-use rust_cli_app::api;
+use rust_cli_app::{api, client::tasks::*};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use chrono::NaiveDateTime;
 
 #[derive(Subcommand)]
 enum AssetCommands {
@@ -75,6 +76,85 @@ enum RenderType {
 }
 
 #[derive(Subcommand)]
+enum TasksCommands {
+    /// List all tasks
+    List,
+    /// Get a task by ID
+    Get,
+    /// Create a new task
+    Create {
+        /// Status of the task (e.g., todo, in_progress, done)
+        #[arg(long)]
+        status: String,
+        /// Optional note ID associated with the task
+        #[arg(long)]
+        note_id: Option<i32>,
+        /// Optional effort estimate in hours
+        #[arg(long)]
+        effort_estimate: Option<i32>,
+        /// Optional actual effort in hours
+        #[arg(long)]
+        actual_effort: Option<i32>,
+        /// Optional deadline in ISO 8601 format (e.g., 2023-12-31T23:59:59)
+        #[arg(long)]
+        deadline: Option<String>,
+        /// Optional priority level
+        #[arg(long)]
+        priority: Option<i32>,
+        /// Whether the task is an all-day task
+        #[arg(long)]
+        all_day: Option<bool>,
+        /// Optional goal relationship description
+        #[arg(long)]
+        goal_relationship: Option<String>,
+    },
+    /// Update an existing task
+    Update {
+        /// Status of the task (e.g., todo, in_progress, done)
+        #[arg(long)]
+        status: Option<String>,
+        /// Optional note ID associated with the task
+        #[arg(long)]
+        note_id: Option<i32>,
+        /// Optional effort estimate in hours
+        #[arg(long)]
+        effort_estimate: Option<i32>,
+        /// Optional actual effort in hours
+        #[arg(long)]
+        actual_effort: Option<i32>,
+        /// Optional deadline in ISO 8601 format (e.g., 2023-12-31T23:59:59)
+        #[arg(long)]
+        deadline: Option<String>,
+        /// Optional priority level
+        #[arg(long)]
+        priority: Option<i32>,
+        /// Whether the task is an all-day task
+        #[arg(long)]
+        all_day: Option<bool>,
+        /// Optional goal relationship description
+        #[arg(long)]
+        goal_relationship: Option<String>,
+    },
+    /// Delete a task
+    Delete,
+    /// Fetch the task tree
+    Tree {
+        /// Display simplified tree with only IDs and statuses
+        #[arg(long)]
+        simple: bool,
+    },
+    /// Show hierarchy mappings
+    Mappings,
+    /// Attach a task to a parent task
+    Attach {
+        /// The parent task ID
+        parent_id: i32,
+    },
+    /// Detach a task from its parent
+    Detach,
+}
+
+#[derive(Subcommand)]
 enum Commands {
     /// Start the API server
     Serve {
@@ -106,6 +186,14 @@ enum ClientCommands {
     Assets {
         #[command(subcommand)]
         command: AssetCommands,
+    },
+    /// Tasks related commands
+    Tasks {
+        /// Optional task ID
+        #[arg(long)]
+        id: Option<i32>,
+        #[command(subcommand)]
+        command: TasksCommands,
     },
 }
 
@@ -575,6 +663,215 @@ async fn main() {
                 }
             },
             ClientCommands::Assets { command } => match command {
+                // ... existing Assets match arms ...
+            },
+            ClientCommands::Tasks { id, command } => match command {
+                TasksCommands::List => {
+                    match fetch_tasks(&url).await {
+                        Ok(tasks) => {
+                            println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error fetching tasks: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TasksCommands::Get => {
+                    if let Some(task_id) = id {
+                        match fetch_task(&url, task_id).await {
+                            Ok(task) => {
+                                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                            }
+                            Err(TaskError::NotFound(id)) => {
+                                eprintln!("Error: Task with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for get command");
+                        std::process::exit(1);
+                    }
+                }
+                TasksCommands::Create {
+                    status,
+                    note_id,
+                    effort_estimate,
+                    actual_effort,
+                    deadline,
+                    priority,
+                    all_day,
+                    goal_relationship,
+                } => {
+                    let deadline = match deadline {
+                        Some(date_str) => match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
+                            Ok(dt) => Some(dt),
+                            Err(e) => {
+                                eprintln!("Error parsing deadline: {}", e);
+                                std::process::exit(1);
+                            }
+                        },
+                        None => None,
+                    };
+
+                    let request = CreateTaskRequest {
+                        note_id,
+                        status,
+                        effort_estimate,
+                        actual_effort,
+                        deadline,
+                        priority,
+                        all_day,
+                        goal_relationship,
+                    };
+
+                    match create_task(&url, request).await {
+                        Ok(task) => {
+                            println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating task: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TasksCommands::Update {
+                    status,
+                    note_id,
+                    effort_estimate,
+                    actual_effort,
+                    deadline,
+                    priority,
+                    all_day,
+                    goal_relationship,
+                } => {
+                    if let Some(task_id) = id {
+                        let deadline = match deadline {
+                            Some(date_str) => match NaiveDateTime::parse_from_str(&date_str, "%Y-%m-%dT%H:%M:%S") {
+                                Ok(dt) => Some(dt),
+                                Err(e) => {
+                                    eprintln!("Error parsing deadline: {}", e);
+                                    std::process::exit(1);
+                                }
+                            },
+                            None => None,
+                        };
+
+                        let request = UpdateTaskRequest {
+                            note_id,
+                            status,
+                            effort_estimate,
+                            actual_effort,
+                            deadline,
+                            priority,
+                            all_day,
+                            goal_relationship,
+                        };
+
+                        match update_task(&url, task_id, request).await {
+                            Ok(task) => {
+                                println!("{}", serde_json::to_string_pretty(&task).unwrap());
+                            }
+                            Err(TaskError::NotFound(id)) => {
+                                eprintln!("Error: Task with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for update command");
+                        std::process::exit(1);
+                    }
+                }
+                TasksCommands::Delete => {
+                    if let Some(task_id) = id {
+                        match delete_task(&url, task_id).await {
+                            Ok(_) => {
+                                println!("Task {} deleted successfully", task_id);
+                            }
+                            Err(TaskError::NotFound(id)) => {
+                                eprintln!("Error: Task with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for delete command");
+                        std::process::exit(1);
+                    }
+                }
+                TasksCommands::Tree { simple } => {
+                    match fetch_task_tree(&url).await {
+                        Ok(tree) => {
+                            if simple {
+                                print_task_tree(&tree, 0);
+                            } else {
+                                println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TasksCommands::Mappings => {
+                    match fetch_hierarchy_mappings(&url).await {
+                        Ok(mappings) => {
+                            println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TasksCommands::Attach { parent_id } => {
+                    if let Some(child_id) = id {
+                        let request = AttachChildRequest {
+                            parent_note_id: Some(parent_id),
+                            child_note_id: child_id,
+                        };
+                        match attach_child_task(&url, request).await {
+                            Ok(_) => {
+                                println!("Successfully attached task {} to parent {}", child_id, parent_id);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for attach command");
+                        std::process::exit(1);
+                    }
+                }
+                TasksCommands::Detach => {
+                    if let Some(child_id) = id {
+                        match detach_child_task(&url, child_id).await {
+                            Ok(_) => {
+                                println!("Successfully detached task {}", child_id);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for detach command");
+                        std::process::exit(1);
+                    }
+                }
                 AssetCommands::Create {
                     file,
                     note_id,
@@ -684,6 +981,21 @@ async fn main() {
 }
 
 fn print_simple_tree(nodes: &[rust_cli_app::client::NoteTreeNode], depth: usize) {
+    // ... existing print_simple_tree implementation ...
+}
+
+fn print_task_tree(nodes: &[TaskTreeNode], depth: usize) {
+    for node in nodes {
+        print!("{}", "  ".repeat(depth));
+        println!("{}:", node.id);
+        print!("{}", "  ".repeat(depth + 1));
+        println!("status: {}", node.status);
+        if !node.children.is_empty() {
+            print!("{}", "  ".repeat(depth + 1));
+            println!("children:");
+            print_task_tree(&node.children, depth + 2);
+        }
+    }
     for node in nodes {
         // Print indentation
         print!("{}", "  ".repeat(depth));
