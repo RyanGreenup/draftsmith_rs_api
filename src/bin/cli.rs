@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
@@ -765,12 +766,12 @@ async fn main() {
                     let request = CreateTaskRequest {
                         note_id,
                         status,
-                        effort_estimate: effort_estimate.map(|e| e.to_string()),
-                        actual_effort: actual_effort.map(|e| e.to_string()),
+                        effort_estimate: effort_estimate.map(|e| BigDecimal::from(e)),
+                        actual_effort: actual_effort.map(|e| BigDecimal::from(e)),
                         deadline,
                         priority,
                         all_day,
-                        goal_relationship,
+                        goal_relationship: goal_relationship.map(|g| g.parse::<i32>().unwrap()),
                     };
 
                     match create_task(&url, request).await {
@@ -811,12 +812,12 @@ async fn main() {
                         let request = UpdateTaskRequest {
                             note_id,
                             status,
-                            effort_estimate: effort_estimate.map(|e| e.to_string()),
-                            actual_effort: actual_effort.map(|e| e.to_string()),
+                            effort_estimate: effort_estimate.map(|e| BigDecimal::from(e)),
+                            actual_effort: actual_effort.map(|e| BigDecimal::from(e)), 
                             deadline,
                             priority,
                             all_day,
-                            goal_relationship,
+                            goal_relationship: goal_relationship.map(|g| g.parse::<i32>().unwrap()),
                         };
 
                         match update_task(&url, task_id, request).await {
