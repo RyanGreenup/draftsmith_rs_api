@@ -294,4 +294,77 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_task_tree_operations() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Clean up by fetching and deleting all existing tasks
+        let existing_tasks = fetch_tasks(base_url).await?;
+        for task in existing_tasks {
+            delete_task(base_url, task.id).await?;
+        }
+
+        // Verify initial hierarchy mappings are empty
+        let initial_mappings = fetch_hierarchy_mappings(base_url).await?;
+        assert!(initial_mappings.is_empty());
+
+        // Create parent task
+        let parent_task = CreateTaskRequest {
+            note_id: None,
+            status: "todo".to_string(),
+            effort_estimate: Some("2".to_string()),
+            actual_effort: None,
+            deadline: None,
+            priority: Some(1),
+            all_day: Some(false),
+            goal_relationship: None,
+        };
+        let created_parent = create_task(base_url, parent_task).await?;
+
+        // Create child task
+        let child_task = CreateTaskRequest {
+            note_id: None,
+            status: "todo".to_string(),
+            effort_estimate: Some("1".to_string()),
+            actual_effort: None,
+            deadline: None,
+            priority: Some(2),
+            all_day: Some(false),
+            goal_relationship: None,
+        };
+        let created_child = create_task(base_url, child_task).await?;
+
+        // Attach child to parent
+        let attach_request = AttachChildRequest {
+            parent_id: Some(created_parent.id),
+            child_id: created_child.id,
+        };
+        attach_child_task(base_url, attach_request).await?;
+
+        // Verify tree structure
+        let tree = fetch_task_tree(base_url).await?;
+        assert_eq!(tree.len(), 1); // Only parent should be at root level
+        let parent_node = &tree[0];
+        assert_eq!(parent_node.id, created_parent.id);
+        assert_eq!(parent_node.children.len(), 1);
+        assert_eq!(parent_node.children[0].id, created_child.id);
+
+        // Verify hierarchy mappings
+        let mappings = fetch_hierarchy_mappings(base_url).await?;
+        assert_eq!(mappings.len(), 1);
+        assert_eq!(mappings[0].parent_id, Some(created_parent.id));
+        assert_eq!(mappings[0].child_id, created_child.id);
+
+        // Detach child
+        detach_child_task(base_url, created_child.id).await?;
+
+        // Verify detachment
+        let tree_after_detach = fetch_task_tree(base_url).await?;
+        assert_eq!(tree_after_detach.len(), 2); // Both tasks should now be at root level
+        let mappings_after_detach = fetch_hierarchy_mappings(base_url).await?;
+        assert!(mappings_after_detach.is_empty());
+
+        Ok(())
+    }
 }
