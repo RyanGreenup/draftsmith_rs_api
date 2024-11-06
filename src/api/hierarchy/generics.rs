@@ -1,6 +1,13 @@
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use std::collections::{HashMap, HashSet};
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct AttachChildRequest {
+    pub parent_id: Option<i32>,
+    pub child_id: i32,
+}
 
 pub trait HierarchyItem
 where
