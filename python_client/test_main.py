@@ -28,6 +28,7 @@ def test_note_create():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to create note: {str(e)}")
 
+
 def test_get_note():
     """Test retrieving a note by ID"""
     # First create a note to ensure we have something to retrieve
@@ -53,6 +54,7 @@ def test_get_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve note: {str(e)}")
 
+
 def test_get_note_without_content():
     """Test retrieving a note without content"""
     test_title = "Test Note"
@@ -77,6 +79,7 @@ def test_get_note_without_content():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve note without content: {str(e)}")
 
+
 def test_get_all_notes():
     """Test retrieving all notes"""
     try:
@@ -98,6 +101,7 @@ def test_get_all_notes():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve all notes: {str(e)}")
+
 
 def test_get_all_notes_without_content():
     """Test retrieving all notes without content"""
@@ -121,20 +125,21 @@ def test_get_all_notes_without_content():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve all notes without content: {str(e)}")
 
+
 def test_get_tags_tree():
     """Test retrieving tags in tree structure"""
     try:
         # Create some test tags with hierarchy
         parent_tag = create_tag("parent")
         child_tag = create_tag("child")
-        
+
         # Create a note to attach to the tag
         note = note_create("Test Note", "Test content")
         note_id = note["id"]
-        
+
         # Attach the note to the parent tag
         attach_tag_to_note(note_id, parent_tag.id)
-        
+
         # Get tags tree
         tags = get_tags_tree()
 
@@ -147,13 +152,14 @@ def test_get_tags_tree():
         test_tag = next((tag for tag in tags if tag.id == parent_tag.id), None)
         assert test_tag is not None
         assert test_tag.name == "parent"
-        
+
         # Verify structure
         assert isinstance(test_tag.children, list)
         assert isinstance(test_tag.notes, list)
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve tags tree: {str(e)}")
+
 
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
@@ -189,6 +195,7 @@ def test_get_notes_tree():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve notes tree: {str(e)}")
 
+
 def test_get_note_hierarchy_relations():
     """Test getting all note hierarchy relationships"""
     try:
@@ -205,21 +212,25 @@ def test_get_note_hierarchy_relations():
 
         # Get all hierarchy relationships
         relations = get_note_hierarchy_relations()
-        
+
         # Verify we got a list of NoteHierarchyRelation objects
         assert isinstance(relations, list)
         assert all(isinstance(rel, NoteHierarchyRelation) for rel in relations)
-        
+
         # Find our test relationship
         test_relation = next(
-            (rel for rel in relations 
-             if rel.parent_id == parent_id and rel.child_id == child_id),
-            None
+            (
+                rel
+                for rel in relations
+                if rel.parent_id == parent_id and rel.child_id == child_id
+            ),
+            None,
         )
         assert test_relation is not None
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get hierarchy relations: {str(e)}")
+
 
 def test_attach_note_to_parent():
     """Test attaching a note as a child of another note"""
@@ -237,17 +248,18 @@ def test_attach_note_to_parent():
 
         # Verify the attachment by getting the tree
         tree = get_notes_tree()
-        
+
         # Find the parent note in the tree
         parent_note = next((n for n in tree if n.id == parent_id), None)
         assert parent_note is not None
-        
+
         # Verify child is in parent's children
         child_ids = [child.id for child in parent_note.children]
         assert child_id in child_ids
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach note: {str(e)}")
+
 
 def test_detach_note_from_parent():
     """Test detaching a note from its parent"""
@@ -265,19 +277,23 @@ def test_detach_note_from_parent():
 
         # Verify the attachment worked
         relations = get_note_hierarchy_relations()
-        assert any(rel.parent_id == parent_id and rel.child_id == child_id 
-                  for rel in relations)
+        assert any(
+            rel.parent_id == parent_id and rel.child_id == child_id for rel in relations
+        )
 
         # Now detach the child
         detach_note_from_parent(child_id)
 
         # Verify the detachment worked by checking relations again
         relations_after = get_note_hierarchy_relations()
-        assert not any(rel.parent_id == parent_id and rel.child_id == child_id 
-                      for rel in relations_after)
+        assert not any(
+            rel.parent_id == parent_id and rel.child_id == child_id
+            for rel in relations_after
+        )
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to detach note: {str(e)}")
+
 
 def test_get_tag():
     """Test getting a tag by ID"""
@@ -297,6 +313,7 @@ def test_get_tag():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get tag: {str(e)}")
+
 
 def test_get_all_tags():
     """Test getting all tags"""
@@ -318,6 +335,7 @@ def test_get_all_tags():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get tags: {str(e)}")
+
 
 def test_update_tag():
     """Test updating a tag through the API endpoint"""
@@ -343,6 +361,7 @@ def test_update_tag():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to update tag: {str(e)}")
 
+
 def test_delete_tag():
     """Test deleting a tag through the API endpoint"""
     try:
@@ -362,13 +381,14 @@ def test_delete_tag():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to delete tag: {str(e)}")
 
+
 def test_attach_tag_to_note():
     """Test attaching a tag to a note"""
     try:
         # First create a note and a tag to work with
         note = note_create("Test Note", "Test content")
         note_id = note["id"]
-        
+
         tag_name = "TestTag"
         tag = create_tag(tag_name)
         tag_id = tag.id
@@ -386,13 +406,14 @@ def test_attach_tag_to_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach tag to note: {str(e)}")
 
+
 def test_detach_tag_from_note():
     """Test detaching a tag from a note"""
     try:
         # First create a note and tag to work with
         note = note_create("Test Note", "Test content")
         note_id = note["id"]
-        
+
         tag = create_tag("TestTag")
         tag_id = tag.id
 
@@ -401,19 +422,20 @@ def test_detach_tag_from_note():
 
         # Verify the attachment worked
         relations = get_note_tag_relations()
-        assert any(rel.note_id == note_id and rel.tag_id == tag_id 
-                  for rel in relations)
+        assert any(rel.note_id == note_id and rel.tag_id == tag_id for rel in relations)
 
         # Now detach the tag
         detach_tag_from_note(note_id, tag_id)
 
         # Verify the detachment worked by checking relations again
         relations_after = get_note_tag_relations()
-        assert not any(rel.note_id == note_id and rel.tag_id == tag_id 
-                      for rel in relations_after)
+        assert not any(
+            rel.note_id == note_id and rel.tag_id == tag_id for rel in relations_after
+        )
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to detach tag from note: {str(e)}")
+
 
 def test_get_note_tag_relations():
     """Test getting all note-tag relationships"""
@@ -421,7 +443,7 @@ def test_get_note_tag_relations():
         # First create a note and tag to work with
         note = note_create("Test Note", "Test content")
         note_id = note["id"]
-        
+
         tag = create_tag("TestTag")
         tag_id = tag.id
 
@@ -430,21 +452,25 @@ def test_get_note_tag_relations():
 
         # Get all note-tag relationships
         relations = get_note_tag_relations()
-        
+
         # Verify we got a list of NoteTagRelation objects
         assert isinstance(relations, list)
         assert all(isinstance(rel, NoteTagRelation) for rel in relations)
-        
+
         # Find our test relationship
         test_relation = next(
-            (rel for rel in relations 
-             if rel.note_id == note_id and rel.tag_id == tag_id),
-            None
+            (
+                rel
+                for rel in relations
+                if rel.note_id == note_id and rel.tag_id == tag_id
+            ),
+            None,
         )
         assert test_relation is not None
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get note-tag relations: {str(e)}")
+
 
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
@@ -460,6 +486,7 @@ def test_create_tag():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to create tag: {str(e)}")
+
 
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
@@ -477,7 +504,7 @@ def test_update_notes_tree():
             modified_at=None,
             hierarchy_type=None,
             children=[],
-            tags=[]
+            tags=[],
         )
 
         # Update the tree structure
@@ -496,4 +523,3 @@ def test_update_notes_tree():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to update notes tree: {str(e)}")
-
