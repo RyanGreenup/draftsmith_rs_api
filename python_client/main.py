@@ -526,7 +526,9 @@ def attach_tag_to_parent(
     response.raise_for_status()
 
 
-def detach_tag_from_parent(tag_id: int, base_url: str = "http://localhost:37240") -> None:
+def detach_tag_from_parent(
+    tag_id: int, base_url: str = "http://localhost:37240"
+) -> None:
     """
     Detach a tag from its parent
 
