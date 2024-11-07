@@ -2,6 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
+use crate::tables::NewNoteTag;
 use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
 
 #[derive(Debug, serde::Deserialize)]
