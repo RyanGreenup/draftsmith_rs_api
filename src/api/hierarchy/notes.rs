@@ -151,7 +151,6 @@ pub async fn get_note_tree(
         .filter_map(|h| {
             h.child_note_id
                 .zip(h.parent_note_id)
-                .map(|(child, parent)| (child, parent))
         })
         .collect();
 
