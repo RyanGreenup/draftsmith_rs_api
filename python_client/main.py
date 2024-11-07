@@ -38,6 +38,10 @@ class Tag(BaseModel):
 class CreateTagRequest(BaseModel):
     name: str
 
+class AttachTagRequest(BaseModel):
+    note_id: int
+    tag_id: int
+
 class TreeNote(BaseModel):
     id: int
     title: str
@@ -340,6 +344,28 @@ def delete_tag(tag_id: int, base_url: str = "http://localhost:37240") -> None:
     response = requests.delete(
         f"{base_url}/tags/{tag_id}",
         headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+
+def attach_tag_to_note(note_id: int, tag_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Attach a tag to a note
+    
+    Args:
+        note_id: The ID of the note
+        tag_id: The ID of the tag to attach
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = AttachTagRequest(note_id=note_id, tag_id=tag_id)
+    
+    response = requests.post(
+        f"{base_url}/tags/notes",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
     )
     
     response.raise_for_status()

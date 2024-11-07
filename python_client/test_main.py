@@ -326,6 +326,30 @@ def test_delete_tag():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to delete tag: {str(e)}")
 
+def test_attach_tag_to_note():
+    """Test attaching a tag to a note"""
+    try:
+        # First create a note and a tag to work with
+        note = note_create("Test Note", "Test content")
+        note_id = note["id"]
+        
+        tag_name = "TestTag"
+        tag = create_tag(tag_name)
+        tag_id = tag.id
+
+        # Attach the tag to the note
+        attach_tag_to_note(note_id, tag_id)
+
+        # Verify the attachment by getting the notes tree
+        # (since it includes tags in the response)
+        tree = get_notes_tree()
+        note_in_tree = next((n for n in tree if n.id == note_id), None)
+        assert note_in_tree is not None
+        assert tag_name in note_in_tree.tags
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to attach tag to note: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
