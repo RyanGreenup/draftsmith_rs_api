@@ -276,6 +276,26 @@ pub async fn update_database_from_notetreenode(
                 .execute(conn)?;
         }
 
+        // Update tags
+        // First remove existing tags
+        diesel::delete(note_tags::table.filter(note_tags::note_id.eq(node_id)))
+            .execute(conn)?;
+
+        // Then insert new tags
+        if !node.tags.is_empty() {
+            let new_tags: Vec<_> = node.tags
+                .iter()
+                .map(|tag| NoteTag {
+                    note_id: node_id,
+                    tag_id: tag.id,
+                })
+                .collect();
+            
+            diesel::insert_into(note_tags::table)
+                .values(&new_tags)
+                .execute(conn)?;
+        }
+
         // Process child nodes recursively
         for child in node.children {
             process_node(conn, child, Some(node_id))?;
