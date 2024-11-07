@@ -522,6 +522,36 @@ def test_get_tag_hierarchy_relations():
         pytest.fail(f"Failed to get tag hierarchy relations: {str(e)}")
 
 
+def test_detach_tag_from_parent():
+    """Test detaching a tag from its parent"""
+    try:
+        # Create parent and child tags
+        parent = create_tag("ParentTag")
+        child = create_tag("ChildTag")
+
+        # First attach child to parent
+        attach_tag_to_parent(child.id, parent.id)
+
+        # Verify the attachment worked
+        relations = get_tag_hierarchy_relations()
+        assert any(
+            rel.parent_id == parent.id and rel.child_id == child.id for rel in relations
+        )
+
+        # Now detach the child
+        detach_tag_from_parent(child.id)
+
+        # Verify the detachment worked by checking relations again
+        relations_after = get_tag_hierarchy_relations()
+        assert not any(
+            rel.parent_id == parent.id and rel.child_id == child.id
+            for rel in relations_after
+        )
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to detach tag from parent: {str(e)}")
+
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:

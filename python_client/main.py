@@ -526,6 +526,25 @@ def attach_tag_to_parent(
     response.raise_for_status()
 
 
+def detach_tag_from_parent(tag_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Detach a tag from its parent
+
+    Args:
+        tag_id: ID of the tag to detach from its parent
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.delete(
+        f"{base_url}/tags/hierarchy/detach/{tag_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+
+
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """
     Create a new tag
