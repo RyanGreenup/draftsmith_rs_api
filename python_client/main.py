@@ -31,6 +31,13 @@ class NoteHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
 
+class Tag(BaseModel):
+    id: int
+    name: str
+
+class CreateTagRequest(BaseModel):
+    name: str
+
 class TreeNote(BaseModel):
     id: int
     title: str
@@ -249,6 +256,31 @@ def detach_note_from_parent(note_id: int, base_url: str = "http://localhost:3724
     )
     
     response.raise_for_status()
+
+def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
+    """
+    Create a new tag
+    
+    Args:
+        name: The name of the tag
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        Tag: The created tag data
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = CreateTagRequest(name=name)
+    
+    response = requests.post(
+        f"{base_url}/tags",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
+    )
+    
+    response.raise_for_status()
+    return Tag.model_validate(response.json())
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

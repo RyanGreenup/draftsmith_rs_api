@@ -243,6 +243,21 @@ def test_detach_note_from_parent():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to detach note: {str(e)}")
 
+def test_create_tag():
+    """Test creating a tag through the API endpoint"""
+    try:
+        # Create a tag
+        tag_name = "TestTag"
+        result = create_tag(tag_name)
+
+        # Verify the response structure
+        assert isinstance(result, Tag)
+        assert result.id > 0
+        assert result.name == tag_name
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to create tag: {str(e)}")
+
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
     try:
