@@ -156,9 +156,13 @@ def test_get_notes_tree():
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
     try:
-        # Create a simple tree structure
+        # First create a note to work with
+        created = note_create("Root", "Root content")
+        note_id = created["id"]
+        
+        # Create a tree structure with the actual note
         note = TreeNote(
-            id=65,
+            id=note_id,
             title="Root",
             content="Root content",
             created_at=None,
@@ -176,7 +180,7 @@ def test_update_notes_tree():
         assert len(updated_tree) > 0
         
         # Find our updated note
-        updated_note = next((n for n in updated_tree if n.id == 65), None)
+        updated_note = next((n for n in updated_tree if n.id == note_id), None)
         assert updated_note is not None
         assert updated_note.title == "Root"
         assert updated_note.content == "Root content"
