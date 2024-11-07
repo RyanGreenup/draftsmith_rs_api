@@ -1,5 +1,6 @@
-from typing import Optional
+from typing import Optional, BinaryIO
 from datetime import datetime, date
+from pathlib import Path
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -83,6 +84,13 @@ class TreeNote(BaseModel):
     children: list["TreeNote"] = []
     tags: list[TreeTag] = []
 
+
+class Asset(BaseModel):
+    id: int
+    note_id: Optional[int]
+    location: str
+    description: Optional[str]
+    created_at: datetime
 
 class TreeTagWithNotes(BaseModel):
     id: int
@@ -875,6 +883,42 @@ def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
     response.raise_for_status()
     return [TreeTask.model_validate(task) for task in response.json()]
 
+
+def upload_asset(
+    file_path: str | Path | BinaryIO,
+    base_url: str = "http://localhost:37240"
+) -> Asset:
+    """
+    Upload a file as an asset
+
+    Args:
+        file_path: Path to the file to upload or file-like object
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Asset: The created asset data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        FileNotFoundError: If the file path does not exist
+    """
+    if isinstance(file_path, (str, Path)):
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            response = requests.post(
+                f"{base_url}/assets",
+                files=files
+            )
+    else:
+        # Handle file-like object
+        files = {'file': file_path}
+        response = requests.post(
+            f"{base_url}/assets",
+            files=files
+        )
+
+    response.raise_for_status()
+    return Asset.model_validate(response.json())
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

@@ -505,6 +505,36 @@ def test_create_task():
         pytest.fail(f"Failed to create task: {str(e)}")
 
 
+def test_upload_asset():
+    """Test uploading a file as an asset"""
+    try:
+        # Create a temporary test file
+        import tempfile
+        import os
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+            tf.write(b"Test content")
+            temp_path = tf.name
+
+        try:
+            # Upload the file
+            result = upload_asset(temp_path)
+
+            # Verify the response structure
+            assert isinstance(result, Asset)
+            assert result.id > 0
+            assert result.location.startswith("uploads/")
+            assert result.created_at is not None
+            assert result.note_id is None
+            assert result.description is None
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to upload asset: {str(e)}")
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:
