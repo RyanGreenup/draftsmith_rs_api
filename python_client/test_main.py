@@ -472,6 +472,27 @@ def test_get_note_tag_relations():
         pytest.fail(f"Failed to get note-tag relations: {str(e)}")
 
 
+def test_attach_tag_to_parent():
+    """Test attaching a tag as a child of another tag"""
+    try:
+        # Create parent and child tags
+        parent = create_tag("ParentTag")
+        child = create_tag("ChildTag")
+
+        # Attach child to parent
+        attach_tag_to_parent(child.id, parent.id)
+
+        # Verify the attachment by getting hierarchy relations
+        relations = get_tag_hierarchy_relations()
+        assert any(
+            rel.parent_id == parent.id and rel.child_id == child.id
+            for rel in relations
+        )
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to attach tag to parent: {str(e)}")
+
+
 def test_get_tag_hierarchy_relations():
     """Test getting all tag hierarchy relationships"""
     try:

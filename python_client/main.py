@@ -59,6 +59,10 @@ class TagHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
 
+class AttachTagHierarchyRequest(BaseModel):
+    parent_id: int
+    child_id: int
+
 
 class TreeTag(BaseModel):
     id: int
@@ -494,6 +498,31 @@ def get_tag_hierarchy_relations(
 
     response.raise_for_status()
     return [TagHierarchyRelation.model_validate(rel) for rel in response.json()]
+
+
+def attach_tag_to_parent(
+    child_id: int, parent_id: int, base_url: str = "http://localhost:37240"
+) -> None:
+    """
+    Attach a tag as a child of another tag
+
+    Args:
+        child_id: ID of the tag to attach as child
+        parent_id: ID of the parent tag
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = AttachTagHierarchyRequest(child_id=child_id, parent_id=parent_id)
+
+    response = requests.post(
+        f"{base_url}/tags/hierarchy/attach",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
+    )
+
+    response.raise_for_status()
 
 
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
