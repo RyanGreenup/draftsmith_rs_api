@@ -146,9 +146,11 @@ def test_get_notes_tree():
             for child in note.children:
                 assert isinstance(child, TreeNote)
 
-            # Verify tags are strings
+            # Verify tags are TreeTag objects
             for tag in note.tags:
-                assert isinstance(tag, str)
+                assert isinstance(tag, TreeTag)
+                assert isinstance(tag.id, int)
+                assert isinstance(tag.name, str)
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve notes tree: {str(e)}")
