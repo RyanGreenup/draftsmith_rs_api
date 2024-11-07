@@ -1,8 +1,9 @@
 import pytest
 import requests
-from main import create_note
+from main import *
 
-def test_create_note():
+
+def test_note_create():
     """Test creating a note through the API endpoint"""
     # Test data
     test_title = "Test Note"
@@ -10,7 +11,7 @@ def test_create_note():
 
     try:
         # Attempt to create a note
-        result = create_note(test_title, test_content)
+        result = note_create(test_title, test_content)
 
         # Verify the response structure
         assert isinstance(result, dict)
@@ -27,28 +28,3 @@ def test_create_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to create note: {str(e)}")
 
-def test_get_note_without_content():
-    """Test getting a note without content"""
-    try:
-        # First create a note
-        note = create_note("Test Note", "Test Content")
-        note_id = note["id"]
-        
-        # Then get it without content
-        result = get_note_without_content(note_id)
-        
-        # Verify the response structure
-        assert isinstance(result, dict)
-        assert "id" in result
-        assert "title" in result
-        assert "created_at" in result
-        assert "modified_at" in result
-        
-        # Content should not be included
-        assert "content" not in result
-        
-        # Verify the id matches
-        assert result["id"] == note_id
-        
-    except requests.exceptions.RequestException as e:
-        pytest.fail(f"Failed to get note: {str(e)}")

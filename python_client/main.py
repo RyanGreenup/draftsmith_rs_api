@@ -9,7 +9,7 @@ class CreateNoteRequest(BaseModel):
     content: str
 
 
-def create_note(
+def note_create(
     title: str, content: str, base_url: str = "http://localhost:37240"
 ) -> dict:
     """
@@ -37,26 +37,3 @@ def create_note(
     response.raise_for_status()
     return response.json()
 
-
-def get_note_without_content(
-    note_id: int, base_url: str = "http://localhost:37240"
-) -> dict:
-    """
-    Get a note without its content field
-
-    Args:
-        note_id: The ID of the note to retrieve
-        base_url: The base URL of the API (default: http://localhost:37240)
-
-    Returns:
-        dict: The note data without content
-
-    Raises:
-        requests.exceptions.RequestException: If the request fails
-    """
-    response = requests.get(
-        f"{base_url}/notes/flat/{note_id}", params={"exclude_content": "true"}
-    )
-
-    response.raise_for_status()
-    return response.json()
