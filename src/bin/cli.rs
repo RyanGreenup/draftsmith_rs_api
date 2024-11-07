@@ -191,17 +191,10 @@ enum TagsCommands {
         #[arg(long)]
         name: String,
     },
-    /// List all tags
+    /// List tags (all or specific by ID)
     List,
-    /// Get a tag by ID
-    Get {
-        /// ID of the tag to retrieve
-        id: i32,
-    },
     /// Update an existing tag
     Update {
-        /// ID of the tag to update
-        id: i32,
         /// New name for the tag
         #[arg(long)]
         name: String,
@@ -783,26 +776,33 @@ async fn main() {
                         }
                     }
                 }
-                TagsCommands::List => match list_tags(&url).await {
-                    Ok(tags) => {
-                        println!("{}", serde_json::to_string_pretty(&tags).unwrap());
-                    }
-                    Err(e) => {
-                        eprintln!("Error listing tags: {}", e);
-                        std::process::exit(1);
-                    }
-                },
-                TagsCommands::Get { id } => match get_tag(&url, id).await {
-                    Ok(tag) => {
-                        println!("{}", serde_json::to_string_pretty(&tag).unwrap());
-                    }
-                    Err(TagError::NotFound) => {
-                        eprintln!("Error: Tag with id {} not found", id);
-                        std::process::exit(1);
-                    }
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
+                TagsCommands::List => {
+                    if let Some(tag_id) = id {
+                        // Get specific tag
+                        match get_tag(&url, tag_id).await {
+                            Ok(tag) => {
+                                println!("{}", serde_json::to_string_pretty(&tag).unwrap());
+                            }
+                            Err(TagError::NotFound) => {
+                                eprintln!("Error: Tag with id {} not found", tag_id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        // List all tags
+                        match list_tags(&url).await {
+                            Ok(tags) => {
+                                println!("{}", serde_json::to_string_pretty(&tags).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error listing tags: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
                     }
                 },
                 TagsCommands::Update { id, name } => {
