@@ -63,19 +63,19 @@ class TreeTag(BaseModel):
 class TreeNote(BaseModel):
     id: int
     title: str
-    content: str
-    created_at: Optional[datetime]
-    modified_at: Optional[datetime]
+    content: Optional[str] = None
+    created_at: Optional[datetime] = None
+    modified_at: Optional[datetime] = None
     hierarchy_type: Optional[str] = None
-    children: list["TreeNote"]
-    tags: list[TreeTag]
+    children: list["TreeNote"] = []
+    tags: list[TreeTag] = []
 
 
 class TreeTagWithNotes(BaseModel):
     id: int
     name: str
     children: list["TreeTagWithNotes"] = []
-    notes: list[TreeNote] = []
+    notes: list["TreeNote"] = []
 
 
 def update_notes_tree(
