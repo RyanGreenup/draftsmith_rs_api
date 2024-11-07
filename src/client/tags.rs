@@ -1,6 +1,6 @@
-use crate::api::hierarchy::tags::TagTreeNode;
+pub use crate::api::hierarchy::tags::TagTreeNode;
 use crate::api::tags::TagResponse;
-use crate::tables::{HierarchyMapping, TagHierarchy};
+use crate::tables::HierarchyMapping;
 use reqwest::{self, StatusCode};
 use serde::Serialize;
 use thiserror::Error;
@@ -263,6 +263,30 @@ pub async fn detach_child_tag(base_url: &str, child_id: i32) -> Result<(), TagEr
 }
 
 // *** Get Tree ...............................................................
+pub async fn get_tag_tree(base_url: &str) -> Result<Vec<TagTreeNode>, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/tree", base_url);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let tree = response
+        .json::<Vec<TagTreeNode>>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(tree)
+}
 
 // *** Get Mappings ...........................................................
 pub async fn get_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMapping>, TagError> {
@@ -477,6 +501,58 @@ mod tests {
         // Test detaching a non-existent tag
         let non_existent_result = detach_child_tag(base_url, 99999).await;
         assert!(matches!(non_existent_result, Err(TagError::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_get_tag_tree() {
+        let base_url = BASE_URL;
+
+        // Create parent tag
+        let parent_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Parent Tag for Tree".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create parent tag");
+
+        // Create child tag
+        let child_tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Child Tag for Tree".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create child tag");
+
+        // Attach child to parent
+        attach_child_tag(base_url, parent_tag.id, child_tag.id)
+            .await
+            .expect("Failed to attach child tag");
+
+        // Get tag tree
+        let tree = get_tag_tree(base_url)
+            .await
+            .expect("Failed to get tag tree");
+
+        // Verify the tree structure
+        let parent_node = tree.iter().find(|node| node.id == parent_tag.id);
+        assert!(parent_node.is_some(), "Parent node not found in tree");
+
+        let parent_node = parent_node.unwrap();
+        assert_eq!(parent_node.name, "Parent Tag for Tree");
+
+        let child_node = parent_node
+            .children
+            .iter()
+            .find(|node| node.id == child_tag.id);
+        assert!(
+            child_node.is_some(),
+            "Child node not found in parent's children"
+        );
+        assert_eq!(child_node.unwrap().name, "Child Tag for Tree");
     }
 
     #[tokio::test]
