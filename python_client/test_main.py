@@ -189,6 +189,38 @@ def test_get_task():
         pytest.fail(f"Failed to get task: {str(e)}")
 
 
+def test_get_all_tasks():
+    """Test retrieving all tasks"""
+    try:
+        # First create a task to ensure we have at least one
+        task_request = CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        )
+        created_task = create_task(task_request)
+
+        # Get all tasks
+        tasks = get_all_tasks()
+
+        # Verify we got a list of Task objects
+        assert isinstance(tasks, list)
+        assert len(tasks) > 0
+        assert all(isinstance(task, Task) for task in tasks)
+
+        # Find our created task in the list
+        test_task = next((task for task in tasks if task.id == created_task.id), None)
+        assert test_task is not None
+        assert test_task.status == TaskStatus.TODO
+        assert test_task.priority == 1
+        assert test_task.all_day == False
+        assert test_task.created_at is not None
+        assert test_task.modified_at is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get tasks: {str(e)}")
+
+
 def test_create_task():
     """Test creating a task through the API endpoint"""
     try:

@@ -653,6 +653,28 @@ def get_task(task_id: int, base_url: str = "http://localhost:37240") -> Task:
     return Task.model_validate(response.json())
 
 
+def get_all_tasks(base_url: str = "http://localhost:37240") -> list[Task]:
+    """
+    Get all tasks
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[Task]: List of all tasks
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tasks",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [Task.model_validate(task) for task in response.json()]
+
+
 def create_task(
     task: CreateTaskRequest, base_url: str = "http://localhost:37240"
 ) -> Task:
