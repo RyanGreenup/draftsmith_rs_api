@@ -214,8 +214,8 @@ pub async fn update_note_tree(
         parent_id: Option<i32>,
     }
 
-    use crate::schema::note_tags;
     use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
+    use crate::schema::note_tags;
     use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
 
     // Initialize stack with root nodes
