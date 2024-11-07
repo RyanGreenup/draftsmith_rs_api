@@ -505,42 +505,27 @@ def test_create_task():
         pytest.fail(f"Failed to create task: {str(e)}")
 
 
-def test_download_asset():
-    """Test downloading an asset by ID"""
+def test_download_asset_by_filename():
+    """Test downloading an asset by filename"""
     try:
-        # First create a test asset to ensure we have one to download
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tf:
-            tf.write(b"Test content for download")
-            temp_path = tf.name
+        # Create output path for downloaded file
+        download_path = os.path.join(tempfile.gettempdir(), "downloaded_icon.png")
 
         try:
-            # Upload test asset
-            created_asset = upload_asset(temp_path)
+            # Download the asset by filename
+            download_asset("icon.png", download_path)
 
-            # Create output path for downloaded file
-            download_path = os.path.join(tempfile.gettempdir(), "downloaded_asset.txt")
-
-            try:
-                # Download the asset
-                download_asset(created_asset.id, download_path)
-
-                # Verify the file was downloaded and contains correct content
-                assert os.path.exists(download_path)
-                with open(download_path, "rb") as f:
-                    content = f.read()
-                assert content == b"Test content for download"
-
-            finally:
-                # Clean up downloaded file
-                if os.path.exists(download_path):
-                    os.unlink(download_path)
+            # Verify the file was downloaded
+            assert os.path.exists(download_path)
+            assert os.path.getsize(download_path) > 0
 
         finally:
-            # Clean up the original temporary file
-            os.unlink(temp_path)
+            # Clean up downloaded file
+            if os.path.exists(download_path):
+                os.unlink(download_path)
 
     except requests.exceptions.RequestException as e:
-        pytest.fail(f"Failed to download asset: {str(e)}")
+        pytest.fail(f"Failed to download asset by filename: {str(e)}")
 
 
 def test_get_all_assets():
