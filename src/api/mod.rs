@@ -23,11 +23,11 @@ use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 // Type alias for the complex tuple type used in get_tags_notes
 type NoteTagResult = (
-    i32,                            // tag_id
-    i32,                            // note_id
-    String,                         // note_title
-    Option<chrono::NaiveDateTime>,  // created_at
-    Option<chrono::NaiveDateTime>,  // modified_at
+    i32,                           // tag_id
+    i32,                           // note_id
+    String,                        // note_title
+    Option<chrono::NaiveDateTime>, // created_at
+    Option<chrono::NaiveDateTime>, // modified_at
 );
 
 #[derive(Serialize)]

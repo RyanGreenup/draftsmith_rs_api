@@ -148,10 +148,7 @@ pub async fn get_note_tree(
 
     let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
         .iter()
-        .filter_map(|h| {
-            h.child_note_id
-                .zip(h.parent_note_id)
-        })
+        .filter_map(|h| h.child_note_id.zip(h.parent_note_id))
         .collect();
 
     // Build the basic tree
@@ -323,6 +320,7 @@ pub async fn update_note_tree(
 mod note_hierarchy_tests {
     use super::*;
     use crate::api::tests::{setup_test_state, TestCleanup};
+    use crate::api::DieselError;
     use crate::tables::Note;
     use axum::extract::State;
     use axum::Json;
