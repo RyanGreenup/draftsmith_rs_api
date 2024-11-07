@@ -99,3 +99,25 @@ def test_get_all_notes():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve all notes: {str(e)}")
 
+def test_get_all_notes_without_content():
+    """Test retrieving all notes without content"""
+    try:
+        # Get all notes without content
+        notes = get_all_notes_without_content()
+        
+        # Verify we got a list of NoteWithoutContent objects
+        assert isinstance(notes, list)
+        assert len(notes) > 0
+        assert all(isinstance(note, NoteWithoutContent) for note in notes)
+        
+        # Verify each note has the required fields
+        for note in notes:
+            assert note.id > 0
+            assert isinstance(note.title, str)
+            assert note.created_at is not None
+            assert note.modified_at is not None
+            assert not hasattr(note, "content")
+            
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve all notes without content: {str(e)}")
+
