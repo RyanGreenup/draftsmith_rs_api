@@ -1,5 +1,5 @@
 pub use crate::api::hierarchy::tags::TagTreeNode;
-use crate::api::tags::{NoteTagResponse, TagResponse};
+pub use crate::api::tags::{NoteTagResponse, TagResponse};
 use crate::tables::HierarchyMapping;
 use reqwest::{self, StatusCode};
 use serde::Serialize;

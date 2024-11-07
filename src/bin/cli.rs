@@ -4,8 +4,9 @@ use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::client::tags::{
-    self, attach_child_tag, create_tag, delete_tag, detach_child_tag, get_hierarchy_mappings,
-    get_tag, list_tags, update_tag, CreateTagRequest, TagError, TagTreeNode, UpdateTagRequest,
+    self, attach_child_tag, attach_tag_to_note, create_tag, delete_tag, detach_child_tag,
+    detach_tag_from_note, get_hierarchy_mappings, get_tag, list_note_tags, list_tags, update_tag,
+    CreateTagRequest, TagError, TagTreeNode, UpdateTagRequest,
 };
 use rust_cli_app::client::tasks::{
     attach_child_task, create_task, delete_task, detach_child_task, fetch_task, fetch_task_tree,
@@ -182,6 +183,30 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum NoteTagsCommands {
+    /// List all note-tag associations
+    List,
+    /// Attach a tag to a note
+    Attach {
+        /// Note ID to attach tag to
+        #[arg(long)]
+        note_id: i32,
+        /// Tag ID to attach
+        #[arg(long)]
+        tag_id: i32,
+    },
+    /// Detach a tag from a note
+    Detach {
+        /// Note ID to detach tag from
+        #[arg(long)]
+        note_id: i32,
+        /// Tag ID to detach
+        #[arg(long)]
+        tag_id: i32,
+    },
+}
+
+#[derive(Subcommand)]
 enum TagsCommands {
     /// Create a new tag
     Create {
@@ -221,6 +246,11 @@ enum TagsCommands {
     Detach {
         /// The tag ID to detach
         tag_id: i32,
+    },
+    /// Note-tag relationship commands
+    NoteTags {
+        #[command(subcommand)]
+        command: NoteTagsCommands,
     },
 }
 
@@ -884,6 +914,46 @@ async fn main() {
                     Err(e) => {
                         eprintln!("Error: {}", e);
                         std::process::exit(1);
+                    }
+                },
+                TagsCommands::NoteTags { command } => match command {
+                    NoteTagsCommands::List => match list_note_tags(&url).await {
+                        Ok(note_tags) => {
+                            println!("{}", serde_json::to_string_pretty(&note_tags).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    },
+                    NoteTagsCommands::Attach { note_id, tag_id } => {
+                        match attach_tag_to_note(&url, note_id, tag_id).await {
+                            Ok(note_tag) => {
+                                println!(
+                                    "Successfully attached tag {} to note {}",
+                                    tag_id, note_id
+                                );
+                                println!("{}", serde_json::to_string_pretty(&note_tag).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    NoteTagsCommands::Detach { note_id, tag_id } => {
+                        match detach_tag_from_note(&url, note_id, tag_id).await {
+                            Ok(_) => {
+                                println!(
+                                    "Successfully detached tag {} from note {}",
+                                    tag_id, note_id
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
                     }
                 },
             },
