@@ -2,8 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::state::AppState;
-use crate::api::Path;
+use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
@@ -81,6 +80,7 @@ pub struct NoteTreeNode {
     pub created_at: Option<chrono::NaiveDateTime>,
     pub modified_at: Option<chrono::NaiveDateTime>,
     pub children: Vec<NoteTreeNode>,
+    pub tags: Vec<TagResponse>,
 }
 
 // Modify Note Hierarchy
@@ -159,22 +159,38 @@ pub async fn get_note_tree(
     let basic_tree = build_generic_tree(&note_data, &hierarchy_tuples);
 
     // Convert BasicTreeNode to NoteTreeNode
-    fn convert_to_note_tree(basic_node: BasicTreeNode<NoteWithoutFts>) -> NoteTreeNode {
+    async fn convert_to_note_tree(
+        basic_node: BasicTreeNode<NoteWithoutFts>,
+        state: &AppState,
+    ) -> NoteTreeNode {
         NoteTreeNode {
             id: basic_node.id,
             title: Some(basic_node.data.title),
             content: Some(basic_node.data.content),
             created_at: basic_node.data.created_at,
             modified_at: basic_node.data.modified_at,
-            children: basic_node
-                .children
-                .into_iter()
-                .map(convert_to_note_tree)
-                .collect(),
+            children: futures::future::join_all(
+                basic_node
+                    .children
+                    .into_iter()
+                    .map(|child| convert_to_note_tree(child, state)),
+            )
+            .await,
+            tags: get_notes_tags(State(state.clone()), vec![basic_node.id])
+                .await
+                .unwrap_or_default()
+                .get(&basic_node.id)
+                .cloned()
+                .unwrap_or_default(),
         }
     }
 
-    let tree = basic_tree.into_iter().map(convert_to_note_tree).collect();
+    let tree = futures::future::join_all(
+        basic_tree
+            .into_iter()
+            .map(|node| convert_to_note_tree(node, &state)),
+    )
+    .await;
 
     Ok(Json(tree))
 }
@@ -305,6 +321,7 @@ mod note_hierarchy_tests {
             content: Some(root_content.clone()),
             created_at: None,
             modified_at: None,
+            tags: Vec::new(),
             children: vec![
                 NoteTreeNode {
                     id: 0,
@@ -312,6 +329,7 @@ mod note_hierarchy_tests {
                     content: Some(child1_content.clone()),
                     created_at: None,
                     modified_at: None,
+                    tags: Vec::new(),
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -320,6 +338,7 @@ mod note_hierarchy_tests {
                     content: Some(child2_content.clone()),
                     created_at: None,
                     modified_at: None,
+                    tags: Vec::new(),
                     children: vec![],
                 },
             ],
@@ -496,18 +515,21 @@ mod note_hierarchy_tests {
             content: Some(note_root_content_updated.to_string()),
             created_at: None,
             modified_at: None,
+            tags: Vec::new(),
             children: vec![NoteTreeNode {
                 id: child2_id,
                 title: Some(child2_title),
                 content: Some(note_2_content_updated.to_string()),
                 created_at: None,
                 modified_at: None,
+                tags: Vec::new(),
                 children: vec![NoteTreeNode {
                     id: child1_id,
                     title: Some(child1_title),
                     content: Some(note_1_content_updated.to_string()),
                     created_at: None,
                     modified_at: None,
+                    tags: Vec::new(),
                     children: vec![],
                 }],
             }],

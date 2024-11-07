@@ -291,6 +291,7 @@ fn simple_node_to_note_tree_node(
         content: content_map.get(&simple_node.id).cloned(),
         created_at: None,
         modified_at: None,
+        tags: vec![],
         children: simple_node
             .children
             .iter()
@@ -789,6 +790,7 @@ mod tests {
             content: Some("Updated root content".to_string()),
             created_at: None,
             modified_at: None,
+            tags: vec![],
             children: vec![
                 NoteTreeNode {
                     id: child1_note.id,
@@ -796,6 +798,7 @@ mod tests {
                     content: Some("Updated child 1 content".to_string()),
                     created_at: None,
                     modified_at: None,
+                    tags: vec![],
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -804,6 +807,7 @@ mod tests {
                     content: Some("Updated child 2 content".to_string()),
                     created_at: None,
                     modified_at: None,
+                    tags: vec![],
                     children: vec![],
                 },
             ],
