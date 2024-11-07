@@ -420,8 +420,8 @@ def test_attach_task_to_parent():
 def test_get_tasks_tree():
     """Test retrieving tasks in tree structure"""
     try:
-        # First create some tasks to ensure we have data
-        task1 = create_task(
+        # Create parent task
+        parent_task = create_task(
             CreateTaskRequest(
                 status=TaskStatus.TODO,
                 priority=1,
@@ -429,13 +429,17 @@ def test_get_tasks_tree():
             )
         )
 
-        task2 = create_task(
+        # Create child task
+        child_task = create_task(
             CreateTaskRequest(
                 status=TaskStatus.TODO,
                 priority=2,
                 all_day=False,
             )
         )
+
+        # Attach child to parent
+        attach_task_to_parent(child_task.id, parent_task.id)
 
         # Get tasks tree
         tasks = get_tasks_tree()
@@ -445,15 +449,27 @@ def test_get_tasks_tree():
         assert len(tasks) > 0
         assert all(isinstance(task, TreeTask) for task in tasks)
 
-        # Verify the structure of tasks
-        for task in tasks:
-            assert task.id > 0
-            assert isinstance(task.status, TaskStatus)
-            assert isinstance(task.priority, int)
-            assert isinstance(task.all_day, bool)
-            assert task.created_at is not None
-            assert task.modified_at is not None
-            assert isinstance(task.children, list)
+        # Find our test task in the tree
+        test_task = next((task for task in tasks if task.id == parent_task.id), None)
+        assert test_task is not None
+        assert test_task.status == TaskStatus.TODO
+        assert test_task.priority == 1
+        assert test_task.all_day == False
+        assert test_task.created_at is not None
+        assert test_task.modified_at is not None
+        assert isinstance(test_task.children, list)
+
+        # Verify child task is in children
+        assert len(test_task.children) == 1
+        child = test_task.children[0]
+        assert child.id == child_task.id
+        assert child.status == TaskStatus.TODO
+        assert child.priority == 2
+        assert child.all_day == False
+        assert child.created_at is not None
+        assert child.modified_at is not None
+        assert isinstance(child.children, list)
+        assert len(child.children) == 0  # No grandchildren
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve tasks tree: {str(e)}")
