@@ -3,6 +3,10 @@ use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
+use rust_cli_app::client::tags::{
+    self, attach_child_tag, create_tag, delete_tag, detach_child_tag, get_hierarchy_mappings,
+    get_tag, list_tags, update_tag, CreateTagRequest, TagError, UpdateTagRequest,
+};
 use rust_cli_app::client::tasks::{
     attach_child_task, create_task, delete_task, detach_child_task, fetch_task, fetch_task_tree,
     fetch_tasks, update_task, AttachChildRequest, CreateTaskRequest, TaskError, TaskTreeNode,
@@ -180,6 +184,59 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum TagsCommands {
+    /// Create a new tag
+    Create {
+        /// Name of the tag
+        #[arg(long)]
+        name: String,
+    },
+    /// List all tags
+    List,
+    /// Get a tag by ID
+    Get {
+        /// ID of the tag to retrieve
+        id: i32,
+    },
+    /// Update an existing tag
+    Update {
+        /// ID of the tag to update
+        id: i32,
+        /// New name for the tag
+        #[arg(long)]
+        name: String,
+    },
+    /// Delete a tag
+    Delete {
+        /// ID of the tag to delete
+        id: i32,
+    },
+    /// Display tag tree
+    Tree {
+        /// Display simplified tree with only IDs and names
+        #[arg(long)]
+        simple: bool,
+    },
+    /// Show hierarchy mappings
+    Mappings,
+    /// Attach a tag to a parent tag
+    Attach {
+        /// The parent tag ID
+        #[arg(long)]
+        parent_id: i32,
+        /// The child tag ID
+        #[arg(long)]
+        child_id: i32,
+    },
+    /// Detach a tag from its parent
+    Detach {
+        /// The child tag ID to detach
+        #[arg(long)]
+        child_id: i32,
+    },
+}
+
+#[derive(Subcommand)]
 enum ClientCommands {
     /// Notes related commands
     Notes {
@@ -201,6 +258,11 @@ enum ClientCommands {
         id: Option<i32>,
         #[command(subcommand)]
         command: TasksCommands,
+    },
+    /// Tags related commands
+    Tags {
+        #[command(subcommand)]
+        command: TagsCommands,
     },
 }
 
@@ -709,6 +771,107 @@ async fn main() {
                     eprintln!("Asset deletion not yet implemented");
                     std::process::exit(1);
                 }
+            },
+            ClientCommands::Tags { command } => match command {
+                TagsCommands::Create { name } => {
+                    let request = CreateTagRequest { name };
+                    match create_tag(&url, request).await {
+                        Ok(tag) => {
+                            println!("{}", serde_json::to_string_pretty(&tag).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating tag: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TagsCommands::List => match list_tags(&url).await {
+                    Ok(tags) => {
+                        println!("{}", serde_json::to_string_pretty(&tags).unwrap());
+                    }
+                    Err(e) => {
+                        eprintln!("Error listing tags: {}", e);
+                        std::process::exit(1);
+                    }
+                },
+                TagsCommands::Get { id } => match get_tag(&url, id).await {
+                    Ok(tag) => {
+                        println!("{}", serde_json::to_string_pretty(&tag).unwrap());
+                    }
+                    Err(TagError::NotFound) => {
+                        eprintln!("Error: Tag with id {} not found", id);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
+                TagsCommands::Update { id, name } => {
+                    let request = UpdateTagRequest { name };
+                    match update_tag(&url, id, request).await {
+                        Ok(tag) => {
+                            println!("{}", serde_json::to_string_pretty(&tag).unwrap());
+                        }
+                        Err(TagError::NotFound) => {
+                            eprintln!("Error: Tag with id {} not found", id);
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TagsCommands::Delete { id } => match delete_tag(&url, id).await {
+                    Ok(_) => {
+                        println!("Tag {} deleted successfully", id);
+                    }
+                    Err(TagError::NotFound) => {
+                        eprintln!("Error: Tag with id {} not found", id);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
+                TagsCommands::Tree { simple: _ } => {
+                    eprintln!("Tag tree functionality not yet implemented");
+                    std::process::exit(1);
+                }
+                TagsCommands::Mappings => match get_hierarchy_mappings(&url).await {
+                    Ok(mappings) => {
+                        println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
+                TagsCommands::Attach { parent_id, child_id } => {
+                    match attach_child_tag(&url, parent_id, child_id).await {
+                        Ok(_) => {
+                            println!(
+                                "Successfully attached tag {} to parent {}",
+                                child_id, parent_id
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                TagsCommands::Detach { child_id } => match detach_child_tag(&url, child_id).await {
+                    Ok(_) => {
+                        println!("Successfully detached tag {}", child_id);
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
             },
             ClientCommands::Tasks { id, command } => match command {
                 TasksCommands::List => match fetch_tasks(&url).await {
