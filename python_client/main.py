@@ -300,6 +300,32 @@ def get_all_tags(base_url: str = "http://localhost:37240") -> list[Tag]:
     response.raise_for_status()
     return [Tag.model_validate(tag) for tag in response.json()]
 
+def update_tag(tag_id: int, name: str, base_url: str = "http://localhost:37240") -> Tag:
+    """
+    Update an existing tag
+    
+    Args:
+        tag_id: The ID of the tag to update
+        name: The new name for the tag
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        Tag: The updated tag data
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = CreateTagRequest(name=name)
+    
+    response = requests.put(
+        f"{base_url}/tags/{tag_id}",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
+    )
+    
+    response.raise_for_status()
+    return Tag.model_validate(response.json())
+
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """
     Create a new tag

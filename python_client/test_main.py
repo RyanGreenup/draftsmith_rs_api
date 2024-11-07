@@ -283,6 +283,30 @@ def test_get_all_tags():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get tags: {str(e)}")
 
+def test_update_tag():
+    """Test updating a tag through the API endpoint"""
+    try:
+        # First create a tag to update
+        original_name = "TestTag"
+        created = create_tag(original_name)
+        tag_id = created.id
+
+        # Update the tag
+        new_name = "UpdatedTestTag"
+        result = update_tag(tag_id, new_name)
+
+        # Verify the response structure
+        assert isinstance(result, Tag)
+        assert result.id == tag_id
+        assert result.name == new_name
+
+        # Verify the update persisted by getting the tag
+        updated = get_tag(tag_id)
+        assert updated.name == new_name
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to update tag: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
