@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel
 import requests
 import json
@@ -7,6 +8,13 @@ import json
 class CreateNoteRequest(BaseModel):
     title: str
     content: str
+
+class Note(BaseModel):
+    id: int
+    title: str
+    content: str
+    created_at: datetime
+    modified_at: datetime
 
 
 def note_create(
@@ -36,4 +44,27 @@ def note_create(
 
     response.raise_for_status()
     return response.json()
+
+def get_note(note_id: int, base_url: str = "http://localhost:37240") -> Note:
+    """
+    Retrieve a note by its ID
+    
+    Args:
+        note_id: The ID of the note to retrieve
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        Note: The retrieved note data
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the note is not found (404)
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat/{note_id}",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return Note.model_validate(response.json())
 

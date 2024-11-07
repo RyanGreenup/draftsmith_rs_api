@@ -28,3 +28,28 @@ def test_note_create():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to create note: {str(e)}")
 
+def test_get_note():
+    """Test retrieving a note by ID"""
+    # First create a note to ensure we have something to retrieve
+    test_title = "Test Note"
+    test_content = "This is a test note"
+    
+    try:
+        # Create the note
+        created = note_create(test_title, test_content)
+        note_id = created["id"]
+        
+        # Retrieve the note
+        result = get_note(note_id)
+        
+        # Verify the response structure using Pydantic model
+        assert isinstance(result, Note)
+        assert result.id == note_id
+        assert result.title == "Untitled"  # API sets default title
+        assert result.content == test_content
+        assert result.created_at is not None
+        assert result.modified_at is not None
+        
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve note: {str(e)}")
+
