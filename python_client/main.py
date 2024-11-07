@@ -54,6 +54,10 @@ class NoteTagRelation(BaseModel):
     note_id: int
     tag_id: int
 
+class TagHierarchyRelation(BaseModel):
+    parent_id: int
+    child_id: int
+
 
 class TreeTag(BaseModel):
     id: int
@@ -466,6 +470,27 @@ def get_note_tag_relations(
     response.raise_for_status()
     return [NoteTagRelation.model_validate(rel) for rel in response.json()]
 
+
+def get_tag_hierarchy_relations(base_url: str = "http://localhost:37240") -> list[TagHierarchyRelation]:
+    """
+    Get all parent-child relationships between tags
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[TagHierarchyRelation]: List of all parent-child relationships between tags
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tags/hierarchy",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [TagHierarchyRelation.model_validate(rel) for rel in response.json()]
 
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """

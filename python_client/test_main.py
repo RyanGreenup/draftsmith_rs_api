@@ -472,6 +472,35 @@ def test_get_note_tag_relations():
         pytest.fail(f"Failed to get note-tag relations: {str(e)}")
 
 
+def test_get_tag_hierarchy_relations():
+    """Test getting all tag hierarchy relationships"""
+    try:
+        # Create parent tag
+        parent = create_tag("ParentTag")
+        parent_id = parent.id
+
+        # Create child tag
+        child = create_tag("ChildTag")
+        child_id = child.id
+
+        # Get all hierarchy relationships
+        relations = get_tag_hierarchy_relations()
+
+        # Verify we got a list of TagHierarchyRelation objects
+        assert isinstance(relations, list)
+        assert all(isinstance(rel, TagHierarchyRelation) for rel in relations)
+
+        # Verify the structure of a relation if any exist
+        if relations:
+            relation = relations[0]
+            assert hasattr(relation, 'parent_id')
+            assert hasattr(relation, 'child_id')
+            assert isinstance(relation.parent_id, int)
+            assert isinstance(relation.child_id, int)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get tag hierarchy relations: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
