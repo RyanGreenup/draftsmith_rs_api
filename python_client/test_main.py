@@ -505,6 +505,39 @@ def test_create_task():
         pytest.fail(f"Failed to create task: {str(e)}")
 
 
+def test_get_all_assets():
+    """Test retrieving all assets"""
+    try:
+        # First create a test asset to ensure we have at least one
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+            tf.write(b"Test asset for listing")
+            temp_path = tf.name
+
+        try:
+            # Upload test asset
+            created_asset = upload_asset(temp_path)
+
+            # Get all assets
+            assets = get_all_assets()
+
+            # Verify we got a list of Asset objects
+            assert isinstance(assets, list)
+            assert len(assets) > 0
+            assert all(isinstance(asset, Asset) for asset in assets)
+
+            # Find our test asset in the list
+            test_asset = next((asset for asset in assets if asset.id == created_asset.id), None)
+            assert test_asset is not None
+            assert test_asset.location.startswith("uploads/")
+            assert test_asset.created_at is not None
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve assets: {str(e)}")
+
 def test_upload_asset():
     """Test uploading a file as an asset"""
     try:

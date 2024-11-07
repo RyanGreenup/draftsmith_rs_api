@@ -915,6 +915,27 @@ def upload_asset(
     return Asset.model_validate(response.json())
 
 
+def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
+    """
+    Get all assets
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[Asset]: List of all assets
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/assets",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [Asset.model_validate(asset) for asset in response.json()]
+
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure
