@@ -10,7 +10,7 @@ use diesel::prelude::*;
 use diesel::QueryResult;
 use serde::{Deserialize, Serialize};
 
-use crate::api::notes::NoteMetadataResponse;
+use crate::api::NoteMetadataResponse;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagTreeNode {
@@ -235,9 +235,10 @@ pub async fn get_tag_tree(
             id: basic_node.id,
             name: basic_node.data.name,
             children: futures::future::join_all(
-                basic_node.children
+                basic_node
+                    .children
                     .into_iter()
-                    .map(|child| convert_to_tag_tree(child, state))
+                    .map(|child| convert_to_tag_tree(child, state)),
             )
             .await,
             notes,
@@ -245,8 +246,11 @@ pub async fn get_tag_tree(
     }
 
     let tree = futures::future::join_all(
-        basic_tree.into_iter().map(|node| convert_to_tag_tree(node, &state))
-    ).await;
+        basic_tree
+            .into_iter()
+            .map(|node| convert_to_tag_tree(node, &state)),
+    )
+    .await;
 
     Ok(Json(tree))
 }

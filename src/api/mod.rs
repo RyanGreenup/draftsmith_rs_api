@@ -46,6 +46,9 @@ pub struct TagResponse {
     pub name: String,
 }
 
+/// Takes a vector of tag IDs and returns a `HashMap<i32, Vec<NoteMetadataResponse>>`
+/// where the key of the hashmap is the tag_id and the vector of `NoteMetadataResponse`
+/// represents the list of notes that correspond to that tag ID.
 pub async fn get_tags_notes(
     State(state): State<AppState>,
     tag_ids: Vec<i32>,
@@ -102,6 +105,8 @@ pub async fn get_tags_notes(
     Ok(Json(tags_notes))
 }
 
+/// Returns a `HashMap<i32, Vec<TagResponse>>` where the key is the note_id and the value
+/// is a vector of `TagResponse` objects representing the tags corresponding to that note id.
 pub async fn get_notes_tags(
     State(state): State<AppState>,
     note_ids: Vec<i32>,
@@ -153,7 +158,7 @@ pub struct UpdateNoteRequest {
 
 type NoteResponse = NoteWithoutFts;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NoteMetadataResponse {
     pub id: i32,
     pub title: String,
