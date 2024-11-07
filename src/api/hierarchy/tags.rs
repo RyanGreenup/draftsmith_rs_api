@@ -226,10 +226,12 @@ pub async fn get_tag_tree(
 
     // Convert BasicTreeNode to TagTreeNode
     async fn convert_to_tag_tree(basic_node: BasicTreeNode<Tag>, state: &AppState) -> TagTreeNode {
-        let notes = get_tags_notes(state.clone(), vec![basic_node.id])
+        let notes = get_tags_notes(State(state.clone()), vec![basic_node.id])
             .await
             .unwrap_or_default()
-            .0;
+            .0
+            .remove(&basic_node.id)
+            .unwrap_or_default();
 
         TagTreeNode {
             id: basic_node.id,
