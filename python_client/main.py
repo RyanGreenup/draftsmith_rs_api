@@ -46,6 +46,12 @@ class NoteTagRelation(BaseModel):
     note_id: int
     tag_id: int
 
+class TreeTagWithNotes(BaseModel):
+    id: int
+    name: str
+    children: list['TreeTagWithNotes'] = []
+    notes: list[TreeNote] = []
+
 class TreeTag(BaseModel):
     id: int
     name: str
@@ -442,6 +448,27 @@ def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     
     response.raise_for_status()
     return Tag.model_validate(response.json())
+
+def get_tags_tree(base_url: str = "http://localhost:37240") -> list[TreeTagWithNotes]:
+    """
+    Get all tags in a tree structure
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[TreeTagWithNotes]: List of all tags with their hierarchical structure
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tags/tree",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [TreeTagWithNotes.model_validate(tag) for tag in response.json()]
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

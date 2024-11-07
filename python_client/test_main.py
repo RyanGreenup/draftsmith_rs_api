@@ -121,6 +121,40 @@ def test_get_all_notes_without_content():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve all notes without content: {str(e)}")
 
+def test_get_tags_tree():
+    """Test retrieving tags in tree structure"""
+    try:
+        # Create some test tags with hierarchy
+        parent_tag = create_tag("parent")
+        child_tag = create_tag("child")
+        
+        # Create a note to attach to the tag
+        note = note_create("Test Note", "Test content")
+        note_id = note["id"]
+        
+        # Attach the note to the parent tag
+        attach_tag_to_note(note_id, parent_tag.id)
+        
+        # Get tags tree
+        tags = get_tags_tree()
+
+        # Verify we got a list of TreeTagWithNotes objects
+        assert isinstance(tags, list)
+        assert len(tags) > 0
+        assert all(isinstance(tag, TreeTagWithNotes) for tag in tags)
+
+        # Find our test tag
+        test_tag = next((tag for tag in tags if tag.id == parent_tag.id), None)
+        assert test_tag is not None
+        assert test_tag.name == "parent"
+        
+        # Verify structure
+        assert isinstance(test_tag.children, list)
+        assert isinstance(test_tag.notes, list)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve tags tree: {str(e)}")
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:
