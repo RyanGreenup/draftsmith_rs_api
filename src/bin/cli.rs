@@ -195,6 +195,8 @@ enum TagsCommands {
     List,
     /// Update an existing tag
     Update {
+        /// ID of the tag to update
+        id: i32,
         /// New name for the tag
         #[arg(long)]
         name: String,
@@ -804,7 +806,7 @@ async fn main() {
                             }
                         }
                     }
-                },
+                }
                 TagsCommands::Update { id, name } => {
                     let request = UpdateTagRequest { name };
                     match update_tag(&url, id, request).await {
