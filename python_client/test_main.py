@@ -170,7 +170,7 @@ def test_create_task():
             effort_estimate=Decimal("2.5"),
             deadline=datetime(2024, 1, 1),
             priority=1,
-            all_day=False
+            all_day=False,
         )
 
         # Create the task
@@ -189,6 +189,7 @@ def test_create_task():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to create task: {str(e)}")
+
 
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""

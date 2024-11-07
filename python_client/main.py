@@ -604,6 +604,7 @@ class TaskStatus(str, Enum):
     DONE = "done"
     CANCELLED = "cancelled"
 
+
 class CreateTaskRequest(BaseModel):
     note_id: Optional[int] = None
     status: TaskStatus = TaskStatus.TODO
@@ -613,6 +614,7 @@ class CreateTaskRequest(BaseModel):
     priority: Optional[int] = None
     all_day: bool = False
     goal_relationship: Optional[str] = None
+
 
 class Task(BaseModel):
     id: int
@@ -627,7 +629,10 @@ class Task(BaseModel):
     all_day: bool
     goal_relationship: Optional[str]
 
-def create_task(task: CreateTaskRequest, base_url: str = "http://localhost:37240") -> Task:
+
+def create_task(
+    task: CreateTaskRequest, base_url: str = "http://localhost:37240"
+) -> Task:
     """
     Create a new task
 
@@ -649,6 +654,7 @@ def create_task(task: CreateTaskRequest, base_url: str = "http://localhost:37240
 
     response.raise_for_status()
     return Task.model_validate(response.json())
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
