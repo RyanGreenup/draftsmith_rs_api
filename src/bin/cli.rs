@@ -605,7 +605,11 @@ async fn main() {
                     };
 
                     // Parse the JSON into a Vec<NoteTreeNode>
-                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str::<Vec<rust_cli_app::client::NoteTreeNode>>(&content) {
+                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str::<
+                        Vec<rust_cli_app::client::NoteTreeNode>,
+                    >(
+                        &content
+                    ) {
                         Ok(trees) => {
                             if trees.is_empty() {
                                 eprintln!("Error: JSON file contains empty array");
@@ -614,9 +618,14 @@ async fn main() {
                             trees
                         }
                         Err(e) => {
-                            eprintln!("Error: JSON file must contain an array of note trees: {}", e);
+                            eprintln!(
+                                "Error: JSON file must contain an array of note trees: {}",
+                                e
+                            );
                             eprintln!("Example format:");
-                            eprintln!(r#"[{{"id": 1, "title": "Root", "content": "content", "children": [], "tags": []}}]"#);
+                            eprintln!(
+                                r#"[{{"id": 1, "title": "Root", "content": "content", "children": [], "tags": []}}]"#
+                            );
                             std::process::exit(1);
                         }
                     };
