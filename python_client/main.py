@@ -632,6 +632,20 @@ class TaskHierarchyRelation(BaseModel):
     child_id: int
 
 
+class TreeTask(BaseModel):
+    id: int
+    note_id: Optional[int]
+    status: TaskStatus
+    effort_estimate: Optional[Decimal]
+    actual_effort: Optional[Decimal]
+    deadline: Optional[datetime]
+    priority: Optional[int]
+    created_at: datetime
+    modified_at: datetime
+    all_day: bool
+    goal_relationship: Optional[str]
+    children: list["TreeTask"] = []
+
 class Task(BaseModel):
     id: int
     note_id: Optional[int]
@@ -787,6 +801,27 @@ def create_task(
     response.raise_for_status()
     return Task.model_validate(response.json())
 
+
+def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
+    """
+    Get all tasks in a tree structure
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[TreeTask]: List of all tasks with their hierarchical structure
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tasks/tree",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [TreeTask.model_validate(task) for task in response.json()]
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

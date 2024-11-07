@@ -314,6 +314,43 @@ def test_update_task():
         pytest.fail(f"Failed to update task: {str(e)}")
 
 
+def test_get_tasks_tree():
+    """Test retrieving tasks in tree structure"""
+    try:
+        # First create some tasks to ensure we have data
+        task1 = create_task(CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        ))
+        
+        task2 = create_task(CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=2,
+            all_day=False,
+        ))
+
+        # Get tasks tree
+        tasks = get_tasks_tree()
+
+        # Verify we got a list of TreeTask objects
+        assert isinstance(tasks, list)
+        assert len(tasks) > 0
+        assert all(isinstance(task, TreeTask) for task in tasks)
+
+        # Verify the structure of tasks
+        for task in tasks:
+            assert task.id > 0
+            assert isinstance(task.status, TaskStatus)
+            assert isinstance(task.priority, int)
+            assert isinstance(task.all_day, bool)
+            assert task.created_at is not None
+            assert task.modified_at is not None
+            assert isinstance(task.children, list)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve tasks tree: {str(e)}")
+
 def test_create_task():
     """Test creating a task through the API endpoint"""
     try:
