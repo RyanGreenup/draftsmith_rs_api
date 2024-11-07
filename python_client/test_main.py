@@ -545,7 +545,7 @@ def test_delete_asset():
     """Test deleting an asset through the API endpoint"""
     try:
         # First create a test asset to delete
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tf:
             tf.write(b"Test asset for deletion")
             temp_path = tf.name
 
@@ -559,7 +559,7 @@ def test_delete_asset():
             # Verify the asset was deleted by trying to get it
             with pytest.raises(requests.exceptions.HTTPError) as exc_info:
                 # Try to download the deleted asset, should fail with 404
-                download_path = os.path.join(tempfile.gettempdir(), "deleted_asset.txt") 
+                download_path = os.path.join(tempfile.gettempdir(), "deleted_asset.txt")
                 download_asset(created_asset.id, download_path)
             assert exc_info.value.response.status_code == 404
 
