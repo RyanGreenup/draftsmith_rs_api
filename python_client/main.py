@@ -42,6 +42,10 @@ class AttachTagRequest(BaseModel):
     note_id: int
     tag_id: int
 
+class TreeTag(BaseModel):
+    id: int
+    name: str
+
 class TreeNote(BaseModel):
     id: int
     title: str
@@ -50,7 +54,7 @@ class TreeNote(BaseModel):
     modified_at: Optional[datetime]
     hierarchy_type: Optional[str] = None
     children: list['TreeNote']
-    tags: list[str]
+    tags: list[TreeTag]
 
 def update_notes_tree(notes: list[TreeNote], base_url: str = "http://localhost:37240") -> None:
     """

@@ -345,7 +345,7 @@ def test_attach_tag_to_note():
         tree = get_notes_tree()
         note_in_tree = next((n for n in tree if n.id == note_id), None)
         assert note_in_tree is not None
-        assert tag_name in note_in_tree.tags
+        assert any(tag.name == tag_name for tag in note_in_tree.tags)
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach tag to note: {str(e)}")
