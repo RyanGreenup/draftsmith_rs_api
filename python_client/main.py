@@ -630,6 +630,29 @@ class Task(BaseModel):
     goal_relationship: Optional[str]
 
 
+def get_task(task_id: int, base_url: str = "http://localhost:37240") -> Task:
+    """
+    Get a task by its ID
+
+    Args:
+        task_id: The ID of the task to retrieve
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Task: The retrieved task data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tasks/{task_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return Task.model_validate(response.json())
+
+
 def create_task(
     task: CreateTaskRequest, base_url: str = "http://localhost:37240"
 ) -> Task:

@@ -161,6 +161,34 @@ def test_get_tags_tree():
         pytest.fail(f"Failed to retrieve tags tree: {str(e)}")
 
 
+def test_get_task():
+    """Test retrieving a task by ID"""
+    try:
+        # First create a task to ensure we have one to get
+        task_request = CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        )
+        created_task = create_task(task_request)
+        task_id = created_task.id
+
+        # Get the task
+        result = get_task(task_id)
+
+        # Verify the response structure
+        assert isinstance(result, Task)
+        assert result.id == task_id
+        assert result.status == TaskStatus.TODO
+        assert result.priority == 1
+        assert result.all_day == False
+        assert result.created_at is not None
+        assert result.modified_at is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get task: {str(e)}")
+
+
 def test_create_task():
     """Test creating a task through the API endpoint"""
     try:
