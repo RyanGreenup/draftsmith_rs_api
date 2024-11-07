@@ -742,6 +742,26 @@ def update_task(
     return Task.model_validate(response.json())
 
 
+def delete_task(task_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Delete a task by its ID
+
+    Args:
+        task_id: The ID of the task to delete
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the task is not found (404)
+    """
+    response = requests.delete(
+        f"{base_url}/tasks/{task_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+
+
 def create_task(
     task: CreateTaskRequest, base_url: str = "http://localhost:37240"
 ) -> Task:

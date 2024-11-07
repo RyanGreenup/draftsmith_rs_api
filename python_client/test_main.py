@@ -259,6 +259,29 @@ def test_get_task_hierarchy_relations():
         pytest.fail(f"Failed to get task hierarchy relations: {str(e)}")
 
 
+def test_delete_task():
+    """Test deleting a task through the API endpoint"""
+    try:
+        # First create a task to delete
+        task_request = CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        )
+        created_task = create_task(task_request)
+
+        # Delete the task
+        delete_task(created_task.id)
+
+        # Verify the task was deleted by trying to get it
+        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+            get_task(created_task.id)
+        assert exc_info.value.response.status_code == 404
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to delete task: {str(e)}")
+
+
 def test_update_task():
     """Test updating a task through the API endpoint"""
     try:
