@@ -42,6 +42,10 @@ class AttachTagRequest(BaseModel):
     note_id: int
     tag_id: int
 
+class NoteTagRelation(BaseModel):
+    note_id: int
+    tag_id: int
+
 class TreeTag(BaseModel):
     id: int
     name: str
@@ -373,6 +377,27 @@ def attach_tag_to_note(note_id: int, tag_id: int, base_url: str = "http://localh
     )
     
     response.raise_for_status()
+
+def get_note_tag_relations(base_url: str = "http://localhost:37240") -> list[NoteTagRelation]:
+    """
+    Get all relationships between notes and tags
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[NoteTagRelation]: List of all note-tag relationships
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tags/notes",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [NoteTagRelation.model_validate(rel) for rel in response.json()]
 
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """

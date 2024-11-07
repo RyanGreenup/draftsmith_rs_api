@@ -352,6 +352,37 @@ def test_attach_tag_to_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach tag to note: {str(e)}")
 
+def test_get_note_tag_relations():
+    """Test getting all note-tag relationships"""
+    try:
+        # First create a note and tag to work with
+        note = note_create("Test Note", "Test content")
+        note_id = note["id"]
+        
+        tag = create_tag("TestTag")
+        tag_id = tag.id
+
+        # Attach the tag to the note
+        attach_tag_to_note(note_id, tag_id)
+
+        # Get all note-tag relationships
+        relations = get_note_tag_relations()
+        
+        # Verify we got a list of NoteTagRelation objects
+        assert isinstance(relations, list)
+        assert all(isinstance(rel, NoteTagRelation) for rel in relations)
+        
+        # Find our test relationship
+        test_relation = next(
+            (rel for rel in relations 
+             if rel.note_id == note_id and rel.tag_id == tag_id),
+            None
+        )
+        assert test_relation is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get note-tag relations: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
