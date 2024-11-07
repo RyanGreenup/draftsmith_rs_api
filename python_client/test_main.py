@@ -259,6 +259,40 @@ def test_get_task_hierarchy_relations():
         pytest.fail(f"Failed to get task hierarchy relations: {str(e)}")
 
 
+def test_update_task():
+    """Test updating a task through the API endpoint"""
+    try:
+        # First create a task to update
+        task_request = CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        )
+        created_task = create_task(task_request)
+
+        # Create update request
+        update_request = UpdateTaskRequest(
+            status=TaskStatus.DONE,
+            actual_effort=Decimal("3.0"),
+            priority=2
+        )
+
+        # Update the task
+        result = update_task(created_task.id, update_request)
+
+        # Verify the response structure
+        assert isinstance(result, Task)
+        assert result.id == created_task.id
+        assert result.status == TaskStatus.DONE
+        assert result.actual_effort == Decimal("3.0")
+        assert result.priority == 2
+        assert result.created_at is not None
+        assert result.modified_at is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to update task: {str(e)}")
+
+
 def test_create_task():
     """Test creating a task through the API endpoint"""
     try:

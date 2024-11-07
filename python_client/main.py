@@ -616,6 +616,17 @@ class CreateTaskRequest(BaseModel):
     goal_relationship: Optional[str] = None
 
 
+class UpdateTaskRequest(BaseModel):
+    note_id: Optional[int] = None
+    status: Optional[TaskStatus] = None
+    effort_estimate: Optional[Decimal] = None
+    actual_effort: Optional[Decimal] = None
+    deadline: Optional[datetime] = None
+    priority: Optional[int] = None
+    all_day: Optional[bool] = None
+    goal_relationship: Optional[str] = None
+
+
 class TaskHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
@@ -702,6 +713,33 @@ def get_task_hierarchy_relations(
 
     response.raise_for_status()
     return [TaskHierarchyRelation.model_validate(rel) for rel in response.json()]
+
+
+def update_task(
+    task_id: int, task: UpdateTaskRequest, base_url: str = "http://localhost:37240"
+) -> Task:
+    """
+    Update an existing task
+
+    Args:
+        task_id: The ID of the task to update
+        task: The task data to update
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Task: The updated task data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.put(
+        f"{base_url}/tasks/{task_id}",
+        headers={"Content-Type": "application/json"},
+        data=task.model_dump_json(exclude_none=True),
+    )
+
+    response.raise_for_status()
+    return Task.model_validate(response.json())
 
 
 def create_task(
