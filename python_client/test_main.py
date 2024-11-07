@@ -252,9 +252,12 @@ def test_get_task_hierarchy_relations():
 
         # Find our test relationship
         test_relation = next(
-            (rel for rel in relations 
-             if rel.parent_id == parent_task.id and rel.child_id == child_task.id),
-            None
+            (
+                rel
+                for rel in relations
+                if rel.parent_id == parent_task.id and rel.child_id == child_task.id
+            ),
+            None,
         )
         assert test_relation is not None
         assert test_relation.parent_id == parent_task.id
