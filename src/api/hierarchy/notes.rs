@@ -202,13 +202,6 @@ pub async fn update_note_tree(
     State(state): State<AppState>,
     Json(note_tree): Json<NoteTreeNode>,
 ) -> Result<StatusCode, StatusCode> {
-    update_database_from_notetreenode(State(state), Json(note_tree)).await
-}
-
-pub async fn update_database_from_notetreenode(
-    State(state): State<AppState>,
-    Json(note_tree_node): Json<NoteTreeNode>,
-) -> Result<StatusCode, StatusCode> {
     let mut conn = state.pool.get().map_err(|e| {
         eprintln!("Failed to get connection: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
@@ -306,7 +299,7 @@ pub async fn update_database_from_notetreenode(
     }
 
     // Start the recursive processing from the root node
-    process_node(&mut conn, note_tree_node, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    process_node(&mut conn, note_tree, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(StatusCode::OK)
 }
@@ -367,8 +360,7 @@ mod note_hierarchy_tests {
         };
 
         // Call the function to update the database
-        let response =
-            update_database_from_notetreenode(State(state.clone()), Json(input_tree)).await;
+        let response = update_note_tree(State(state.clone()), Json(input_tree)).await;
 
         // Assert that the operation was successful
         assert_eq!(
@@ -558,7 +550,7 @@ mod note_hierarchy_tests {
         };
 
         // Update the hierarchy
-        let response = update_database_from_notetreenode(State(state.clone()), Json(modified_tree))
+        let response = update_note_tree(State(state.clone()), Json(modified_tree))
             .await
             .expect("Failed to update hierarchy");
         assert_eq!(response, StatusCode::OK);

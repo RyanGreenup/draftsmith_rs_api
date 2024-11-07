@@ -482,29 +482,6 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
         stack.extend(node.children.iter().cloned());
     }
 
-    // Update tags for all nodes
-    for node in nodes {
-        // First detach all existing tags
-        for tag in &node.tags {
-            match detach_tag_from_note(base_url, node.id, tag.id).await {
-                Ok(_) => (),
-                Err(e) => {
-                    if let crate::client::tags::TagError::NotFound = e {
-                        continue;
-                    }
-                    return Err(e.into());
-                }
-            }
-        }
-
-        // Then attach new tags
-        for tag in node.tags {
-            attach_tag_to_note(base_url, node.id, tag.id).await?;
-            // Small delay between tag attachments
-            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        }
-    }
-
     Ok(())
 }
 // *** Hashes ....................................................................
