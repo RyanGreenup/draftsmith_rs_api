@@ -228,9 +228,9 @@ pub struct NoteWithoutFts {
 impl NoteWithoutFts {
     pub fn get_all(conn: &mut PgConnection) -> diesel::QueryResult<Vec<NoteWithoutFts>> {
         use crate::schema::notes::dsl::*;
-        Ok(notes
+        notes
             .select((id, title, content, created_at, modified_at))
-            .load::<NoteWithoutFts>(conn)?)
+            .load::<NoteWithoutFts>(conn)
     }
 }
 
