@@ -9,14 +9,14 @@ Draftsmith is a modern note-taking and task management system built with a focus
 ## Architecture
 
 Draftsmith follows a unique architectural approach:
-- Core logic is implemented in Rust, providing strong type safety, memory safety, and high performance
+- Core logic is implemented in Rust (backed by Postgresql), providing strong type safety, memory safety, and high performance
 - A REST API exposes this functionality, allowing for flexible integrations
-- Client applications (GUI, CLI, etc.) can be written in any language while benefiting from the robust core
+- Client applications (GUI, CLI, etc.) can be written in any language while benefiting from a stable, well-defined and performant backend
 
 This separation allows:
 - Core business logic to remain fast and reliable
 - GUI development to use more flexible languages like Python or TypeScript
-- CLI tools to be easily created and integrated
+- CLI tools and aliases can be created easily.
 - Type safety and correctness to be maintained across all interfaces
 
 ## Installation
@@ -47,10 +47,8 @@ notes_tree = get_notes_tree()
 ## Features
 
 - Complete API coverage for Draftsmith's functionality
+    - Full CRUD operations for notes, tasks, and tags
 - Type-safe requests and responses using Pydantic models
-- Hierarchical note and task management
-- Tag system for flexible organization
-- Full CRUD operations for notes, tasks, and tags
 
 ## API Documentation
 
@@ -84,4 +82,4 @@ pytest python_client/test_main.py
 
 ## License
 
-MIT License - see LICENSE file for details
+GPL License

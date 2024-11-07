@@ -833,7 +833,9 @@ def attach_task_to_parent(
     response.raise_for_status()
 
 
-def detach_task_from_parent(task_id: int, base_url: str = "http://localhost:37240") -> None:
+def detach_task_from_parent(
+    task_id: int, base_url: str = "http://localhost:37240"
+) -> None:
     """
     Detach a task from its parent
 

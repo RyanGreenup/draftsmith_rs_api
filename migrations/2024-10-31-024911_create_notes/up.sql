@@ -153,13 +153,13 @@ CREATE TABLE tags (
 
 CREATE TABLE note_tags (
     note_id INT NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
-    tag_id INT NOT NULL REFERENCES tags (id),
+    tag_id INT NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
     PRIMARY KEY (note_id, tag_id)
 );
 
 CREATE TABLE tag_hierarchy (
     id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    parent_tag_id INT REFERENCES tags (id),
+    parent_tag_id INT REFERENCES tags (id) ON DELETE CASCADE,
     child_tag_id INT REFERENCES tags (id) ON DELETE CASCADE,
     UNIQUE (child_tag_id)  -- Tags can only have one parent
 );
