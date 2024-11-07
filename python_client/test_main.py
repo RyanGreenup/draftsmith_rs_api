@@ -485,8 +485,7 @@ def test_attach_tag_to_parent():
         # Verify the attachment by getting hierarchy relations
         relations = get_tag_hierarchy_relations()
         assert any(
-            rel.parent_id == parent.id and rel.child_id == child.id
-            for rel in relations
+            rel.parent_id == parent.id and rel.child_id == child.id for rel in relations
         )
 
     except requests.exceptions.RequestException as e:

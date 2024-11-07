@@ -59,6 +59,7 @@ class TagHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
 
+
 class AttachTagHierarchyRequest(BaseModel):
     parent_id: int
     child_id: int
