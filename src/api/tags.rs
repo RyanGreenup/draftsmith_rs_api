@@ -151,7 +151,7 @@ async fn get_tag(
     Ok(Json(tag.into()))
 }
 
-async fn create_tag(
+pub async fn create_tag(
     State(state): State<AppState>,
     Json(payload): Json<CreateTagRequest>,
 ) -> Result<(StatusCode, Json<TagResponse>), TagError> {
