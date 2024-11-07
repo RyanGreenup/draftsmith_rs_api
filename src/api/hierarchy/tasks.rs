@@ -8,6 +8,8 @@ use diesel::result::QueryResult;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
+type TaskHierarchyTuple = (i32, i32);
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AttachChildRequest {
     pub parent_task_id: Option<i32>,
@@ -166,13 +168,9 @@ pub async fn get_task_tree(
     // Prepare data for generic tree building
     let task_data: Vec<(i32, Task)> = all_tasks.into_iter().map(|task| (task.id, task)).collect();
 
-    let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
+    let hierarchy_tuples: Vec<TaskHierarchyTuple> = hierarchies
         .iter()
-        .filter_map(|h| {
-            h.child_task_id
-                .zip(h.parent_task_id)
-                .map(|(child, parent)| (child, parent))
-        })
+        .filter_map(|h| h.child_task_id.zip(h.parent_task_id))
         .collect();
 
     // Build the basic tree and convert
