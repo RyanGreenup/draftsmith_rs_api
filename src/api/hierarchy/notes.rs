@@ -9,7 +9,7 @@ pub struct AttachChildNoteRequest {
     pub parent_note_id: Option<i32>,
     pub child_note_id: i32,
 }
-use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
+use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts, NoteTag};
 use diesel::prelude::*;
 
 impl HierarchyItem for NoteHierarchy {
@@ -219,6 +219,7 @@ pub async fn update_database_from_notetreenode(
         node: NoteTreeNode,
         parent_id: Option<i32>,
     ) -> Result<i32, DieselError> {
+        use crate::schema::note_tags;
         eprintln!("Processing node: id={}, title={:?}", node.id, node.title);
         use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
         use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
