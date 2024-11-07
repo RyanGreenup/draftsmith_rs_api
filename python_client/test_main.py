@@ -129,15 +129,18 @@ def test_get_all_notes_without_content():
 def test_get_tags_tree():
     """Test retrieving tags in tree structure"""
     try:
-        # Create some test tags with hierarchy
+        # Create parent and child tags
         parent_tag = create_tag("parent")
         child_tag = create_tag("child")
 
-        # Create a note to attach to the tag
+        # Create a note to attach to the parent tag
         note = note_create("Test Note", "Test content")
         note_id = note["id"]
 
-        # Attach the note to the parent tag
+        # Attach child tag to parent tag
+        attach_tag_to_parent(child_tag.id, parent_tag.id)
+
+        # Attach note to parent tag
         attach_tag_to_note(note_id, parent_tag.id)
 
         # Get tags tree
@@ -156,6 +159,16 @@ def test_get_tags_tree():
         # Verify structure
         assert isinstance(test_tag.children, list)
         assert isinstance(test_tag.notes, list)
+
+        # Verify child tag is in children
+        assert any(child.id == child_tag.id for child in test_tag.children)
+        child = next((child for child in test_tag.children if child.id == child_tag.id), None)
+        assert child.name == "child"
+
+        # Verify note is attached
+        assert any(n.id == note_id for n in test_tag.notes)
+        attached_note = next((n for n in test_tag.notes if n.id == note_id), None)
+        assert attached_note.title == "Untitled"  # API sets default title
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve tags tree: {str(e)}")
