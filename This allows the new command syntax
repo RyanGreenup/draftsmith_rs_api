@@ -1,0 +1,2 @@
+cargo run -- client tags --id=2 attach 1  # Attach tag 2 to parent 1
+cargo run -- client tags detach 2         # Detach tag 2

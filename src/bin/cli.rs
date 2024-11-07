@@ -221,18 +221,13 @@ enum TagsCommands {
     Mappings,
     /// Attach a tag to a parent tag
     Attach {
-        /// The parent tag ID
-        #[arg(long)]
+        /// The parent tag ID to attach to
         parent_id: i32,
-        /// The child tag ID
-        #[arg(long)]
-        child_id: i32,
     },
-    /// Detach a tag from its parent
+    /// Detach a tag
     Detach {
-        /// The child tag ID to detach
-        #[arg(long)]
-        child_id: i32,
+        /// The tag ID to detach
+        tag_id: i32,
     },
 }
 
@@ -261,6 +256,9 @@ enum ClientCommands {
     },
     /// Tags related commands
     Tags {
+        /// Optional tag ID
+        #[arg(long)]
+        id: Option<i32>,
         #[command(subcommand)]
         command: TagsCommands,
     },
@@ -772,7 +770,7 @@ async fn main() {
                     std::process::exit(1);
                 }
             },
-            ClientCommands::Tags { command } => match command {
+            ClientCommands::Tags { id, command } => match command {
                 TagsCommands::Create { name } => {
                     let request = CreateTagRequest { name };
                     match create_tag(&url, request).await {
@@ -849,24 +847,28 @@ async fn main() {
                         std::process::exit(1);
                     }
                 },
-                TagsCommands::Attach {
-                    parent_id,
-                    child_id,
-                } => match attach_child_tag(&url, parent_id, child_id).await {
-                    Ok(_) => {
-                        println!(
-                            "Successfully attached tag {} to parent {}",
-                            child_id, parent_id
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
+                TagsCommands::Attach { parent_id } => {
+                    if let Some(child_id) = id {
+                        match attach_child_tag(&url, parent_id, child_id).await {
+                            Ok(_) => {
+                                println!(
+                                    "Successfully attached tag {} to parent {}",
+                                    child_id, parent_id
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for attach command");
                         std::process::exit(1);
                     }
-                },
-                TagsCommands::Detach { child_id } => match detach_child_tag(&url, child_id).await {
+                }
+                TagsCommands::Detach { tag_id } => match detach_child_tag(&url, tag_id).await {
                     Ok(_) => {
-                        println!("Successfully detached tag {}", child_id);
+                        println!("Successfully detached tag {}", tag_id);
                     }
                     Err(e) => {
                         eprintln!("Error: {}", e);
