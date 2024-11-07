@@ -616,6 +616,11 @@ class CreateTaskRequest(BaseModel):
     goal_relationship: Optional[str] = None
 
 
+class TaskHierarchyRelation(BaseModel):
+    parent_id: int
+    child_id: int
+
+
 class Task(BaseModel):
     id: int
     note_id: Optional[int]
@@ -673,6 +678,30 @@ def get_all_tasks(base_url: str = "http://localhost:37240") -> list[Task]:
 
     response.raise_for_status()
     return [Task.model_validate(task) for task in response.json()]
+
+
+def get_task_hierarchy_relations(
+    base_url: str = "http://localhost:37240",
+) -> list[TaskHierarchyRelation]:
+    """
+    Get all parent-child relationships between tasks
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[TaskHierarchyRelation]: List of all parent-child relationships between tasks
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tasks/hierarchy",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [TaskHierarchyRelation.model_validate(rel) for rel in response.json()]
 
 
 def create_task(

@@ -221,6 +221,40 @@ def test_get_all_tasks():
         pytest.fail(f"Failed to get tasks: {str(e)}")
 
 
+def test_get_task_hierarchy_relations():
+    """Test getting all task hierarchy relationships"""
+    try:
+        # First create two tasks to ensure we have some hierarchy
+        parent_task = create_task(CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=1,
+            all_day=False,
+        ))
+        child_task = create_task(CreateTaskRequest(
+            status=TaskStatus.TODO,
+            priority=2,
+            all_day=False,
+        ))
+
+        # Get all hierarchy relationships
+        relations = get_task_hierarchy_relations()
+
+        # Verify we got a list of TaskHierarchyRelation objects
+        assert isinstance(relations, list)
+        assert all(isinstance(rel, TaskHierarchyRelation) for rel in relations)
+
+        # Verify the structure of a relation if any exist
+        if relations:
+            relation = relations[0]
+            assert hasattr(relation, "parent_id")
+            assert hasattr(relation, "child_id")
+            assert isinstance(relation.parent_id, int)
+            assert isinstance(relation.child_id, int)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get task hierarchy relations: {str(e)}")
+
+
 def test_create_task():
     """Test creating a task through the API endpoint"""
     try:
