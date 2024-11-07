@@ -671,40 +671,40 @@ async fn main() {
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
-                    file,
-                    note_id,
-                    description,
-                    filename,
+                    file: _,
+                    note_id: _,
+                    description: _,
+                    filename: _,
                 } => {
                     // TODO: Implement asset creation logic
                     eprintln!("Asset creation not yet implemented");
                     std::process::exit(1);
                 }
-                AssetCommands::List { note_id } => {
+                AssetCommands::List { note_id: _ } => {
                     // TODO: Implement asset listing logic
                     eprintln!("Asset listing not yet implemented");
                     std::process::exit(1);
                 }
-                AssetCommands::Get { id, output } => {
+                AssetCommands::Get { id: _, output: _ } => {
                     // TODO: Implement get asset logic
                     eprintln!("Asset retrieval not yet implemented");
                     std::process::exit(1);
                 }
-                AssetCommands::GetByName { path, output } => {
+                AssetCommands::GetByName { path: _, output: _ } => {
                     // TODO: Implement get by name logic
                     eprintln!("Asset retrieval by name not yet implemented");
                     std::process::exit(1);
                 }
                 AssetCommands::Update {
-                    id,
-                    note_id,
-                    description,
+                    id: _,
+                    note_id: _,
+                    description: _,
                 } => {
                     // TODO: Implement update logic
                     eprintln!("Asset update not yet implemented");
                     std::process::exit(1);
                 }
-                AssetCommands::Delete { id } => {
+                AssetCommands::Delete { id: _ } => {
                     // TODO: Implement delete logic
                     eprintln!("Asset deletion not yet implemented");
                     std::process::exit(1);
