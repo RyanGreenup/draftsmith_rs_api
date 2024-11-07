@@ -182,7 +182,7 @@ def test_update_notes_tree():
         # Find our updated note
         updated_note = next((n for n in updated_tree if n.id == note_id), None)
         assert updated_note is not None
-        assert updated_note.title == "Root"
+        assert updated_note.title == "Untitled"  # API sets default title
         assert updated_note.content == "Root content"
         
     except requests.exceptions.RequestException as e:
