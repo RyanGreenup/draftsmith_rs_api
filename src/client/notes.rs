@@ -555,6 +555,7 @@ pub async fn get_all_notes_rendered_html(base_url: &str) -> Result<Vec<RenderedN
 mod tests {
     use super::*;
     use crate::BASE_URL;
+    use crate::api::tags::{create_tag, attach_tag_to_note, TagError};
     // ** Client ....................................................................
     // *** Functions .................................................................
     // **** Create ...................................................................
@@ -766,7 +767,7 @@ mod tests {
         )
         .await
         .unwrap();
-        add_tag_to_note(base_url, root_note.id, tag1.id).await.unwrap();
+        attach_tag_to_note(base_url, root_note.id, tag1.id).await.unwrap();
 
         // Create child notes with tags
         let child1_note = create_note(
@@ -778,7 +779,7 @@ mod tests {
         )
         .await
         .unwrap();
-        add_tag_to_note(base_url, child1_note.id, tag2.id).await.unwrap();
+        attach_tag_to_note(base_url, child1_note.id, tag2.id).await.unwrap();
 
         let child2_note = create_note(
             base_url,
@@ -789,7 +790,7 @@ mod tests {
         )
         .await
         .unwrap();
-        add_tag_to_note(base_url, child2_note.id, tag3.id).await.unwrap();
+        attach_tag_to_note(base_url, child2_note.id, tag3.id).await.unwrap();
 
         // Give the server time to process tag assignments
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
