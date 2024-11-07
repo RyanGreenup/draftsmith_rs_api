@@ -459,7 +459,7 @@ pub async fn read_from_disk(base_url: &str, input_dir: &std::path::Path) -> Resu
 // **** Files .................................................................
 // *** Tree ...................................................................
 
-pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), NoteError> {
+pub async fn update_note_tree(base_url: &str, tree: Vec<NoteTreeNode>) -> Result<(), NoteError> {
     // First update the note content and structure
     let client = reqwest::Client::new();
     let url = format!("{}/notes/tree", base_url);
