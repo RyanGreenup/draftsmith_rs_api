@@ -27,6 +27,10 @@ class AttachNoteRequest(BaseModel):
     parent_note_id: int 
     hierarchy_type: str
 
+class NoteHierarchyRelation(BaseModel):
+    parent_id: int
+    child_id: int
+
 class TreeNote(BaseModel):
     id: int
     title: str
@@ -206,6 +210,27 @@ def attach_note_to_parent(
     )
     
     response.raise_for_status()
+
+def get_note_hierarchy_relations(base_url: str = "http://localhost:37240") -> list[NoteHierarchyRelation]:
+    """
+    Get all parent-child relationships between notes
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[NoteHierarchyRelation]: List of all parent-child relationships
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/hierarchy",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [NoteHierarchyRelation.model_validate(rel) for rel in response.json()]
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

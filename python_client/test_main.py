@@ -153,6 +153,38 @@ def test_get_notes_tree():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve notes tree: {str(e)}")
 
+def test_get_note_hierarchy_relations():
+    """Test getting all note hierarchy relationships"""
+    try:
+        # Create parent note
+        parent = note_create("Parent", "Parent content")
+        parent_id = parent["id"]
+
+        # Create child note
+        child = note_create("Child", "Child content")
+        child_id = child["id"]
+
+        # Attach child to parent
+        attach_note_to_parent(child_id, parent_id)
+
+        # Get all hierarchy relationships
+        relations = get_note_hierarchy_relations()
+        
+        # Verify we got a list of NoteHierarchyRelation objects
+        assert isinstance(relations, list)
+        assert all(isinstance(rel, NoteHierarchyRelation) for rel in relations)
+        
+        # Find our test relationship
+        test_relation = next(
+            (rel for rel in relations 
+             if rel.parent_id == parent_id and rel.child_id == child_id),
+            None
+        )
+        assert test_relation is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get hierarchy relations: {str(e)}")
+
 def test_attach_note_to_parent():
     """Test attaching a note as a child of another note"""
     try:
