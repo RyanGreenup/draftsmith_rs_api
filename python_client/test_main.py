@@ -318,17 +318,21 @@ def test_get_tasks_tree():
     """Test retrieving tasks in tree structure"""
     try:
         # First create some tasks to ensure we have data
-        task1 = create_task(CreateTaskRequest(
-            status=TaskStatus.TODO,
-            priority=1,
-            all_day=False,
-        ))
-        
-        task2 = create_task(CreateTaskRequest(
-            status=TaskStatus.TODO,
-            priority=2,
-            all_day=False,
-        ))
+        task1 = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=1,
+                all_day=False,
+            )
+        )
+
+        task2 = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=2,
+                all_day=False,
+            )
+        )
 
         # Get tasks tree
         tasks = get_tasks_tree()
@@ -350,6 +354,7 @@ def test_get_tasks_tree():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve tasks tree: {str(e)}")
+
 
 def test_create_task():
     """Test creating a task through the API endpoint"""

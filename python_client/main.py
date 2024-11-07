@@ -646,6 +646,7 @@ class TreeTask(BaseModel):
     goal_relationship: Optional[str]
     children: list["TreeTask"] = []
 
+
 class Task(BaseModel):
     id: int
     note_id: Optional[int]
@@ -822,6 +823,7 @@ def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
 
     response.raise_for_status()
     return [TreeTask.model_validate(task) for task in response.json()]
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
