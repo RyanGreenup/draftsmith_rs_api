@@ -46,6 +46,62 @@ pub struct TagResponse {
     pub name: String,
 }
 
+pub async fn get_tags_notes(
+    State(state): State<AppState>,
+    tag_ids: Vec<i32>,
+) -> Result<Json<HashMap<i32, Vec<NoteMetadataResponse>>>, StatusCode> {
+    use crate::schema::{note_tags, notes, tags};
+    use diesel::prelude::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get all notes for the specified tags
+    let results: Vec<(
+        i32,
+        i32,
+        String,
+        Option<chrono::NaiveDateTime>,
+        Option<chrono::NaiveDateTime>,
+    )> = note_tags::table
+        .inner_join(notes::table.on(notes::columns::id.eq(note_tags::columns::note_id)))
+        .inner_join(tags::table.on(tags::columns::id.eq(note_tags::columns::tag_id)))
+        .filter(tags::columns::id.eq_any(tag_ids))
+        .select((
+            tags::columns::id,
+            notes::columns::id,
+            notes::columns::title,
+            notes::columns::created_at,
+            notes::columns::modified_at,
+        ))
+        .load::<(
+            i32,
+            i32,
+            String,
+            Option<chrono::NaiveDateTime>,
+            Option<chrono::NaiveDateTime>,
+        )>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Group notes by tag_id
+    let mut tags_notes: HashMap<i32, Vec<NoteMetadataResponse>> = HashMap::new();
+    for (t_id, n_id, n_title, n_created, n_modified) in results {
+        tags_notes
+            .entry(t_id)
+            .or_default()
+            .push(NoteMetadataResponse {
+                id: n_id,
+                title: n_title,
+                created_at: n_created,
+                modified_at: n_modified,
+            });
+    }
+
+    Ok(Json(tags_notes))
+}
+
 pub async fn get_notes_tags(
     State(state): State<AppState>,
     note_ids: Vec<i32>,
@@ -1487,6 +1543,104 @@ mod tests {
         assert!(note2_tags
             .iter()
             .any(|t| t.id == tag1.id && t.name == "tag1"));
+
+        // Clean up
+        diesel::delete(note_tags::table)
+            .filter(note_tags::note_id.eq_any(vec![note1.id, note2.id]))
+            .execute(&mut conn)
+            .expect("Failed to clean up note_tags");
+
+        diesel::delete(tags::table)
+            .filter(tags::id.eq_any(vec![tag1.id, tag2.id]))
+            .execute(&mut conn)
+            .expect("Failed to clean up tags");
+
+        let _ = delete_note(Path(note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(note2.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_tags_notes() {
+        use crate::schema::note_tags;
+        use crate::schema::tags;
+        use diesel::prelude::*;
+
+        let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
+        let mut conn = pool.get().expect("Failed to get connection");
+
+        // Create test notes
+        let note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note 1".to_string(),
+                content: "Content 1".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create note 1")
+        .1
+         .0;
+
+        let note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note 2".to_string(),
+                content: "Content 2".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create note 2")
+        .1
+         .0;
+
+        // Create test tags
+        let tag1 = diesel::insert_into(tags::table)
+            .values((tags::name.eq("tag1"),))
+            .get_result::<crate::tables::Tag>(&mut conn)
+            .expect("Failed to create tag 1");
+
+        let tag2 = diesel::insert_into(tags::table)
+            .values((tags::name.eq("tag2"),))
+            .get_result::<crate::tables::Tag>(&mut conn)
+            .expect("Failed to create tag 2");
+
+        // Associate tags with notes
+        diesel::insert_into(note_tags::table)
+            .values(&vec![
+                (
+                    note_tags::note_id.eq(note1.id),
+                    note_tags::tag_id.eq(tag1.id),
+                ),
+                (
+                    note_tags::note_id.eq(note1.id),
+                    note_tags::tag_id.eq(tag2.id),
+                ),
+                (
+                    note_tags::note_id.eq(note2.id),
+                    note_tags::tag_id.eq(tag1.id),
+                ),
+            ])
+            .execute(&mut conn)
+            .expect("Failed to associate tags with notes");
+
+        // Test getting notes for both tags
+        let result = get_tags_notes(State(state.clone()), vec![tag1.id, tag2.id])
+            .await
+            .expect("Failed to get tags notes")
+            .0;
+
+        // Verify results
+        assert_eq!(result.len(), 2);
+
+        let tag1_notes = result.get(&tag1.id).expect("Missing notes for tag 1");
+        assert_eq!(tag1_notes.len(), 2);
+        assert!(tag1_notes.iter().any(|n| n.id == note1.id));
+        assert!(tag1_notes.iter().any(|n| n.id == note2.id));
+
+        let tag2_notes = result.get(&tag2.id).expect("Missing notes for tag 2");
+        assert_eq!(tag2_notes.len(), 1);
+        assert!(tag2_notes.iter().any(|n| n.id == note1.id));
 
         // Clean up
         diesel::delete(note_tags::table)
