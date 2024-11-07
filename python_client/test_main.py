@@ -509,7 +509,7 @@ def test_get_all_assets():
     """Test retrieving all assets"""
     try:
         # First create a test asset to ensure we have at least one
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tf:
             tf.write(b"Test asset for listing")
             temp_path = tf.name
 
@@ -526,7 +526,9 @@ def test_get_all_assets():
             assert all(isinstance(asset, Asset) for asset in assets)
 
             # Find our test asset in the list
-            test_asset = next((asset for asset in assets if asset.id == created_asset.id), None)
+            test_asset = next(
+                (asset for asset in assets if asset.id == created_asset.id), None
+            )
             assert test_asset is not None
             assert test_asset.location.startswith("uploads/")
             assert test_asset.created_at is not None
@@ -537,6 +539,7 @@ def test_get_all_assets():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve assets: {str(e)}")
+
 
 def test_upload_asset():
     """Test uploading a file as an asset"""

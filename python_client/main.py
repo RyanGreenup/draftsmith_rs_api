@@ -7,6 +7,8 @@ from typing import Optional
 from pydantic import BaseModel
 import requests
 import json
+import tempfile
+import os
 
 
 class CreateNoteRequest(BaseModel):
@@ -935,6 +937,7 @@ def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
 
     response.raise_for_status()
     return [Asset.model_validate(asset) for asset in response.json()]
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
