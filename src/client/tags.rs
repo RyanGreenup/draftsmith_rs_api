@@ -1,5 +1,6 @@
+use crate::api::hierarchy::tags::TagTreeNode;
 use crate::api::tags::TagResponse;
-use crate::tables::HierarchyMapping;
+use crate::tables::{HierarchyMapping, TagHierarchy};
 use reqwest::{self, StatusCode};
 use serde::Serialize;
 use thiserror::Error;
