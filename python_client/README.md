@@ -4,6 +4,8 @@ Official Python bindings for Draftsmith's REST API.
 
 ## What is Draftsmith?
 
+<p><img src="./assets/logo.png" style="float: left; width: 80px" /></p>
+
 Draftsmith is a modern note-taking and task management system built with a focus on performance, type safety, and flexibility. It allows you to organize your thoughts, tasks, and knowledge in a hierarchical structure while maintaining relationships between different pieces of information through tags and parent-child relationships.
 
 ## Architecture
