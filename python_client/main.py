@@ -54,6 +54,7 @@ class NoteTagRelation(BaseModel):
     note_id: int
     tag_id: int
 
+
 class TagHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
@@ -471,7 +472,9 @@ def get_note_tag_relations(
     return [NoteTagRelation.model_validate(rel) for rel in response.json()]
 
 
-def get_tag_hierarchy_relations(base_url: str = "http://localhost:37240") -> list[TagHierarchyRelation]:
+def get_tag_hierarchy_relations(
+    base_url: str = "http://localhost:37240",
+) -> list[TagHierarchyRelation]:
     """
     Get all parent-child relationships between tags
 
@@ -491,6 +494,7 @@ def get_tag_hierarchy_relations(base_url: str = "http://localhost:37240") -> lis
 
     response.raise_for_status()
     return [TagHierarchyRelation.model_validate(rel) for rel in response.json()]
+
 
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """

@@ -493,13 +493,14 @@ def test_get_tag_hierarchy_relations():
         # Verify the structure of a relation if any exist
         if relations:
             relation = relations[0]
-            assert hasattr(relation, 'parent_id')
-            assert hasattr(relation, 'child_id')
+            assert hasattr(relation, "parent_id")
+            assert hasattr(relation, "child_id")
             assert isinstance(relation.parent_id, int)
             assert isinstance(relation.child_id, int)
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get tag hierarchy relations: {str(e)}")
+
 
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
