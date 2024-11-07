@@ -940,7 +940,9 @@ def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
 
 
 def download_asset(
-    asset_id: int | str, output_path: str | Path, base_url: str = "http://localhost:37240"
+    asset_id: int | str,
+    output_path: str | Path,
+    base_url: str = "http://localhost:37240",
 ) -> None:
     """
     Download an asset by its ID or filename to a specified path
@@ -954,7 +956,11 @@ def download_asset(
         requests.exceptions.RequestException: If the request fails
         requests.exceptions.HTTPError: If the asset is not found (404)
     """
-    endpoint = f"{base_url}/assets/download/{asset_id}" if isinstance(asset_id, str) else f"{base_url}/assets/{asset_id}"
+    endpoint = (
+        f"{base_url}/assets/download/{asset_id}"
+        if isinstance(asset_id, str)
+        else f"{base_url}/assets/{asset_id}"
+    )
     response = requests.get(endpoint, stream=True)
     response.raise_for_status()
 
