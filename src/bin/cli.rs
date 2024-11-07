@@ -1016,8 +1016,8 @@ async fn main() {
                     let request = CreateTaskRequest {
                         note_id,
                         status,
-                        effort_estimate: effort_estimate.map(|e| BigDecimal::from(e)),
-                        actual_effort: actual_effort.map(|e| BigDecimal::from(e)),
+                        effort_estimate: effort_estimate.map(BigDecimal::from),
+                        actual_effort: actual_effort.map(BigDecimal::from),
                         deadline,
                         priority,
                         all_day,
@@ -1062,8 +1062,8 @@ async fn main() {
                         let request = UpdateTaskRequest {
                             note_id,
                             status,
-                            effort_estimate: effort_estimate.map(|e| BigDecimal::from(e)),
-                            actual_effort: actual_effort.map(|e| BigDecimal::from(e)),
+                            effort_estimate: effort_estimate.map(BigDecimal::from),
+                            actual_effort: actual_effort.map(BigDecimal::from),
                             deadline,
                             priority,
                             all_day,
