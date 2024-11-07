@@ -87,6 +87,10 @@ class TreeNote(BaseModel):
     tags: list[TreeTag] = []
 
 
+class UpdateAssetRequest(BaseModel):
+    note_id: Optional[int] = None
+    description: Optional[str] = None
+
 class Asset(BaseModel):
     id: int
     note_id: Optional[int]
@@ -938,6 +942,31 @@ def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
     response.raise_for_status()
     return [Asset.model_validate(asset) for asset in response.json()]
 
+
+def update_asset(asset_id: int, request: UpdateAssetRequest, base_url: str = "http://localhost:37240") -> Asset:
+    """
+    Update an asset's metadata
+
+    Args:
+        asset_id: The ID of the asset to update
+        request: The update request containing new metadata
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Asset: The updated asset data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the asset is not found (404)
+    """
+    response = requests.put(
+        f"{base_url}/assets/{asset_id}",
+        headers={"Content-Type": "application/json"},
+        data=request.model_dump_json(exclude_none=True),
+    )
+
+    response.raise_for_status()
+    return Asset.model_validate(response.json())
 
 def download_asset(
     asset_id: int | str,

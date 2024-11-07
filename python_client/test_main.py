@@ -505,6 +505,42 @@ def test_create_task():
         pytest.fail(f"Failed to create task: {str(e)}")
 
 
+def test_update_asset():
+    """Test updating an asset's metadata"""
+    try:
+        # First create a test asset
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+            tf.write(b"Test asset for updating")
+            temp_path = tf.name
+
+        try:
+            # Upload test asset
+            created_asset = upload_asset(temp_path)
+
+            # Create update request
+            update_request = UpdateAssetRequest(
+                note_id=1,
+                description="Updated description for the asset"
+            )
+
+            # Update the asset
+            updated_asset = update_asset(created_asset.id, update_request)
+
+            # Verify the response
+            assert isinstance(updated_asset, Asset)
+            assert updated_asset.id == created_asset.id
+            assert updated_asset.note_id == 1
+            assert updated_asset.description == "Updated description for the asset"
+            assert updated_asset.location == created_asset.location
+            assert updated_asset.created_at is not None
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to update asset: {str(e)}")
+
 def test_download_asset_by_filename():
     """Test downloading an asset by filename"""
     try:
