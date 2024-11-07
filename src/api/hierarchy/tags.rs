@@ -289,7 +289,6 @@ mod tests {
     use axum::extract::State;
     use axum::http::StatusCode;
     use axum::Json;
-    use diesel::prelude::*;
 
     #[tokio::test]
     async fn test_attach_child_tag_detects_cycle() {
@@ -297,7 +296,6 @@ mod tests {
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
         // Import necessary items
-        use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
         use crate::schema::tags::dsl::tags;
 
         // Create test tags within a transaction
@@ -334,6 +332,8 @@ mod tests {
         let result = attach_child_tag(State(state), Json(cyclic_payload)).await;
         assert_eq!(result, Err(StatusCode::BAD_REQUEST));
     }
+
+    #[tokio::test]
     async fn test_detach_child_tag() {
         let state = setup_test_state();
         let mut conn = state.pool.get().expect("Failed to get database connection");
@@ -463,10 +463,8 @@ mod tests {
         let mut conn = state.pool.get().expect("Failed to get database connection");
 
         // Import only necessary items and alias conflicting names
-        use crate::schema::tag_hierarchy::dsl::{
-            child_tag_id, id as hierarchy_id, parent_tag_id, tag_hierarchy,
-        };
-        use crate::schema::tags::dsl::{id as tags_id, tags};
+        use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
+        use crate::schema::tags::dsl::tags;
 
         // Declare variables to hold the tag IDs
         let mut root_tag_id: Option<i32> = None;
