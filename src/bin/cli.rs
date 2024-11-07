@@ -299,10 +299,10 @@ enum NotesCommands {
         #[arg(short = 't', long, value_enum, default_value_t = RenderType::Md)]
         render_type: RenderType,
     },
-    /// Full text search notes by content
-    Fts {
-        /// Search query
-        query: String,
+    /// Search commands
+    Search {
+        #[command(subcommand)]
+        command: SearchCommands,
     },
 }
 
@@ -710,17 +710,19 @@ async fn main() {
                         println!("{}", rendered_output);
                     }
                 }
-                NotesCommands::Fts { query } => {
-                    match rust_cli_app::client::fts_search_notes(&url, &query).await {
-                        Ok(notes) => {
-                            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
+                NotesCommands::Search { command } => match command {
+                    SearchCommands::Db { query } => {
+                        match rust_cli_app::client::fts_search_notes(&url, &query).await {
+                            Ok(notes) => {
+                                println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
                         }
                     }
-                }
+                },
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
@@ -1187,3 +1189,11 @@ mod tests {
     }
 }
 */
+#[derive(Subcommand)]
+enum SearchCommands {
+    /// Search notes in database
+    Db {
+        /// Search query
+        query: String,
+    },
+}
