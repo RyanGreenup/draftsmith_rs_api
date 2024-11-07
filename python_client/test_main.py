@@ -21,7 +21,7 @@ def test_create_note():
         assert "modified_at" in result
 
         # Verify the content matches what we sent
-        assert result["title"] == "Untitled"  # API currently returns "Untitled" regardless of input
+        assert result["title"] == "Untitled"  # API (db) sets default title to H1
         assert result["content"] == test_content
 
     except requests.exceptions.RequestException as e:
