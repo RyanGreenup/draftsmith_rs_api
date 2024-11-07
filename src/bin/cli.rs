@@ -88,10 +88,8 @@ enum RenderType {
 
 #[derive(Subcommand)]
 enum TasksCommands {
-    /// List all tasks
+    /// List all tasks or get a specific task by ID
     List,
-    /// Get a task by ID
-    Get,
     /// Create a new task
     Create {
         /// Status of the task (e.g., todo, in_progress, done)
@@ -888,17 +886,9 @@ async fn main() {
                 },
             },
             ClientCommands::Tasks { id, command } => match command {
-                TasksCommands::List => match fetch_tasks(&url).await {
-                    Ok(tasks) => {
-                        println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
-                    }
-                    Err(e) => {
-                        eprintln!("Error fetching tasks: {}", e);
-                        std::process::exit(1);
-                    }
-                },
-                TasksCommands::Get => {
+                TasksCommands::List => {
                     if let Some(task_id) = id {
+                        // Get specific task
                         match fetch_task(&url, task_id).await {
                             Ok(task) => {
                                 println!("{}", serde_json::to_string_pretty(&task).unwrap());
@@ -913,8 +903,16 @@ async fn main() {
                             }
                         }
                     } else {
-                        eprintln!("Error: --id is required for get command");
-                        std::process::exit(1);
+                        // List all tasks
+                        match fetch_tasks(&url).await {
+                            Ok(tasks) => {
+                                println!("{}", serde_json::to_string_pretty(&tasks).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error fetching tasks: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
                     }
                 }
                 TasksCommands::Create {
