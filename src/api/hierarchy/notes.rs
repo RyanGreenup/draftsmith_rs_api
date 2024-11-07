@@ -70,7 +70,6 @@ use axum::{
     extract::{Json, State},
     http::StatusCode,
 };
-use diesel::result::Error as DieselError;
 use serde::Serialize;
 
 #[derive(Debug, serde::Deserialize, Serialize, Clone)]
