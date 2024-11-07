@@ -162,7 +162,9 @@ def test_get_tags_tree():
 
         # Verify child tag is in children
         assert any(child.id == child_tag.id for child in test_tag.children)
-        child = next((child for child in test_tag.children if child.id == child_tag.id), None)
+        child = next(
+            (child for child in test_tag.children if child.id == child_tag.id), None
+        )
         assert child.name == "child"
 
         # Verify note is attached
