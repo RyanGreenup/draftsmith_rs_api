@@ -98,3 +98,24 @@ def get_note_without_content(note_id: int, base_url: str = "http://localhost:372
     response.raise_for_status()
     return NoteWithoutContent.model_validate(response.json())
 
+def get_all_notes(base_url: str = "http://localhost:37240") -> list[Note]:
+    """
+    Retrieve all notes
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[Note]: List of all notes
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [Note.model_validate(note) for note in response.json()]
+
