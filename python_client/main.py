@@ -939,7 +939,9 @@ def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
     return [Asset.model_validate(asset) for asset in response.json()]
 
 
-def download_asset(asset_id: int, output_path: str | Path, base_url: str = "http://localhost:37240") -> None:
+def download_asset(
+    asset_id: int, output_path: str | Path, base_url: str = "http://localhost:37240"
+) -> None:
     """
     Download an asset by its ID to a specified path
 
@@ -952,15 +954,13 @@ def download_asset(asset_id: int, output_path: str | Path, base_url: str = "http
         requests.exceptions.RequestException: If the request fails
         requests.exceptions.HTTPError: If the asset is not found (404)
     """
-    response = requests.get(
-        f"{base_url}/assets/{asset_id}",
-        stream=True
-    )
+    response = requests.get(f"{base_url}/assets/{asset_id}", stream=True)
     response.raise_for_status()
-    
-    with open(output_path, 'wb') as f:
+
+    with open(output_path, "wb") as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
