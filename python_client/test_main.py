@@ -7,28 +7,6 @@ def test_create_note():
     # Test data
     test_title = "Test Note"
     test_content = "This is a test note"
-    
-    try:
-        # Attempt to create a note
-        result = create_note(test_title, test_content)
-        
-        # Verify the response structure
-        assert isinstance(result, dict)
-        assert "note_id" in result
-        assert result["title"] == test_title
-        assert result["content"] == test_content
-        
-    except requests.exceptions.ConnectionError:
-        pytest.skip("API server is not running")
-from .main import create_note
-import pytest
-import requests
-
-def test_create_note():
-    """Test creating a note through the API endpoint"""
-    # Test data
-    test_title = "Test Note"
-    test_content = "This is a test note"
 
     try:
         # Attempt to create a note
@@ -41,7 +19,7 @@ def test_create_note():
         assert "content" in result
         assert "created_at" in result
         assert "modified_at" in result
-        
+
         # Verify the content matches what we sent
         assert result["title"] == test_title
         assert result["content"] == test_content
