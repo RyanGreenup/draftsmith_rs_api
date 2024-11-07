@@ -876,40 +876,6 @@ def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
     return [TreeTask.model_validate(task) for task in response.json()]
 
 
-class Asset(BaseModel):
-    id: int
-    note_id: Optional[int]
-    location: str
-    description: Optional[str]
-    created_at: datetime
-
-def upload_asset(
-    file_path: str, 
-    base_url: str = "http://localhost:37240"
-) -> Asset:
-    """
-    Upload a file as an asset
-
-    Args:
-        file_path: Path to the file to upload
-        base_url: The base URL of the API (default: http://localhost:37240)
-
-    Returns:
-        Asset: The created asset data
-
-    Raises:
-        requests.exceptions.RequestException: If the request fails
-        FileNotFoundError: If the file does not exist
-    """
-    with open(file_path, 'rb') as f:
-        files = {'file': f}
-        response = requests.post(
-            f"{base_url}/assets",
-            files=files
-        )
-        response.raise_for_status()
-        return Asset.model_validate(response.json())
-
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure
