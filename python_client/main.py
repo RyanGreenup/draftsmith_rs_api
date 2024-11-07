@@ -28,7 +28,7 @@ class TreeNote(BaseModel):
     content: str
     created_at: Optional[datetime]
     modified_at: Optional[datetime]
-    hierarchy_type: Optional[str]
+    hierarchy_type: Optional[str] = None
     children: list['TreeNote']
     tags: list[str]
 
