@@ -91,6 +91,7 @@ class UpdateAssetRequest(BaseModel):
     note_id: Optional[int] = None
     description: Optional[str] = None
 
+
 class Asset(BaseModel):
     id: int
     note_id: Optional[int]
@@ -943,7 +944,9 @@ def get_all_assets(base_url: str = "http://localhost:37240") -> list[Asset]:
     return [Asset.model_validate(asset) for asset in response.json()]
 
 
-def update_asset(asset_id: int, request: UpdateAssetRequest, base_url: str = "http://localhost:37240") -> Asset:
+def update_asset(
+    asset_id: int, request: UpdateAssetRequest, base_url: str = "http://localhost:37240"
+) -> Asset:
     """
     Update an asset's metadata
 
@@ -967,6 +970,7 @@ def update_asset(asset_id: int, request: UpdateAssetRequest, base_url: str = "ht
 
     response.raise_for_status()
     return Asset.model_validate(response.json())
+
 
 def download_asset(
     asset_id: int | str,

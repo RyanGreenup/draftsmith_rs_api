@@ -509,7 +509,7 @@ def test_update_asset():
     """Test updating an asset's metadata"""
     try:
         # First create a test asset
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tf:
             tf.write(b"Test asset for updating")
             temp_path = tf.name
 
@@ -519,8 +519,7 @@ def test_update_asset():
 
             # Create update request
             update_request = UpdateAssetRequest(
-                note_id=1,
-                description="Updated description for the asset"
+                note_id=1, description="Updated description for the asset"
             )
 
             # Update the asset
@@ -540,6 +539,7 @@ def test_update_asset():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to update asset: {str(e)}")
+
 
 def test_download_asset_by_filename():
     """Test downloading an asset by filename"""
