@@ -604,31 +604,25 @@ async fn main() {
                         }
                     };
 
-                    // Parse the JSON into a NoteTreeNode, wrapping in Vec if needed
-                    let tree: rust_cli_app::client::NoteTreeNode = match serde_json::from_str(
-                        &content,
-                    ) {
-                        Ok(tree) => tree,
-                        Err(e) => {
-                            // Try parsing as array and take first element
-                            match serde_json::from_str::<Vec<rust_cli_app::client::NoteTreeNode>>(
-                                &content,
-                            ) {
-                                Ok(mut trees) if !trees.is_empty() => trees.remove(0),
-                                Ok(_) => {
-                                    eprintln!("Error: JSON file contains empty array");
-                                    std::process::exit(1);
-                                }
-                                Err(_) => {
-                                    eprintln!("Error parsing JSON: {}", e);
-                                    std::process::exit(1);
-                                }
+                    // Parse the JSON into a Vec<NoteTreeNode>
+                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str(&content) {
+                        Ok(trees) => {
+                            if trees.is_empty() {
+                                eprintln!("Error: JSON file contains empty array");
+                                std::process::exit(1);
                             }
+                            trees
+                        }
+                        Err(e) => {
+                            eprintln!("Error: JSON file must contain an array of note trees: {}", e);
+                            eprintln!("Example format:");
+                            eprintln!(r#"[{{"id": 1, "title": "Root", "content": "content", "children": [], "tags": []}}]"#);
+                            std::process::exit(1);
                         }
                     };
 
-                    // Upload the tree
-                    match rust_cli_app::client::update_note_tree(&url, tree).await {
+                    // Upload the trees
+                    match rust_cli_app::client::update_note_tree(&url, trees).await {
                         Ok(_) => println!("Tree structure updated successfully"),
                         Err(e) => {
                             eprintln!("Error updating tree: {}", e);
