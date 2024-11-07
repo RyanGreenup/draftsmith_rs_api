@@ -207,16 +207,30 @@ pub async fn update_note_tree(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Recursive function to process each node
-    fn process_node(
-        conn: &mut PgConnection,
+    // Process nodes iteratively using a stack
+    #[derive(Debug)]
+    struct NodeWithParent {
         node: NoteTreeNode,
         parent_id: Option<i32>,
-    ) -> Result<i32, DieselError> {
-        use crate::schema::note_tags;
+    }
+
+    use crate::schema::note_tags;
+    use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
+    use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
+
+    // Initialize stack with root nodes
+    let mut stack: Vec<NodeWithParent> = note_trees
+        .into_iter()
+        .map(|node| NodeWithParent {
+            node,
+            parent_id: None,
+        })
+        .collect();
+
+    // Process nodes while stack is not empty
+    while let Some(NodeWithParent { node, parent_id }) = stack.pop() {
         eprintln!("Processing node: id={}, title={:?}", node.id, node.title);
-        use crate::schema::note_hierarchy::dsl::{child_note_id, note_hierarchy};
-        use crate::schema::notes::dsl::{content, id as notes_id, modified_at, notes, title};
+
         // Determine if the note is new or existing
         let node_id = if node.id <= 0 {
             // Insert new note
@@ -229,7 +243,7 @@ pub async fn update_note_tree(
             let result = diesel::insert_into(notes)
                 .values(&new_note)
                 .returning(notes_id)
-                .get_result::<i32>(conn);
+                .get_result::<i32>(&mut conn);
 
             match result {
                 Ok(other_id) => {
@@ -238,7 +252,7 @@ pub async fn update_note_tree(
                 }
                 Err(e) => {
                     eprintln!("Failed to insert new note: {:?}", e);
-                    return Err(e);
+                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
                 }
             }
         } else {
@@ -249,16 +263,17 @@ pub async fn update_note_tree(
                     content.eq(&node.content.unwrap_or_default()),
                     modified_at.eq(Some(chrono::Utc::now().naive_utc())),
                 ))
-                .execute(conn)?;
+                .execute(&mut conn)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             node.id
         };
-
-        // Update hierarchy
 
         // Update hierarchy only if there is a parent
         if let Some(p_id) = parent_id {
             // Remove existing hierarchy entry for this node
-            diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id))).execute(conn)?;
+            diesel::delete(note_hierarchy.filter(child_note_id.eq(node_id)))
+                .execute(&mut conn)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
             // Insert new hierarchy entry
             let new_hierarchy = NewNoteHierarchy {
@@ -267,12 +282,15 @@ pub async fn update_note_tree(
             };
             diesel::insert_into(note_hierarchy)
                 .values(&new_hierarchy)
-                .execute(conn)?;
+                .execute(&mut conn)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
 
         // Update tags
         // First remove existing tags
-        diesel::delete(note_tags::table.filter(note_tags::note_id.eq(node_id))).execute(conn)?;
+        diesel::delete(note_tags::table.filter(note_tags::note_id.eq(node_id)))
+            .execute(&mut conn)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
         // Then insert new tags
         if !node.tags.is_empty() {
@@ -287,20 +305,17 @@ pub async fn update_note_tree(
 
             diesel::insert_into(note_tags::table)
                 .values(new_tags)
-                .execute(conn)?;
+                .execute(&mut conn)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
 
-        // Process child nodes recursively
-        for child in node.children {
-            process_node(conn, child, Some(node_id))?;
+        // Add children to stack (in reverse order to maintain same processing order as recursive version)
+        for child in node.children.into_iter().rev() {
+            stack.push(NodeWithParent {
+                node: child,
+                parent_id: Some(node_id),
+            });
         }
-
-        Ok(node_id)
-    }
-
-    // Process each root node in the vector
-    for note_tree in note_trees {
-        process_node(&mut conn, note_tree, None).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
 
     Ok(StatusCode::OK)
