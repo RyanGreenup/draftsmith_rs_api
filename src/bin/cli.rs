@@ -321,8 +321,8 @@ enum HierarchyCommands {
 
 #[derive(Subcommand)]
 enum FlatCommands {
-    /// Get all notes
-    Get {
+    /// List all notes
+    List {
         /// Only fetch metadata (exclude content)
         #[arg(long)]
         metadata_only: bool,
@@ -373,7 +373,7 @@ async fn main() {
         Commands::Client { url, command } => match command {
             ClientCommands::Notes { id, command } => match command {
                 NotesCommands::Flat { command } => match command {
-                    FlatCommands::Get { metadata_only } => {
+                    FlatCommands::List { metadata_only } => {
                         if let Some(note_id) = id {
                             match rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
                                 .await
