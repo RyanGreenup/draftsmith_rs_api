@@ -240,6 +240,9 @@ def test_get_task_hierarchy_relations():
             )
         )
 
+        # Attach child to parent
+        attach_task_to_parent(child_task.id, parent_task.id)
+
         # Get all hierarchy relationships
         relations = get_task_hierarchy_relations()
 
@@ -247,13 +250,15 @@ def test_get_task_hierarchy_relations():
         assert isinstance(relations, list)
         assert all(isinstance(rel, TaskHierarchyRelation) for rel in relations)
 
-        # Verify the structure of a relation if any exist
-        if relations:
-            relation = relations[0]
-            assert hasattr(relation, "parent_id")
-            assert hasattr(relation, "child_id")
-            assert isinstance(relation.parent_id, int)
-            assert isinstance(relation.child_id, int)
+        # Find our test relationship
+        test_relation = next(
+            (rel for rel in relations 
+             if rel.parent_id == parent_task.id and rel.child_id == child_task.id),
+            None
+        )
+        assert test_relation is not None
+        assert test_relation.parent_id == parent_task.id
+        assert test_relation.child_id == child_task.id
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get task hierarchy relations: {str(e)}")
