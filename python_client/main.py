@@ -22,6 +22,15 @@ class NoteWithoutContent(BaseModel):
     created_at: datetime
     modified_at: datetime
 
+class TreeNote(BaseModel):
+    id: int
+    title: str
+    content: str
+    created_at: datetime
+    modified_at: datetime
+    children: list['TreeNote']
+    tags: list[str]
+
 
 def note_create(
     title: str, content: str, base_url: str = "http://localhost:37240"
@@ -140,4 +149,25 @@ def get_all_notes_without_content(base_url: str = "http://localhost:37240") -> l
     
     response.raise_for_status()
     return [NoteWithoutContent.model_validate(note) for note in response.json()]
+
+def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
+    """
+    Retrieve all notes in a tree structure
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[TreeNote]: List of all notes with their hierarchical structure
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/tree",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [TreeNote.model_validate(note) for note in response.json()]
 

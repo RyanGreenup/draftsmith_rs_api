@@ -121,3 +121,35 @@ def test_get_all_notes_without_content():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve all notes without content: {str(e)}")
 
+def test_get_notes_tree():
+    """Test retrieving notes in tree structure"""
+    try:
+        # Get notes tree
+        notes = get_notes_tree()
+        
+        # Verify we got a list of TreeNote objects
+        assert isinstance(notes, list)
+        assert len(notes) > 0
+        assert all(isinstance(note, TreeNote) for note in notes)
+        
+        # Verify each note has the required fields
+        for note in notes:
+            assert note.id > 0
+            assert isinstance(note.title, str)
+            assert isinstance(note.content, str)
+            assert note.created_at is not None
+            assert note.modified_at is not None
+            assert isinstance(note.children, list)
+            assert isinstance(note.tags, list)
+            
+            # Verify any children are also TreeNote objects
+            for child in note.children:
+                assert isinstance(child, TreeNote)
+            
+            # Verify tags are strings
+            for tag in note.tags:
+                assert isinstance(tag, str)
+            
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve notes tree: {str(e)}")
+
