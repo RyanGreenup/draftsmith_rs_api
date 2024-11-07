@@ -40,6 +40,12 @@ use tokio::time::{self, Duration};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+#[derive(Serialize, Deserialize)]
+pub struct TagResponse {
+    pub id: i32,
+    pub name: String,
+}
+
 // Request/Response types
 #[derive(Deserialize, Serialize)]
 pub struct CreateNoteRequest {

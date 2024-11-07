@@ -2,6 +2,7 @@ use super::hierarchy::tags::{
     attach_child_tag, detach_child_tag, get_hierarchy_mappings, get_tag_tree,
 };
 use super::AppState;
+pub use super::TagResponse;
 use crate::schema::note_tags;
 pub use crate::tables::{NewNoteTag, NewTag, NoteTag, Tag};
 use crate::TAGS_API;
@@ -47,12 +48,6 @@ pub struct CreateTagRequest {
 
 #[derive(Deserialize)]
 pub struct UpdateTagRequest {
-    pub name: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct TagResponse {
-    pub id: i32,
     pub name: String,
 }
 
