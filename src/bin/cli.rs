@@ -605,7 +605,7 @@ async fn main() {
                     };
 
                     // Parse the JSON into a Vec<NoteTreeNode>
-                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str(&content) {
+                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str::<Vec<rust_cli_app::client::NoteTreeNode>>(&content) {
                         Ok(trees) => {
                             if trees.is_empty() {
                                 eprintln!("Error: JSON file contains empty array");

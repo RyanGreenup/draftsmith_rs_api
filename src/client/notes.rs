@@ -5,7 +5,6 @@ pub use crate::api::{
     CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest,
     UpdateNoteRequest,
 };
-use crate::client::tags::{attach_tag_to_note, detach_tag_from_note};
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
 use futures::future::join_all;
@@ -579,7 +578,6 @@ pub async fn get_all_notes_rendered_html(base_url: &str) -> Result<Vec<RenderedN
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::tags::create_tag;
     use crate::BASE_URL;
     // ** Client ....................................................................
     // *** Functions .................................................................
@@ -898,7 +896,7 @@ mod tests {
         };
 
         // Update the tree structure
-        let update_result = update_note_tree(base_url, tree.clone()).await;
+        let update_result = update_note_tree(base_url, vec![tree.clone()]).await;
         // Test the result and print a useful error message
         if let Err(ref e) = update_result {
             eprintln!("Error updating note tree: {}", e);
