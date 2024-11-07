@@ -794,8 +794,17 @@ mod tests {
         );
     }
 
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
     #[tokio::test]
     async fn test_update_note_tree() {
+        // Acquire mutex to ensure test runs in isolation
+        let _lock = TEST_MUTEX.lock().unwrap();
         let base_url = BASE_URL;
 
         // Create test tags first
