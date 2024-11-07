@@ -661,6 +661,31 @@ def test_upload_asset():
         pytest.fail(f"Failed to upload asset: {str(e)}")
 
 
+def test_search_notes():
+    """Test searching notes using full-text search"""
+    try:
+        # Search for notes containing 'feature'
+        results = search_notes("feature")
+
+        # Verify we got a list of Note objects
+        assert isinstance(results, list)
+        assert all(isinstance(note, Note) for note in results)
+
+        # Verify each note has the required fields
+        for note in results:
+            assert note.id > 0
+            assert isinstance(note.title, str)
+            assert isinstance(note.content, str)
+            assert note.created_at is not None
+            assert note.modified_at is not None
+
+            # Verify the note contains our search term
+            assert "feature" in note.content.lower()
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to search notes: {str(e)}")
+
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:

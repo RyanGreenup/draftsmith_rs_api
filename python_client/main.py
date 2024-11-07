@@ -1022,6 +1022,30 @@ def download_asset(
             f.write(chunk)
 
 
+def search_notes(query: str, base_url: str = "http://localhost:37240") -> list[Note]:
+    """
+    Search notes using full-text search
+
+    Args:
+        query: The search query string
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[Note]: List of notes matching the search query
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/search/fts",
+        params={"q": query},
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [Note.model_validate(note) for note in response.json()]
+
+
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure
