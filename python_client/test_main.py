@@ -53,3 +53,27 @@ def test_get_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve note: {str(e)}")
 
+def test_get_note_without_content():
+    """Test retrieving a note without content"""
+    test_title = "Test Note"
+    test_content = "This is a test note"
+    
+    try:
+        # Create a note
+        created = note_create(test_title, test_content)
+        note_id = created["id"]
+        
+        # Retrieve the note without content
+        result = get_note_without_content(note_id)
+        
+        # Verify the response structure using Pydantic model
+        assert isinstance(result, NoteWithoutContent)
+        assert result.id == note_id
+        assert result.title == "Untitled"  # API sets default title
+        assert result.created_at is not None
+        assert result.modified_at is not None
+        assert not hasattr(result, "content")
+        
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to retrieve note without content: {str(e)}")
+

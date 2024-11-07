@@ -12,7 +12,13 @@ class CreateNoteRequest(BaseModel):
 class Note(BaseModel):
     id: int
     title: str
-    content: str
+    content: str 
+    created_at: datetime
+    modified_at: datetime
+
+class NoteWithoutContent(BaseModel):
+    id: int
+    title: str
     created_at: datetime
     modified_at: datetime
 
@@ -67,4 +73,28 @@ def get_note(note_id: int, base_url: str = "http://localhost:37240") -> Note:
     
     response.raise_for_status()
     return Note.model_validate(response.json())
+
+def get_note_without_content(note_id: int, base_url: str = "http://localhost:37240") -> NoteWithoutContent:
+    """
+    Retrieve a note by its ID, excluding the content field
+    
+    Args:
+        note_id: The ID of the note to retrieve
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        NoteWithoutContent: The retrieved note data without content
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the note is not found (404)
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat/{note_id}",
+        params={"exclude_content": "true"},
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return NoteWithoutContent.model_validate(response.json())
 
