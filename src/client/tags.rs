@@ -1,5 +1,7 @@
+use crate::api::tags::TagResponse;
+use crate::tables::HierarchyMapping;
 use reqwest::{self, StatusCode};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,11 +23,11 @@ pub struct CreateTagRequest {
     pub name: String,
 }
 
-#[derive(Deserialize)]
-pub struct TagResponse {
-    pub id: i32,
-    pub name: String,
-}
+// #[derive(Deserialize)]
+// pub struct TagResponse {
+//     pub id: i32,
+//     pub name: String,
+// }
 
 #[derive(Serialize)]
 pub struct UpdateTagRequest {
@@ -38,11 +40,11 @@ pub struct AttachChildTagRequest {
     pub child_id: i32,
 }
 
-#[derive(Debug, Deserialize, PartialEq)]
-pub struct HierarchyMapping {
-    pub parent_id: Option<i32>,
-    pub child_id: i32,
-}
+// #[derive(Debug, Deserialize, PartialEq)]
+// pub struct HierarchyMapping {
+//     pub parent_id: Option<i32>,
+//     pub child_id: i32,
+// }
 // * Client ...................................................................
 // ** Flat Functions ..........................................................
 // *** Create .................................................................

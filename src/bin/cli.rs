@@ -849,20 +849,21 @@ async fn main() {
                         std::process::exit(1);
                     }
                 },
-                TagsCommands::Attach { parent_id, child_id } => {
-                    match attach_child_tag(&url, parent_id, child_id).await {
-                        Ok(_) => {
-                            println!(
-                                "Successfully attached tag {} to parent {}",
-                                child_id, parent_id
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!("Error: {}", e);
-                            std::process::exit(1);
-                        }
+                TagsCommands::Attach {
+                    parent_id,
+                    child_id,
+                } => match attach_child_tag(&url, parent_id, child_id).await {
+                    Ok(_) => {
+                        println!(
+                            "Successfully attached tag {} to parent {}",
+                            child_id, parent_id
+                        );
                     }
-                }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
                 TagsCommands::Detach { child_id } => match detach_child_tag(&url, child_id).await {
                     Ok(_) => {
                         println!("Successfully detached tag {}", child_id);
