@@ -1,5 +1,5 @@
 pub use crate::api::hierarchy::tags::TagTreeNode;
-use crate::api::tags::TagResponse;
+use crate::api::tags::{NoteTagResponse, TagResponse};
 use crate::tables::HierarchyMapping;
 use reqwest::{self, StatusCode};
 use serde::Serialize;
@@ -39,6 +39,12 @@ pub struct UpdateTagRequest {
 pub struct AttachChildTagRequest {
     pub parent_id: i32,
     pub child_id: i32,
+}
+
+#[derive(Serialize)]
+pub struct AttachTagRequest {
+    pub note_id: i32,
+    pub tag_id: i32,
 }
 
 // #[derive(Debug, Deserialize, PartialEq)]
@@ -289,6 +295,96 @@ pub async fn get_tag_tree(base_url: &str) -> Result<Vec<TagTreeNode>, TagError> 
 }
 
 // *** Get Mappings ...........................................................
+pub async fn list_note_tags(base_url: &str) -> Result<Vec<NoteTagResponse>, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/notes", base_url);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let note_tags = response
+        .json::<Vec<NoteTagResponse>>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(note_tags)
+}
+
+pub async fn attach_tag_to_note(
+    base_url: &str,
+    note_id: i32,
+    tag_id: i32,
+) -> Result<NoteTagResponse, TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/notes", base_url);
+
+    let request = AttachTagRequest { note_id, tag_id };
+
+    let response = client
+        .post(&url)
+        .json(&request)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    let note_tag = response
+        .json::<NoteTagResponse>()
+        .await
+        .map_err(TagError::NetworkError)?;
+    Ok(note_tag)
+}
+
+pub async fn detach_tag_from_note(
+    base_url: &str,
+    note_id: i32,
+    tag_id: i32,
+) -> Result<(), TagError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/tags/notes/{}/{}", base_url, note_id, tag_id);
+
+    let response = client
+        .delete(&url)
+        .send()
+        .await
+        .map_err(TagError::NetworkError)?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(TagError::NotFound);
+    }
+
+    if !response.status().is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(TagError::ServerError(error_text));
+    }
+
+    Ok(())
+}
+
 pub async fn get_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMapping>, TagError> {
     let client = reqwest::Client::new();
     let url = format!("{}/tags/hierarchy", base_url);
@@ -594,6 +690,52 @@ mod tests {
             .iter()
             .any(|mapping| mapping.parent_id == Some(parent_tag.id)
                 && mapping.child_id == child_tag.id));
+    }
+
+    #[tokio::test]
+    async fn test_note_tag_operations() {
+        let base_url = BASE_URL;
+
+        // Create a tag and note to work with
+        let tag = create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "Test Tag for Note".to_string(),
+            },
+        )
+        .await
+        .expect("Failed to create test tag");
+
+        // Test attaching tag to note
+        let note_tag = attach_tag_to_note(base_url, 1, tag.id)
+            .await
+            .expect("Failed to attach tag to note");
+
+        assert_eq!(note_tag.note_id, 1);
+        assert_eq!(note_tag.tag_id, tag.id);
+
+        // Test listing note tags
+        let note_tags = list_note_tags(base_url)
+            .await
+            .expect("Failed to list note tags");
+
+        assert!(note_tags
+            .iter()
+            .any(|nt| nt.note_id == 1 && nt.tag_id == tag.id));
+
+        // Test detaching tag from note
+        detach_tag_from_note(base_url, 1, tag.id)
+            .await
+            .expect("Failed to detach tag from note");
+
+        // Verify detachment
+        let note_tags_after = list_note_tags(base_url)
+            .await
+            .expect("Failed to list note tags after detachment");
+
+        assert!(!note_tags_after
+            .iter()
+            .any(|nt| nt.note_id == 1 && nt.tag_id == tag.id));
     }
 
     #[tokio::test]

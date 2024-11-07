@@ -2,8 +2,8 @@ use super::hierarchy::tags::{
     attach_child_tag, detach_child_tag, get_hierarchy_mappings, get_tag_tree,
 };
 use super::AppState;
-pub use crate::tables::{NewTag, Tag, NoteTag, NewNoteTag};
 use crate::schema::note_tags;
+pub use crate::tables::{NewNoteTag, NewTag, NoteTag, Tag};
 use crate::TAGS_API;
 use axum::{
     extract::{Path, State},
@@ -71,7 +71,7 @@ pub struct AttachTagRequest {
     pub tag_id: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct NoteTagResponse {
     pub note_id: i32,
     pub tag_id: i32,

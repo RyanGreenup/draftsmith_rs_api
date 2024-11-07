@@ -160,7 +160,7 @@ pub struct NewNoteModification<'a> {
     pub modified_at: Option<chrono::NaiveDateTime>,
 }
 
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = note_tags)]
 pub struct NoteTag {
     pub note_id: i32,
