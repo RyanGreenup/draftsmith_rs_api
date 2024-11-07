@@ -326,6 +326,24 @@ def update_tag(tag_id: int, name: str, base_url: str = "http://localhost:37240")
     response.raise_for_status()
     return Tag.model_validate(response.json())
 
+def delete_tag(tag_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Delete a tag by its ID
+    
+    Args:
+        tag_id: The ID of the tag to delete
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.delete(
+        f"{base_url}/tags/{tag_id}",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """
     Create a new tag

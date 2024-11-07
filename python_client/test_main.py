@@ -307,6 +307,25 @@ def test_update_tag():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to update tag: {str(e)}")
 
+def test_delete_tag():
+    """Test deleting a tag through the API endpoint"""
+    try:
+        # First create a tag to delete
+        tag_name = "TagToDelete"
+        created = create_tag(tag_name)
+        tag_id = created.id
+
+        # Delete the tag
+        delete_tag(tag_id)
+
+        # Verify the tag was deleted by trying to get it
+        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+            get_tag(tag_id)
+        assert exc_info.value.response.status_code == 404
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to delete tag: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
