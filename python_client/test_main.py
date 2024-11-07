@@ -272,9 +272,7 @@ def test_update_task():
 
         # Create update request
         update_request = UpdateTaskRequest(
-            status=TaskStatus.DONE,
-            actual_effort=Decimal("3.0"),
-            priority=2
+            status=TaskStatus.DONE, actual_effort=Decimal("3.0"), priority=2
         )
 
         # Update the task
