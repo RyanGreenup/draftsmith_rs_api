@@ -450,7 +450,7 @@ pub async fn read_from_disk(base_url: &str, input_dir: &std::path::Path) -> Resu
 
     // Update the note hierarchy in the database
     for note_tree_node in note_tree_nodes {
-        update_note_tree(base_url, note_tree_node).await?;
+        update_note_tree(base_url, vec![note_tree_node]).await?;
     }
 
     Ok(())
@@ -459,13 +459,13 @@ pub async fn read_from_disk(base_url: &str, input_dir: &std::path::Path) -> Resu
 // **** Files .................................................................
 // *** Tree ...................................................................
 
-pub async fn update_note_tree(base_url: &str, tree: Vec<NoteTreeNode>) -> Result<(), NoteError> {
+pub async fn update_note_tree(base_url: &str, trees: Vec<NoteTreeNode>) -> Result<(), NoteError> {
     // First update the note content and structure
     let client = reqwest::Client::new();
     let url = format!("{}/notes/tree", base_url);
     client
         .put(url)
-        .json(&tree)
+        .json(&trees)
         .send()
         .await?
         .error_for_status()
@@ -476,10 +476,12 @@ pub async fn update_note_tree(base_url: &str, tree: Vec<NoteTreeNode>) -> Result
 
     // Collect all nodes into a flat vector
     let mut nodes = Vec::new();
-    let mut stack = vec![tree];
-    while let Some(node) = stack.pop() {
-        nodes.push(node.clone());
-        stack.extend(node.children.iter().cloned());
+    for tree in trees {
+        let mut stack = vec![tree];
+        while let Some(node) = stack.pop() {
+            nodes.push(node.clone());
+            stack.extend(node.children.iter().cloned());
+        }
     }
 
     Ok(())
