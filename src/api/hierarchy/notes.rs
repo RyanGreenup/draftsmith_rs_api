@@ -2,15 +2,15 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::tables::NewNoteTag;
 use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
+use crate::tables::NewNoteTag;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
     pub parent_note_id: Option<i32>,
     pub child_note_id: i32,
 }
-use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts, NoteTag};
+use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
 use diesel::prelude::*;
 
 impl HierarchyItem for NoteHierarchy {
@@ -279,19 +279,19 @@ pub async fn update_database_from_notetreenode(
 
         // Update tags
         // First remove existing tags
-        diesel::delete(note_tags::table.filter(note_tags::note_id.eq(node_id)))
-            .execute(conn)?;
+        diesel::delete(note_tags::table.filter(note_tags::note_id.eq(node_id))).execute(conn)?;
 
         // Then insert new tags
         if !node.tags.is_empty() {
-            let new_tags: Vec<_> = node.tags
+            let new_tags: Vec<_> = node
+                .tags
                 .iter()
                 .map(|tag| NewNoteTag {
                     note_id: node_id,
                     tag_id: tag.id,
                 })
                 .collect();
-            
+
             diesel::insert_into(note_tags::table)
                 .values(new_tags)
                 .execute(conn)?;

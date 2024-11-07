@@ -1,9 +1,11 @@
 use crate::api::compute_all_note_hashes;
+pub use crate::api::tags::{AttachTagRequest, CreateTagRequest};
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
-    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, UpdateAssetRequest,
+    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest,
     UpdateNoteRequest,
 };
+use crate::client::tags::{attach_tag_to_note, detach_tag_from_note};
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
 use futures::future::join_all;
@@ -28,6 +30,7 @@ pub enum NoteError {
     SerdeYamlError(serde_yaml::Error),
     SerdeJsonError(reqwest::Error),
     HttpStatusError(StatusCode),
+    TagError(crate::client::tags::TagError),
 }
 
 impl fmt::Display for NoteError {
@@ -39,6 +42,7 @@ impl fmt::Display for NoteError {
             NoteError::SerdeYamlError(e) => write!(f, "YAML serialization error: {}", e),
             NoteError::SerdeJsonError(e) => write!(f, "JSON serialization error: {}", e),
             NoteError::HttpStatusError(code) => write!(f, "HTTP error with status code: {}", code),
+            NoteError::TagError(e) => write!(f, "Tag error: {}", e),
         }
     }
 }
@@ -48,6 +52,12 @@ impl std::error::Error for NoteError {}
 impl From<ReqwestError> for NoteError {
     fn from(err: ReqwestError) -> Self {
         NoteError::RequestError(err)
+    }
+}
+
+impl From<crate::client::tags::TagError> for NoteError {
+    fn from(err: crate::client::tags::TagError) -> Self {
+        NoteError::TagError(err)
     }
 }
 
@@ -450,6 +460,7 @@ pub async fn read_from_disk(base_url: &str, input_dir: &std::path::Path) -> Resu
 // *** Tree ...................................................................
 
 pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), NoteError> {
+    // First update the note content and structure
     let client = reqwest::Client::new();
     let url = format!("{}/notes/tree", base_url);
     client
@@ -459,6 +470,41 @@ pub async fn update_note_tree(base_url: &str, tree: NoteTreeNode) -> Result<(), 
         .await?
         .error_for_status()
         .map_err(NoteError::from)?;
+
+    // Give the server time to process the tree update
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // Collect all nodes into a flat vector
+    let mut nodes = Vec::new();
+    let mut stack = vec![tree];
+    while let Some(node) = stack.pop() {
+        nodes.push(node.clone());
+        stack.extend(node.children.iter().cloned());
+    }
+
+    // Update tags for all nodes
+    for node in nodes {
+        // First detach all existing tags
+        for tag in &node.tags {
+            match detach_tag_from_note(base_url, node.id, tag.id).await {
+                Ok(_) => (),
+                Err(e) => {
+                    if let crate::client::tags::TagError::NotFound = e {
+                        continue;
+                    }
+                    return Err(e.into());
+                }
+            }
+        }
+
+        // Then attach new tags
+        for tag in node.tags {
+            attach_tag_to_note(base_url, node.id, tag.id).await?;
+            // Small delay between tag attachments
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        }
+    }
+
     Ok(())
 }
 // *** Hashes ....................................................................
@@ -549,13 +595,13 @@ pub async fn get_all_notes_rendered_html(base_url: &str) -> Result<Vec<RenderedN
     let rendered_notes = response.json::<Vec<RenderedNote>>().await?;
     Ok(rendered_notes)
 }
-// * Tests  ....................................................................
+// * Tests ....................................................................
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::tags::create_tag;
     use crate::BASE_URL;
-    use crate::api::tags::{create_tag, attach_tag_to_note, TagError};
     // ** Client ....................................................................
     // *** Functions .................................................................
     // **** Create ...................................................................
@@ -753,9 +799,35 @@ mod tests {
         let base_url = BASE_URL;
 
         // Create test tags first
-        let tag1 = create_tag(base_url, "tag1").await.unwrap();
-        let tag2 = create_tag(base_url, "tag2").await.unwrap();
-        let tag3 = create_tag(base_url, "tag3").await.unwrap();
+        let tag1 = crate::client::tags::create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "tag1".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let tag2 = crate::client::tags::create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "tag2".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        let tag3 = crate::client::tags::create_tag(
+            base_url,
+            CreateTagRequest {
+                name: "tag3".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Create root note with tag1
         let root_note = create_note(
@@ -767,7 +839,12 @@ mod tests {
         )
         .await
         .unwrap();
-        attach_tag_to_note(base_url, root_note.id, tag1.id).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        attach_tag_to_note(base_url, root_note.id, tag1.id)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to attach tag1 to root note: {}", e));
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Create child notes with tags
         let child1_note = create_note(
@@ -779,7 +856,12 @@ mod tests {
         )
         .await
         .unwrap();
-        attach_tag_to_note(base_url, child1_note.id, tag2.id).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        attach_tag_to_note(base_url, child1_note.id, tag2.id)
+            .await
+            .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         let child2_note = create_note(
             base_url,
@@ -790,10 +872,12 @@ mod tests {
         )
         .await
         .unwrap();
-        attach_tag_to_note(base_url, child2_note.id, tag3.id).await.unwrap();
-
-        // Give the server time to process tag assignments
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        attach_tag_to_note(base_url, child2_note.id, tag3.id)
+            .await
+            .unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // Create a tree structure with updated tags
         let tree = NoteTreeNode {
@@ -802,7 +886,7 @@ mod tests {
             content: Some("Updated root content".to_string()),
             created_at: None,
             modified_at: None,
-            tags: vec![tag1.id, tag2.id], // Add tag2 to root
+            tags: vec![tag1.clone(), tag2.clone()], // Add tag2 to root
             children: vec![
                 NoteTreeNode {
                     id: child1_note.id,
@@ -810,7 +894,7 @@ mod tests {
                     content: Some("Updated child 1 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    tags: vec![tag2.id, tag3.id], // Add tag3 to child1
+                    tags: vec![tag2.clone(), tag3.clone()], // Add tag3 to child1
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -819,7 +903,7 @@ mod tests {
                     content: Some("Updated child 2 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    tags: vec![tag3.id, tag1.id], // Add tag1 to child2
+                    tags: vec![tag3.clone(), tag1.clone()], // Add tag1 to child2
                     children: vec![],
                 },
             ],
@@ -827,6 +911,19 @@ mod tests {
 
         // Update the tree structure
         let update_result = update_note_tree(base_url, tree.clone()).await;
+        // Test the result and print a useful error message
+        if let Err(ref e) = update_result {
+            eprintln!("Error updating note tree: {}", e);
+            if let NoteError::RequestError(req_err) = e {
+                if let Some(status) = req_err.status() {
+                    eprintln!("Status code: {}", status);
+                }
+                if let Some(url) = req_err.url() {
+                    eprintln!("URL: {}", url);
+                }
+            }
+        }
+        // If it failed to update, panic
         assert!(update_result.is_ok(), "Failed to update note tree");
 
         // Give the server time to process updates
@@ -850,11 +947,11 @@ mod tests {
 
         // Verify root tags
         assert!(
-            updated_tree.tags.contains(&tag1.id),
+            updated_tree.tags.iter().any(|t| t.id == tag1.id),
             "Root should have tag1"
         );
         assert!(
-            updated_tree.tags.contains(&tag2.id),
+            updated_tree.tags.iter().any(|t| t.id == tag2.id),
             "Root should have tag2"
         );
 
@@ -865,8 +962,14 @@ mod tests {
             .find(|n| n.id == child1_note.id)
             .expect("Could not find child1");
         assert_eq!(child1.content, Some("Updated child 1 content".to_string()));
-        assert!(child1.tags.contains(&tag2.id), "Child1 should have tag2");
-        assert!(child1.tags.contains(&tag3.id), "Child1 should have tag3");
+        assert!(
+            child1.tags.iter().any(|t| t.id == tag2.id),
+            "Child1 should have tag2"
+        );
+        assert!(
+            child1.tags.iter().any(|t| t.id == tag3.id),
+            "Child1 should have tag3"
+        );
 
         let child2 = updated_tree
             .children
@@ -874,8 +977,14 @@ mod tests {
             .find(|n| n.id == child2_note.id)
             .expect("Could not find child2");
         assert_eq!(child2.content, Some("Updated child 2 content".to_string()));
-        assert!(child2.tags.contains(&tag3.id), "Child2 should have tag3");
-        assert!(child2.tags.contains(&tag1.id), "Child2 should have tag1");
+        assert!(
+            child2.tags.iter().any(|t| t.id == tag3.id),
+            "Child2 should have tag3"
+        );
+        assert!(
+            child2.tags.iter().any(|t| t.id == tag1.id),
+            "Child2 should have tag1"
+        );
     }
     // *** Utils .....................................................................
 

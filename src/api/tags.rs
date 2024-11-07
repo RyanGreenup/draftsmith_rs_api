@@ -41,7 +41,7 @@ impl IntoResponse for TagError {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CreateTagRequest {
     pub name: String,
 }
@@ -60,7 +60,7 @@ impl From<Tag> for TagResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct AttachTagRequest {
     pub note_id: i32,
     pub tag_id: i32,

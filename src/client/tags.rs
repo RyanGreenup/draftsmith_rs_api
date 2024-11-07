@@ -1,5 +1,5 @@
 pub use crate::api::hierarchy::tags::TagTreeNode;
-pub use crate::api::tags::{NoteTagResponse, TagResponse};
+pub use crate::api::tags::{CreateTagRequest, NoteTagResponse, TagResponse};
 use crate::tables::HierarchyMapping;
 use reqwest::{self, StatusCode};
 use serde::Serialize;
@@ -20,17 +20,6 @@ pub enum TagError {
 // * Types ....................................................................
 
 #[derive(Serialize)]
-pub struct CreateTagRequest {
-    pub name: String,
-}
-
-// #[derive(Deserialize)]
-// pub struct TagResponse {
-//     pub id: i32,
-//     pub name: String,
-// }
-
-#[derive(Serialize)]
 pub struct UpdateTagRequest {
     pub name: String,
 }
@@ -47,11 +36,6 @@ pub struct AttachTagRequest {
     pub tag_id: i32,
 }
 
-// #[derive(Debug, Deserialize, PartialEq)]
-// pub struct HierarchyMapping {
-//     pub parent_id: Option<i32>,
-//     pub child_id: i32,
-// }
 // * Client ...................................................................
 // ** Flat Functions ..........................................................
 // *** Create .................................................................
