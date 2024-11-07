@@ -504,6 +504,19 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_empty_tag_tree() {
+        let base_url = BASE_URL;
+        
+        // Get tag tree before creating any tags
+        let tree = get_tag_tree(base_url)
+            .await
+            .expect("Failed to get empty tag tree");
+
+        // Verify the tree is empty
+        assert!(tree.is_empty(), "Tree should be empty");
+    }
+
+    #[tokio::test]
     async fn test_get_tag_tree() {
         let base_url = BASE_URL;
 
