@@ -4,3 +4,21 @@ reset-db:
     rm -rf ./uploads
     diesel migration run
 
+server-down:
+    fuser 37240/tcp -k
+
+server-up:
+    just reset-db && clear && RUST_DEBUG=1 cargo run --bin cli serve
+
+server-up-disown:
+    just server-up & disown
+
+test:
+    just server-down
+    just server-up-disown
+    cargo test
+
+psql:
+    PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d draftsmith2
+
+
