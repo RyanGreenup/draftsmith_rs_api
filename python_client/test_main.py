@@ -511,8 +511,8 @@ def test_upload_asset():
         # Create a temporary test file
         import tempfile
         import os
-        
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tf:
             tf.write(b"Test content")
             temp_path = tf.name
 
@@ -534,6 +534,7 @@ def test_upload_asset():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to upload asset: {str(e)}")
+
 
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""

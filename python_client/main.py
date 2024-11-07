@@ -92,6 +92,7 @@ class Asset(BaseModel):
     description: Optional[str]
     created_at: datetime
 
+
 class TreeTagWithNotes(BaseModel):
     id: int
     name: str
@@ -885,8 +886,7 @@ def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
 
 
 def upload_asset(
-    file_path: str | Path | BinaryIO,
-    base_url: str = "http://localhost:37240"
+    file_path: str | Path | BinaryIO, base_url: str = "http://localhost:37240"
 ) -> Asset:
     """
     Upload a file as an asset
@@ -903,22 +903,17 @@ def upload_asset(
         FileNotFoundError: If the file path does not exist
     """
     if isinstance(file_path, (str, Path)):
-        with open(file_path, 'rb') as f:
-            files = {'file': f}
-            response = requests.post(
-                f"{base_url}/assets",
-                files=files
-            )
+        with open(file_path, "rb") as f:
+            files = {"file": f}
+            response = requests.post(f"{base_url}/assets", files=files)
     else:
         # Handle file-like object
-        files = {'file': file_path}
-        response = requests.post(
-            f"{base_url}/assets",
-            files=files
-        )
+        files = {"file": file_path}
+        response = requests.post(f"{base_url}/assets", files=files)
 
     response.raise_for_status()
     return Asset.model_validate(response.json())
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
