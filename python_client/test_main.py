@@ -352,6 +352,35 @@ def test_attach_tag_to_note():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach tag to note: {str(e)}")
 
+def test_detach_tag_from_note():
+    """Test detaching a tag from a note"""
+    try:
+        # First create a note and tag to work with
+        note = note_create("Test Note", "Test content")
+        note_id = note["id"]
+        
+        tag = create_tag("TestTag")
+        tag_id = tag.id
+
+        # Attach the tag to the note
+        attach_tag_to_note(note_id, tag_id)
+
+        # Verify the attachment worked
+        relations = get_note_tag_relations()
+        assert any(rel.note_id == note_id and rel.tag_id == tag_id 
+                  for rel in relations)
+
+        # Now detach the tag
+        detach_tag_from_note(note_id, tag_id)
+
+        # Verify the detachment worked by checking relations again
+        relations_after = get_note_tag_relations()
+        assert not any(rel.note_id == note_id and rel.tag_id == tag_id 
+                      for rel in relations_after)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to detach tag from note: {str(e)}")
+
 def test_get_note_tag_relations():
     """Test getting all note-tag relationships"""
     try:

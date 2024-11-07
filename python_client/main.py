@@ -378,6 +378,25 @@ def attach_tag_to_note(note_id: int, tag_id: int, base_url: str = "http://localh
     
     response.raise_for_status()
 
+def detach_tag_from_note(note_id: int, tag_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Detach a tag from a note
+    
+    Args:
+        note_id: The ID of the note
+        tag_id: The ID of the tag to detach
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.delete(
+        f"{base_url}/tags/notes/{note_id}/{tag_id}",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+
 def get_note_tag_relations(base_url: str = "http://localhost:37240") -> list[NoteTagRelation]:
     """
     Get all relationships between notes and tags
