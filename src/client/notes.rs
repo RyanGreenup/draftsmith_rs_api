@@ -751,7 +751,12 @@ mod tests {
     async fn test_update_note_tree() {
         let base_url = BASE_URL;
 
-        // Create root note
+        // Create test tags first
+        let tag1 = create_tag(base_url, "tag1").await.unwrap();
+        let tag2 = create_tag(base_url, "tag2").await.unwrap();
+        let tag3 = create_tag(base_url, "tag3").await.unwrap();
+
+        // Create root note with tag1
         let root_note = create_note(
             base_url,
             CreateNoteRequest {
@@ -761,8 +766,9 @@ mod tests {
         )
         .await
         .unwrap();
+        add_tag_to_note(base_url, root_note.id, tag1.id).await.unwrap();
 
-        // Create child notes
+        // Create child notes with tags
         let child1_note = create_note(
             base_url,
             CreateNoteRequest {
@@ -772,6 +778,7 @@ mod tests {
         )
         .await
         .unwrap();
+        add_tag_to_note(base_url, child1_note.id, tag2.id).await.unwrap();
 
         let child2_note = create_note(
             base_url,
@@ -782,15 +789,19 @@ mod tests {
         )
         .await
         .unwrap();
+        add_tag_to_note(base_url, child2_note.id, tag3.id).await.unwrap();
 
-        // Create a tree structure
+        // Give the server time to process tag assignments
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Create a tree structure with updated tags
         let tree = NoteTreeNode {
             id: root_note.id,
             title: Some("Updated Root".to_string()),
             content: Some("Updated root content".to_string()),
             created_at: None,
             modified_at: None,
-            tags: vec![],
+            tags: vec![tag1.id, tag2.id], // Add tag2 to root
             children: vec![
                 NoteTreeNode {
                     id: child1_note.id,
@@ -798,7 +809,7 @@ mod tests {
                     content: Some("Updated child 1 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    tags: vec![],
+                    tags: vec![tag2.id, tag3.id], // Add tag3 to child1
                     children: vec![],
                 },
                 NoteTreeNode {
@@ -807,7 +818,7 @@ mod tests {
                     content: Some("Updated child 2 content".to_string()),
                     created_at: None,
                     modified_at: None,
-                    tags: vec![],
+                    tags: vec![tag3.id, tag1.id], // Add tag1 to child2
                     children: vec![],
                 },
             ],
@@ -816,6 +827,9 @@ mod tests {
         // Update the tree structure
         let update_result = update_note_tree(base_url, tree.clone()).await;
         assert!(update_result.is_ok(), "Failed to update note tree");
+
+        // Give the server time to process updates
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
         // Fetch the updated tree
         let fetched_tree = fetch_note_tree(base_url).await.unwrap();
@@ -826,33 +840,41 @@ mod tests {
             .find(|n| n.id == root_note.id)
             .expect("Could not find updated tree");
 
-        // Verify the structure
-        // Titles are now automatically set as H1 of content by Database
-        // [[file:migrations/2024-10-31-024911_create_notes/up.sql::CREATE OR REPLACE FUNCTION update_title_from_content()][Postgres set title as h1 content]]
-        // assert_eq!(updated_tree.title, "Updated Root");
-        // see commit 12acc9fb1b177b279181c4d15618e60571722ca1
+        // Verify the structure and content
         assert_eq!(
             updated_tree.content,
             Some("Updated root content".to_string())
         );
         assert_eq!(updated_tree.children.len(), 2);
 
-        // Verify children
+        // Verify root tags
+        assert!(
+            updated_tree.tags.contains(&tag1.id),
+            "Root should have tag1"
+        );
+        assert!(
+            updated_tree.tags.contains(&tag2.id),
+            "Root should have tag2"
+        );
+
+        // Verify children content and tags
         let child1 = updated_tree
             .children
             .iter()
             .find(|n| n.id == child1_note.id)
             .expect("Could not find child1");
-        // assert_eq!(child1.title, "Updated Child 1");
         assert_eq!(child1.content, Some("Updated child 1 content".to_string()));
+        assert!(child1.tags.contains(&tag2.id), "Child1 should have tag2");
+        assert!(child1.tags.contains(&tag3.id), "Child1 should have tag3");
 
         let child2 = updated_tree
             .children
             .iter()
             .find(|n| n.id == child2_note.id)
             .expect("Could not find child2");
-        // assert_eq!(child2.title, "Updated Child 2");
         assert_eq!(child2.content, Some("Updated child 2 content".to_string()));
+        assert!(child2.tags.contains(&tag3.id), "Child2 should have tag3");
+        assert!(child2.tags.contains(&tag1.id), "Child2 should have tag1");
     }
     // *** Utils .....................................................................
 
