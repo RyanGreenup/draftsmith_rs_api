@@ -541,6 +541,36 @@ def test_update_asset():
         pytest.fail(f"Failed to update asset: {str(e)}")
 
 
+def test_delete_asset():
+    """Test deleting an asset through the API endpoint"""
+    try:
+        # First create a test asset to delete
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tf:
+            tf.write(b"Test asset for deletion")
+            temp_path = tf.name
+
+        try:
+            # Upload test asset
+            created_asset = upload_asset(temp_path)
+
+            # Delete the asset
+            delete_asset(created_asset.id)
+
+            # Verify the asset was deleted by trying to get it
+            with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+                # Try to download the deleted asset, should fail with 404
+                download_path = os.path.join(tempfile.gettempdir(), "deleted_asset.txt") 
+                download_asset(created_asset.id, download_path)
+            assert exc_info.value.response.status_code == 404
+
+        finally:
+            # Clean up the temporary file
+            os.unlink(temp_path)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to delete asset: {str(e)}")
+
+
 def test_download_asset_by_filename():
     """Test downloading an asset by filename"""
     try:

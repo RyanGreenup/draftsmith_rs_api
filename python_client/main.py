@@ -972,6 +972,26 @@ def update_asset(
     return Asset.model_validate(response.json())
 
 
+def delete_asset(asset_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Delete an asset by its ID
+
+    Args:
+        asset_id: The ID of the asset to delete
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the asset is not found (404)
+    """
+    response = requests.delete(
+        f"{base_url}/assets/{asset_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+
+
 def download_asset(
     asset_id: int | str,
     output_path: str | Path,
