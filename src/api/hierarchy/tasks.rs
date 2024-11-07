@@ -325,7 +325,7 @@ mod task_hierarchy_tests {
             .get()
             .expect("Failed to get connection from pool");
 
-        use crate::schema::tasks::dsl::{id as task_id, tasks};
+        use crate::schema::tasks::dsl::tasks;
         use diesel::prelude::*;
 
         // Create two tasks
@@ -392,9 +392,7 @@ mod task_hierarchy_tests {
             .read_write()
             .run::<_, DieselError, _>(|conn| {
                 // Create test tasks
-                use crate::schema::task_hierarchy::dsl::{
-                    child_task_id, id as hierarchy_id, parent_task_id, task_hierarchy,
-                };
+                use crate::schema::task_hierarchy::dsl::{child_task_id, task_hierarchy};
                 use crate::schema::tasks::dsl::{id as tasks_id, tasks};
 
                 let root_task = diesel::insert_into(crate::schema::tasks::table)

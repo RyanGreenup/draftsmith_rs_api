@@ -2,10 +2,8 @@ pub use crate::api::hierarchy::tasks::{AttachChildRequest, TaskTreeNode};
 pub use crate::api::tasks::{CreateTaskRequest, UpdateTaskRequest};
 use crate::tables::Task;
 use crate::TASK_API;
-use bigdecimal::BigDecimal;
 use reqwest::{self, StatusCode};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -154,6 +152,8 @@ pub async fn fetch_hierarchy_mappings(base_url: &str) -> Result<Vec<HierarchyMap
 mod tests {
     use super::*;
     use crate::BASE_URL;
+    use bigdecimal::BigDecimal;
+    use std::str::FromStr;
     use tokio;
 
     #[tokio::test]
@@ -217,10 +217,6 @@ mod tests {
     #[tokio::test]
     async fn test_task_tree_operations() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
-
-        dbg!("Running task tree operations test");
-        let initial_tree = fetch_task_tree(base_url).await?;
-        let initial_parents = initial_tree.len();
 
         dbg!("Creating parent task");
         // Create parent task
