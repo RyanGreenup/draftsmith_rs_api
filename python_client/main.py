@@ -279,6 +279,27 @@ def get_tag(tag_id: int, base_url: str = "http://localhost:37240") -> Tag:
     response.raise_for_status()
     return Tag.model_validate(response.json())
 
+def get_all_tags(base_url: str = "http://localhost:37240") -> list[Tag]:
+    """
+    Get all tags
+    
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        list[Tag]: List of all tags
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tags",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return [Tag.model_validate(tag) for tag in response.json()]
+
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """
     Create a new tag

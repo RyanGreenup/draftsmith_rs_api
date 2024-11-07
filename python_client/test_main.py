@@ -262,6 +262,27 @@ def test_get_tag():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get tag: {str(e)}")
 
+def test_get_all_tags():
+    """Test getting all tags"""
+    try:
+        # First create a tag to ensure we have at least one
+        tag_name = "TestTag"
+        created = create_tag(tag_name)
+
+        # Get all tags
+        tags = get_all_tags()
+
+        # Verify we got a list of Tag objects
+        assert isinstance(tags, list)
+        assert len(tags) > 0
+        assert all(isinstance(tag, Tag) for tag in tags)
+
+        # Verify our created tag is in the list
+        assert any(tag.id == created.id and tag.name == created.name for tag in tags)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get tags: {str(e)}")
+
 def test_create_tag():
     """Test creating a tag through the API endpoint"""
     try:
