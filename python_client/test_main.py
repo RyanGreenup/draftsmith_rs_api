@@ -225,16 +225,20 @@ def test_get_task_hierarchy_relations():
     """Test getting all task hierarchy relationships"""
     try:
         # First create two tasks to ensure we have some hierarchy
-        parent_task = create_task(CreateTaskRequest(
-            status=TaskStatus.TODO,
-            priority=1,
-            all_day=False,
-        ))
-        child_task = create_task(CreateTaskRequest(
-            status=TaskStatus.TODO,
-            priority=2,
-            all_day=False,
-        ))
+        parent_task = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=1,
+                all_day=False,
+            )
+        )
+        child_task = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=2,
+                all_day=False,
+            )
+        )
 
         # Get all hierarchy relationships
         relations = get_task_hierarchy_relations()
