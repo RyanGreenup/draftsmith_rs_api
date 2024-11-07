@@ -627,6 +627,11 @@ class UpdateTaskRequest(BaseModel):
     goal_relationship: Optional[str] = None
 
 
+class AttachTaskRequest(BaseModel):
+    child_task_id: int
+    parent_task_id: int
+
+
 class TaskHierarchyRelation(BaseModel):
     parent_id: int
     child_id: int
@@ -801,6 +806,31 @@ def create_task(
 
     response.raise_for_status()
     return Task.model_validate(response.json())
+
+
+def attach_task_to_parent(
+    child_id: int, parent_id: int, base_url: str = "http://localhost:37240"
+) -> None:
+    """
+    Attach a task as a child of another task
+
+    Args:
+        child_id: ID of the task to attach as child
+        parent_id: ID of the parent task
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = AttachTaskRequest(child_task_id=child_id, parent_task_id=parent_id)
+
+    response = requests.post(
+        f"{base_url}/tasks/hierarchy/attach",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
+    )
+
+    response.raise_for_status()
 
 
 def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:

@@ -314,6 +314,41 @@ def test_update_task():
         pytest.fail(f"Failed to update task: {str(e)}")
 
 
+def test_attach_task_to_parent():
+    """Test attaching a task as a child of another task"""
+    try:
+        # Create parent task
+        parent_task = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=1,
+                all_day=False,
+            )
+        )
+
+        # Create child task
+        child_task = create_task(
+            CreateTaskRequest(
+                status=TaskStatus.TODO,
+                priority=2,
+                all_day=False,
+            )
+        )
+
+        # Attach child to parent
+        attach_task_to_parent(child_task.id, parent_task.id)
+
+        # Verify the attachment by getting hierarchy relations
+        relations = get_task_hierarchy_relations()
+        assert any(
+            rel.parent_id == parent_task.id and rel.child_id == child_task.id
+            for rel in relations
+        )
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to attach task to parent: {str(e)}")
+
+
 def test_get_tasks_tree():
     """Test retrieving tasks in tree structure"""
     try:
