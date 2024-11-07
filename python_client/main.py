@@ -833,6 +833,25 @@ def attach_task_to_parent(
     response.raise_for_status()
 
 
+def detach_task_from_parent(task_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Detach a task from its parent
+
+    Args:
+        task_id: ID of the task to detach from its parent
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.delete(
+        f"{base_url}/tasks/hierarchy/detach/{task_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+
+
 def get_tasks_tree(base_url: str = "http://localhost:37240") -> list[TreeTask]:
     """
     Get all tasks in a tree structure
