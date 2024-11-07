@@ -153,6 +153,34 @@ def test_get_notes_tree():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to retrieve notes tree: {str(e)}")
 
+def test_attach_note_to_parent():
+    """Test attaching a note as a child of another note"""
+    try:
+        # Create parent note
+        parent = note_create("Parent", "Parent content")
+        parent_id = parent["id"]
+
+        # Create child note
+        child = note_create("Child", "Child content")
+        child_id = child["id"]
+
+        # Attach child to parent
+        attach_note_to_parent(child_id, parent_id)
+
+        # Verify the attachment by getting the tree
+        tree = get_notes_tree()
+        
+        # Find the parent note in the tree
+        parent_note = next((n for n in tree if n.id == parent_id), None)
+        assert parent_note is not None
+        
+        # Verify child is in parent's children
+        child_ids = [child.id for child in parent_note.children]
+        assert child_id in child_ids
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to attach note: {str(e)}")
+
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
     try:

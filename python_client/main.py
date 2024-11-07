@@ -22,6 +22,11 @@ class NoteWithoutContent(BaseModel):
     created_at: datetime
     modified_at: datetime
 
+class AttachNoteRequest(BaseModel):
+    child_note_id: int
+    parent_note_id: int 
+    hierarchy_type: str
+
 class TreeNote(BaseModel):
     id: int
     title: str
@@ -169,6 +174,38 @@ def get_all_notes_without_content(base_url: str = "http://localhost:37240") -> l
     
     response.raise_for_status()
     return [NoteWithoutContent.model_validate(note) for note in response.json()]
+
+def attach_note_to_parent(
+    child_note_id: int,
+    parent_note_id: int,
+    hierarchy_type: str = "block",
+    base_url: str = "http://localhost:37240"
+) -> None:
+    """
+    Attach a note as a child of another note
+    
+    Args:
+        child_note_id: ID of the note to attach as child
+        parent_note_id: ID of the parent note
+        hierarchy_type: Type of hierarchy relationship (default: "block")
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request_data = AttachNoteRequest(
+        child_note_id=child_note_id,
+        parent_note_id=parent_note_id,
+        hierarchy_type=hierarchy_type
+    )
+
+    response = requests.post(
+        f"{base_url}/notes/hierarchy/attach",
+        headers={"Content-Type": "application/json"},
+        data=request_data.model_dump_json(),
+    )
+    
+    response.raise_for_status()
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
