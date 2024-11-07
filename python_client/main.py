@@ -1,5 +1,8 @@
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
+from decimal import Decimal
+from enum import Enum
+from typing import Optional
 from pydantic import BaseModel
 import requests
 import json
@@ -594,6 +597,58 @@ def get_tags_tree(base_url: str = "http://localhost:37240") -> list[TreeTagWithN
     response.raise_for_status()
     return [TreeTagWithNotes.model_validate(tag) for tag in response.json()]
 
+
+class TaskStatus(str, Enum):
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    CANCELLED = "cancelled"
+
+class CreateTaskRequest(BaseModel):
+    note_id: Optional[int] = None
+    status: TaskStatus = TaskStatus.TODO
+    effort_estimate: Optional[Decimal] = None
+    actual_effort: Optional[Decimal] = None
+    deadline: Optional[datetime] = None
+    priority: Optional[int] = None
+    all_day: bool = False
+    goal_relationship: Optional[str] = None
+
+class Task(BaseModel):
+    id: int
+    note_id: Optional[int]
+    status: TaskStatus
+    effort_estimate: Optional[Decimal]
+    actual_effort: Optional[Decimal]
+    deadline: Optional[datetime]
+    priority: Optional[int]
+    created_at: datetime
+    modified_at: datetime
+    all_day: bool
+    goal_relationship: Optional[str]
+
+def create_task(task: CreateTaskRequest, base_url: str = "http://localhost:37240") -> Task:
+    """
+    Create a new task
+
+    Args:
+        task: The task data to create
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Task: The created task data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.post(
+        f"{base_url}/tasks",
+        headers={"Content-Type": "application/json"},
+        data=task.model_dump_json(exclude_none=True),
+    )
+
+    response.raise_for_status()
+    return Task.model_validate(response.json())
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

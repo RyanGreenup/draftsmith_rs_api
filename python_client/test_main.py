@@ -161,6 +161,35 @@ def test_get_tags_tree():
         pytest.fail(f"Failed to retrieve tags tree: {str(e)}")
 
 
+def test_create_task():
+    """Test creating a task through the API endpoint"""
+    try:
+        # Create task request
+        task_request = CreateTaskRequest(
+            status=TaskStatus.TODO,
+            effort_estimate=Decimal("2.5"),
+            deadline=datetime(2024, 1, 1),
+            priority=1,
+            all_day=False
+        )
+
+        # Create the task
+        result = create_task(task_request)
+
+        # Verify the response structure
+        assert isinstance(result, Task)
+        assert result.id > 0
+        assert result.status == TaskStatus.TODO
+        assert result.effort_estimate == Decimal("2.5")
+        assert result.deadline.date() == date(2024, 1, 1)
+        assert result.priority == 1
+        assert result.all_day == False
+        assert result.created_at is not None
+        assert result.modified_at is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to create task: {str(e)}")
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:
