@@ -234,7 +234,7 @@ async fn list_note_tags(
     Ok(Json(results.into_iter().map(Into::into).collect()))
 }
 
-async fn attach_tag_to_note(
+pub async fn attach_tag_to_note(
     State(state): State<AppState>,
     Json(payload): Json<AttachTagRequest>,
 ) -> Result<(StatusCode, Json<NoteTagResponse>), TagError> {

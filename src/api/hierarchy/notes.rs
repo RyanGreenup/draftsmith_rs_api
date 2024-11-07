@@ -285,14 +285,14 @@ pub async fn update_database_from_notetreenode(
         if !node.tags.is_empty() {
             let new_tags: Vec<_> = node.tags
                 .iter()
-                .map(|tag| NoteTag {
+                .map(|tag| NewNoteTag {
                     note_id: node_id,
                     tag_id: tag.id,
                 })
                 .collect();
             
             diesel::insert_into(note_tags::table)
-                .values(&new_tags)
+                .values(new_tags)
                 .execute(conn)?;
         }
 
