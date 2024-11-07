@@ -578,6 +578,7 @@ pub async fn get_all_notes_rendered_html(base_url: &str) -> Result<Vec<RenderedN
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::tags::attach_tag_to_note;
     use crate::BASE_URL;
     // ** Client ....................................................................
     // *** Functions .................................................................
