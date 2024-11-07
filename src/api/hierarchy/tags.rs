@@ -10,11 +10,14 @@ use diesel::prelude::*;
 use diesel::QueryResult;
 use serde::{Deserialize, Serialize};
 
+use crate::api::notes::NoteMetadataResponse;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TagTreeNode {
     pub id: i32,
     pub name: String,
     pub children: Vec<TagTreeNode>,
+    pub notes: Vec<NoteMetadataResponse>,
 }
 
 impl HierarchyItem for TagHierarchy {
@@ -222,19 +225,28 @@ pub async fn get_tag_tree(
     let basic_tree = build_generic_tree(&tag_data, &hierarchy_tuples);
 
     // Convert BasicTreeNode to TagTreeNode
-    fn convert_to_tag_tree(basic_node: BasicTreeNode<Tag>) -> TagTreeNode {
+    async fn convert_to_tag_tree(basic_node: BasicTreeNode<Tag>, state: &AppState) -> TagTreeNode {
+        let notes = get_tags_notes(state.clone(), vec![basic_node.id])
+            .await
+            .unwrap_or_default()
+            .0;
+
         TagTreeNode {
             id: basic_node.id,
             name: basic_node.data.name,
-            children: basic_node
-                .children
-                .into_iter()
-                .map(convert_to_tag_tree)
-                .collect(),
+            children: futures::future::join_all(
+                basic_node.children
+                    .into_iter()
+                    .map(|child| convert_to_tag_tree(child, state))
+            )
+            .await,
+            notes,
         }
     }
 
-    let tree = basic_tree.into_iter().map(convert_to_tag_tree).collect();
+    let tree = futures::future::join_all(
+        basic_tree.into_iter().map(|node| convert_to_tag_tree(node, &state))
+    ).await;
 
     Ok(Json(tree))
 }
