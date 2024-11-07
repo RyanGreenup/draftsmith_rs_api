@@ -5,7 +5,7 @@ use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use rust_cli_app::client::tags::{
     self, attach_child_tag, create_tag, delete_tag, detach_child_tag, get_hierarchy_mappings,
-    get_tag, list_tags, update_tag, CreateTagRequest, TagError, UpdateTagRequest,
+    get_tag, list_tags, update_tag, CreateTagRequest, TagError, TagTreeNode, UpdateTagRequest,
 };
 use rust_cli_app::client::tasks::{
     attach_child_task, create_task, delete_task, detach_child_task, fetch_task, fetch_task_tree,
@@ -834,10 +834,19 @@ async fn main() {
                         std::process::exit(1);
                     }
                 },
-                TagsCommands::Tree { simple: _ } => {
-                    eprintln!("Tag tree functionality not yet implemented");
-                    std::process::exit(1);
-                }
+                TagsCommands::Tree { simple } => match tags::get_tag_tree(&url).await {
+                    Ok(tree) => {
+                        if simple {
+                            print_tag_tree(&tree, 0);
+                        } else {
+                            println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                },
                 TagsCommands::Mappings => match get_hierarchy_mappings(&url).await {
                     Ok(mappings) => {
                         println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
@@ -1100,6 +1109,20 @@ fn print_simple_tree(nodes: &[NoteTreeNode], depth: usize) {
         );
         if !node.children.is_empty() {
             print_simple_tree(&node.children, depth + 1);
+        }
+    }
+}
+
+fn print_tag_tree(nodes: &[TagTreeNode], depth: usize) {
+    for node in nodes {
+        println!(
+            "{}- Tag ID: {}, Name: {}",
+            "  ".repeat(depth),
+            node.id,
+            node.name
+        );
+        if !node.children.is_empty() {
+            print_tag_tree(&node.children, depth + 1);
         }
     }
 }
