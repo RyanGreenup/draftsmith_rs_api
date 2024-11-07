@@ -232,6 +232,24 @@ def get_note_hierarchy_relations(base_url: str = "http://localhost:37240") -> li
     response.raise_for_status()
     return [NoteHierarchyRelation.model_validate(rel) for rel in response.json()]
 
+def detach_note_from_parent(note_id: int, base_url: str = "http://localhost:37240") -> None:
+    """
+    Detach a note from its parent
+    
+    Args:
+        note_id: ID of the note to detach from its parent
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.delete(
+        f"{base_url}/notes/hierarchy/detach/{note_id}",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure

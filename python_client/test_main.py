@@ -213,6 +213,36 @@ def test_attach_note_to_parent():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to attach note: {str(e)}")
 
+def test_detach_note_from_parent():
+    """Test detaching a note from its parent"""
+    try:
+        # Create parent note
+        parent = note_create("Parent", "Parent content")
+        parent_id = parent["id"]
+
+        # Create child note
+        child = note_create("Child", "Child content")
+        child_id = child["id"]
+
+        # First attach child to parent
+        attach_note_to_parent(child_id, parent_id)
+
+        # Verify the attachment worked
+        relations = get_note_hierarchy_relations()
+        assert any(rel.parent_id == parent_id and rel.child_id == child_id 
+                  for rel in relations)
+
+        # Now detach the child
+        detach_note_from_parent(child_id)
+
+        # Verify the detachment worked by checking relations again
+        relations_after = get_note_hierarchy_relations()
+        assert not any(rel.parent_id == parent_id and rel.child_id == child_id 
+                      for rel in relations_after)
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to detach note: {str(e)}")
+
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
     try:
