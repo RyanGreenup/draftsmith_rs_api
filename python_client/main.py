@@ -257,6 +257,28 @@ def detach_note_from_parent(note_id: int, base_url: str = "http://localhost:3724
     
     response.raise_for_status()
 
+def get_tag(tag_id: int, base_url: str = "http://localhost:37240") -> Tag:
+    """
+    Get a tag by its ID
+    
+    Args:
+        tag_id: The ID of the tag to retrieve
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Returns:
+        Tag: The retrieved tag data
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/tags/{tag_id}",
+        headers={"Content-Type": "application/json"},
+    )
+    
+    response.raise_for_status()
+    return Tag.model_validate(response.json())
+
 def create_tag(name: str, base_url: str = "http://localhost:37240") -> Tag:
     """
     Create a new tag
