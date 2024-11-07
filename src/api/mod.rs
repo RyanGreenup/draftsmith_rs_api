@@ -21,6 +21,15 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
+// Type alias for the complex tuple type used in get_tags_notes
+type NoteTagResult = (
+    i32,                            // tag_id
+    i32,                            // note_id
+    String,                         // note_title
+    Option<chrono::NaiveDateTime>,  // created_at
+    Option<chrono::NaiveDateTime>,  // modified_at
+);
+
 #[derive(Serialize)]
 struct RenderedNote {
     id: i32,
@@ -62,13 +71,7 @@ pub async fn get_tags_notes(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get all notes for the specified tags
-    let results: Vec<(
-        i32,
-        i32,
-        String,
-        Option<chrono::NaiveDateTime>,
-        Option<chrono::NaiveDateTime>,
-    )> = note_tags::table
+    let results: Vec<NoteTagResult> = note_tags::table
         .inner_join(notes::table.on(notes::columns::id.eq(note_tags::columns::note_id)))
         .inner_join(tags::table.on(tags::columns::id.eq(note_tags::columns::tag_id)))
         .filter(tags::columns::id.eq_any(tag_ids))
