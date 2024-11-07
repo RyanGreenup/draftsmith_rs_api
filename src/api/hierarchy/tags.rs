@@ -1,4 +1,5 @@
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
+use crate::api::get_tags_notes;
 use crate::api::hierarchy::generics::{attach_child, is_circular_hierarchy, AttachChildRequest};
 use crate::api::state::AppState;
 use crate::schema::tag_hierarchy;
