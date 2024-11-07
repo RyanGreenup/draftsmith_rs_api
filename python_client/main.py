@@ -26,10 +26,30 @@ class TreeNote(BaseModel):
     id: int
     title: str
     content: str
-    created_at: datetime
-    modified_at: datetime
+    created_at: Optional[datetime]
+    modified_at: Optional[datetime]
+    hierarchy_type: Optional[str]
     children: list['TreeNote']
     tags: list[str]
+
+def update_notes_tree(notes: list[TreeNote], base_url: str = "http://localhost:37240") -> None:
+    """
+    Update the entire notes tree structure
+    
+    Args:
+        notes: List of TreeNote objects representing the new tree structure
+        base_url: The base URL of the API (default: http://localhost:37240)
+        
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.put(
+        f"{base_url}/notes/tree",
+        headers={"Content-Type": "application/json"},
+        json=[note.model_dump(exclude_unset=True) for note in notes]
+    )
+    
+    response.raise_for_status()
 
 
 def note_create(
