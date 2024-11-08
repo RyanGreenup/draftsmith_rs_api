@@ -15,6 +15,10 @@ class CreateNoteRequest(BaseModel):
     title: str
     content: str
 
+class UpdateNoteRequest(BaseModel):
+    title: str
+    content: str
+
 
 class Note(BaseModel):
     id: int
@@ -1045,6 +1049,31 @@ def search_notes(query: str, base_url: str = "http://localhost:37240") -> list[N
     response.raise_for_status()
     return [Note.model_validate(note) for note in response.json()]
 
+
+def update_note(note_id: int, request: UpdateNoteRequest, base_url: str = "http://localhost:37240") -> Note:
+    """
+    Update an existing note
+
+    Args:
+        note_id: The ID of the note to update
+        request: The update request containing new note data
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        Note: The updated note data
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the note is not found (404)
+    """
+    response = requests.put(
+        f"{base_url}/notes/flat/{note_id}",
+        headers={"Content-Type": "application/json"},
+        data=request.model_dump_json(),
+    )
+
+    response.raise_for_status()
+    return Note.model_validate(response.json())
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
