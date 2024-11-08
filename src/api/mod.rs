@@ -195,6 +195,13 @@ pub struct SearchQuery {
 }
 
 #[derive(Deserialize)]
+pub struct RenderMarkdownRequest {
+    content: String,
+    #[serde(default)]
+    format: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct CreateAssetRequest {
     pub note_id: Option<i32>,
     pub filename: Option<String>,
@@ -310,6 +317,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
+        .route("/render/markdown", post(render_markdown))
         .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route("/notes/flat/:id/forward-links", get(get_forward_links))
         .route("/notes/flat/link-edge-list", get(get_link_edge_list))
@@ -1162,6 +1170,18 @@ async fn get_link_edge_list(
     }
 
     Ok(Json(edges))
+}
+
+/// Renders markdown content to HTML or plain text
+/// # Parameters
+///
+/// - `content`: The markdown content to render
+/// - `format`: The output format, either "html" or None (markdown)
+async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<String, StatusCode> {
+    match payload.format.as_deref() {
+        Some("html") => Ok(draftsmith_render::parse_md_to_html(&payload.content)),
+        _ => Ok(draftsmith_render::process_md(&payload.content)),
+    }
 }
 
 async fn cleanup_orphaned_assets(state: AppState) {
@@ -2107,6 +2127,37 @@ mod tests {
         let _ = delete_note(Path(linking_note1.id), State(state.clone())).await;
         let _ = delete_note(Path(linking_note2.id), State(state.clone())).await;
         let _ = delete_note(Path(unrelated_note.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_render_markdown() {
+        // Test HTML rendering
+        let html_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** and _italic_ text.".to_string(),
+            format: Some("html".to_string()),
+        };
+
+        let html_response = render_markdown(Json(html_request))
+            .await
+            .expect("Failed to render HTML");
+
+        assert!(html_response.contains("<h1>Test Header</h1>"));
+        assert!(html_response.contains("<strong>bold</strong>"));
+        assert!(html_response.contains("<em>italic</em>"));
+
+        // Test plain text (markdown) rendering
+        let md_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** and _italic_ text.".to_string(),
+            format: None,
+        };
+
+        let md_response = render_markdown(Json(md_request))
+            .await
+            .expect("Failed to render markdown");
+
+        assert!(md_response.contains("# Test Header"));
+        assert!(md_response.contains("**bold**"));
+        assert!(md_response.contains("_italic_"));
     }
 
     #[tokio::test]

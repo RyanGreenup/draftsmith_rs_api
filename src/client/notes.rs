@@ -560,6 +560,30 @@ pub async fn get_link_edge_list(base_url: &str) -> Result<Vec<LinkEdge>, NoteErr
     let edges = response.json::<Vec<LinkEdge>>().await?;
     Ok(edges)
 }
+
+#[derive(Debug, serde::Serialize)]
+pub struct RenderMarkdownRequest {
+    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+}
+
+pub async fn render_markdown(
+    base_url: &str,
+    request: RenderMarkdownRequest,
+) -> Result<String, NoteError> {
+    let client = reqwest::Client::new();
+    let url = format!("{}/render/markdown", base_url);
+    let response = client
+        .post(&url)
+        .json(&request)
+        .send()
+        .await?
+        .error_for_status()?;
+    let rendered = response.text().await?;
+    Ok(rendered)
+}
+
 // *** Typesense ..............................................................
 // **** Semantic ..............................................................
 // **** TODO Hybrid ...........................................................
@@ -1757,6 +1781,30 @@ mod tests {
             has_edge(note3.id, note3.id),
             "Missing self-referential edge in note3"
         );
+
+        Ok(())
+    }
+    #[tokio::test]
+    async fn test_render_markdown() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Test HTML rendering
+        let html_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** text.".to_string(),
+            format: Some("html".to_string()),
+        };
+        let html_result = render_markdown(base_url, html_request).await?;
+        assert!(html_result.contains("<h1>"));
+        assert!(html_result.contains("<strong>"));
+
+        // Test default markdown rendering
+        let md_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** text.".to_string(),
+            format: None,
+        };
+        let md_result = render_markdown(base_url, md_request).await?;
+        assert!(md_result.contains("# Test Header"));
+        assert!(md_result.contains("**bold**"));
 
         Ok(())
     }
