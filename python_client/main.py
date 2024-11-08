@@ -1257,7 +1257,11 @@ def get_rendered_notes(base_url: str = "http://localhost:37240") -> list[Rendere
     return [RenderedNote.model_validate(note) for note in response.json()]
 
 
-def get_rendered_note(note_id: int, base_url: str = "http://localhost:37240", format: Literal["md", "html"] = "md") -> str:
+def get_rendered_note(
+    note_id: int,
+    base_url: str = "http://localhost:37240",
+    format: Literal["md", "html"] = "md",
+) -> str:
     """Get a single note with its content rendered as markdown
 
     Args:

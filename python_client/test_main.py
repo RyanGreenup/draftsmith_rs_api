@@ -1361,6 +1361,7 @@ def test_get_rendered_note_md():
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get rendered note: {str(e)}")
 
+
 def test_get_rendered_note_html():
     """Test getting a single note with its content rendered as HTML"""
     try:
