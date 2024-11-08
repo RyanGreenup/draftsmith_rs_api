@@ -426,7 +426,7 @@ async fn update_single_note(
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .select(NoteWithoutFts::as_select())
+            .returning(NoteWithoutFts::as_select())
             .get_result(&mut conn)
     }
 }
@@ -480,11 +480,13 @@ async fn update_note(
     let updated_note = if let Some(new_title) = payload.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<NoteBad>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<NoteBad>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
     }
     .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -653,7 +655,8 @@ async fn create_note(
 
     let note = diesel::insert_into(notes::table)
         .values(&new_note)
-        .get_result::<NoteBad>(&mut conn)
+        .returning(NoteWithoutFts::as_select())
+        .get_result::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(note.into())))
