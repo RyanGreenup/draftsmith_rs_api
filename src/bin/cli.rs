@@ -923,7 +923,9 @@ async fn main() {
                     }
                 }
                 AssetCommands::GetByName { path, output } => {
-                    match rust_cli_app::client::assets::get_asset_by_name(&url, &path, &output).await {
+                    match rust_cli_app::client::assets::get_asset_by_name(&url, &path, &output)
+                        .await
+                    {
                         Ok(_) => {
                             println!("Asset '{}' downloaded to {}", path, output.display());
                         }
