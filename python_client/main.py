@@ -1341,6 +1341,36 @@ def render_markdown(
 
 
 
+def render_markdown(
+    content: str,
+    format: Optional[Literal["text", "html", "pdf"]] = None,
+    base_url: str = "http://localhost:37240"
+) -> str:
+    """Render markdown content to the specified format
+
+    Args:
+        content: The markdown content to render
+        format: Optional output format (text, html, or pdf)
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        str: The rendered content
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    request = RenderMarkdownRequest(content=content, format=format)
+    
+    response = requests.post(
+        f"{base_url}/render/markdown",
+        headers={"Content-Type": "application/json"},
+        data=request.model_dump_json(exclude_none=True)
+    )
+
+    response.raise_for_status()
+    return response.text
+
+
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure
