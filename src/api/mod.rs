@@ -55,6 +55,13 @@ pub struct TagResponse {
     pub name: String,
 }
 
+#[derive(Serialize)]
+pub struct BacklinkResponse {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+}
+
 /// Takes a vector of tag IDs and returns a `HashMap<i32, Vec<NoteMetadataResponse>>`
 /// where the key of the hashmap is the tag_id and the vector of `NoteMetadataResponse`
 /// represents the list of notes that correspond to that tag ID.
