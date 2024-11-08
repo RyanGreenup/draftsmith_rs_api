@@ -334,6 +334,8 @@ enum NotesCommands {
         #[command(subcommand)]
         command: SearchCommands,
     },
+    /// Get backlinks for a note
+    Backlinks,
 }
 
 #[derive(Subcommand)]
@@ -756,6 +758,26 @@ async fn main() {
                         }
                     }
                 },
+                NotesCommands::Backlinks => {
+                    if let Some(note_id) = id {
+                        match rust_cli_app::client::get_backlinks(&url, note_id).await {
+                            Ok(backlinks) => {
+                                println!("{}", serde_json::to_string_pretty(&backlinks).unwrap());
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for backlinks command");
+                        std::process::exit(1);
+                    }
+                }
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
