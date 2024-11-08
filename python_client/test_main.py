@@ -1389,26 +1389,27 @@ def test_get_rendered_note_html():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get rendered note HTML: {str(e)}")
-    """Test getting all notes with rendered markdown content"""
+def test_render_markdown():
+    """Test rendering markdown content"""
     try:
-        # Get rendered notes
-        notes = get_rendered_notes()
+        # Test markdown with embedded calculation
+        content = "# Test\nλ#(21*2)#\nThis is **bold** and _italic_."
+        result = render_markdown(content)
 
-        # Verify we got a list of RenderedNote objects
-        assert isinstance(notes, list)
-        assert len(notes) > 0
-        assert all(isinstance(note, RenderedNote) for note in notes)
+        # Verify the rendered content
+        assert "# Test" in result
+        assert "42" in result  # The calculated result
+        assert "This is **bold** and _italic_." in result
 
-        # Verify each note has the required fields
-        for note in notes:
-            assert note.id > 0
-            assert isinstance(note.rendered_content, str)
-            assert note.rendered_content.startswith(
-                "# "
-            )  # All rendered notes start with H1
+        # Test HTML rendering
+        html_result = render_markdown(content, format="html")
+        assert "<h1>Test</h1>" in html_result
+        assert "<p>42</p>" in html_result
+        assert "<strong>bold</strong>" in html_result
+        assert "<em>italic</em>" in html_result
 
     except requests.exceptions.RequestException as e:
-        pytest.fail(f"Failed to get rendered notes: {str(e)}")
+        pytest.fail(f"Failed to render markdown: {str(e)}")
 
 
 def test_update_notes_tree():
