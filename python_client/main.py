@@ -1152,11 +1152,40 @@ def batch_update_notes(
     return BatchUpdateNotesResponse.model_validate(response.json())
 
 
-def get_note_backlinks(
-    note_id: int, base_url: str = "http://localhost:37240"
-) -> list[Note]:
+def get_note_backlinks(note_id: int, base_url: str = "http://localhost:37240") -> list[Note]:
+    """Get all notes that link to the specified note
+
+    Args:
+        note_id: The ID of the note to get backlinks for
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[Note]: List of notes that link to the specified note
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
     """
-    Get all notes that link to the specified note
+    response = requests.get(
+        f"{base_url}/notes/flat/{note_id}/backlinks",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [Note.model_validate(note) for note in response.json()]
+
+
+def get_note_forward_links(note_id: int, base_url: str = "http://localhost:37240") -> list[Note]:
+    """Get all notes that the specified note links to
+
+    Args:
+        note_id: The ID of the note to get forward links for
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[Note]: List of notes that are linked to by the specified note
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
 
     Args:
         note_id: The ID of the note to get backlinks for
