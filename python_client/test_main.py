@@ -1346,7 +1346,7 @@ def test_get_rendered_notes():
         pytest.fail(f"Failed to get rendered notes: {str(e)}")
 
 
-def test_get_rendered_note():
+def test_get_rendered_note_md():
     """Test getting a single note with rendered markdown content"""
     try:
         # Get rendered note with ID 1
@@ -1360,6 +1360,22 @@ def test_get_rendered_note():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get rendered note: {str(e)}")
+
+def test_get_rendered_note_html():
+    """Test getting a single note with its content rendered as HTML"""
+    try:
+        # Get rendered note with ID 1
+        rendered_content = get_rendered_note(1, format="html")
+
+        # Verify we got a string containing HTML
+        assert isinstance(rendered_content, str)
+        assert "<p>Welcome to your new note-taking system!</p>" in rendered_content
+        assert "<p>DraftSmith helps you organize" in rendered_content
+        assert "<ul>" in rendered_content
+        assert '<a href="2" data-wikilink="true">2</a>' in rendered_content
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get rendered note HTML: {str(e)}")
     """Test getting all notes with rendered markdown content"""
     try:
         # Get rendered notes
