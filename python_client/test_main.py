@@ -574,21 +574,37 @@ def test_delete_asset():
 def test_download_asset_by_filename():
     """Test downloading an asset by filename"""
     try:
-        # Create output path for downloaded file
-        download_path = os.path.join(tempfile.gettempdir(), "downloaded_icon.png")
+        # First create a temporary test file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tf:
+            tf.write(b"Test image content")
+            temp_path = tf.name
 
         try:
-            # Download the asset by filename
-            download_asset("icon.png", download_path)
+            # Upload test asset with specific filename
+            created_asset = upload_asset(temp_path)
+            
+            # Create output path for downloaded file
+            download_path = os.path.join(tempfile.gettempdir(), "downloaded_test.png")
 
-            # Verify the file was downloaded
-            assert os.path.exists(download_path)
-            assert os.path.getsize(download_path) > 0
+            try:
+                # Get filename from asset location
+                filename = os.path.basename(created_asset.location)
+                
+                # Download the asset by filename
+                download_asset(filename, download_path)
+
+                # Verify the file was downloaded
+                assert os.path.exists(download_path)
+                assert os.path.getsize(download_path) > 0
+
+            finally:
+                # Clean up downloaded file
+                if os.path.exists(download_path):
+                    os.unlink(download_path)
 
         finally:
-            # Clean up downloaded file
-            if os.path.exists(download_path):
-                os.unlink(download_path)
+            # Clean up the temporary file
+            os.unlink(temp_path)
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to download asset by filename: {str(e)}")
