@@ -783,6 +783,34 @@ def test_update_note():
         pytest.fail(f"Failed to update note: {str(e)}")
 
 
+def test_get_note_backlinks():
+    """Test retrieving backlinks for a note"""
+    try:
+        # First create two notes - one that links to another
+        target_note = note_create("Target Note", "This is the target note")
+        target_id = target_note["id"]
+        
+        linking_note = note_create("Linking Note", f"This note links to [[{target_id}]]")
+        
+        # Get backlinks for the target note
+        backlinks = get_note_backlinks(target_id)
+        
+        # Verify we got a list of Note objects
+        assert isinstance(backlinks, list)
+        assert len(backlinks) > 0
+        assert all(isinstance(note, Note) for note in backlinks)
+        
+        # Find our linking note in the backlinks
+        linking_note_found = next(
+            (note for note in backlinks if note.id == linking_note["id"]), None
+        )
+        assert linking_note_found is not None
+        assert f"[[{target_id}]]" in linking_note_found.content
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get note backlinks: {str(e)}")
+
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:
