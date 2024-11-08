@@ -290,6 +290,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
+        .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
@@ -1023,6 +1024,46 @@ async fn download_asset_by_filename(
     ];
 
     Ok((headers, file_data))
+}
+
+async fn get_backlinks(
+    State(state): State<AppState>,
+    Path(note_id): Path<i32>,
+) -> Result<Json<Vec<BacklinkResponse>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // First verify the target note exists
+    if notes
+        .find(note_id)
+        .first::<Note>(&mut conn)
+        .is_err()
+    {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Find all notes that contain [[note_id]]
+    let link_pattern = format!("[[{}]]", note_id);
+    
+    let backlinks = notes
+        .filter(content.like(format!("%{}%", link_pattern)))
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let responses = backlinks
+        .into_iter()
+        .map(|note| BacklinkResponse {
+            id: note.id,
+            title: note.title,
+            content: note.content,
+        })
+        .collect();
+
+    Ok(Json(responses))
 }
 
 async fn cleanup_orphaned_assets(state: AppState) {
