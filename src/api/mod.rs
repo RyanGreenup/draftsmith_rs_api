@@ -1124,7 +1124,12 @@ async fn get_backlinks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // First verify the target note exists
-    if notes.find(note_id).first::<NoteBad>(&mut conn).is_err() {
+    if notes
+        .find(note_id)
+        .select(NoteWithoutFts::as_select())
+        .first::<NoteWithoutFts>(&mut conn)
+        .is_err()
+    {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -2196,7 +2201,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<NoteBad>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create test note 1");
 
         let note2 = diesel::insert_into(notes)
@@ -2206,7 +2212,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<NoteBad>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create test note 2");
 
         let _cleanup = TestCleanup {
