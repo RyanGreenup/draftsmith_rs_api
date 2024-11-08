@@ -887,6 +887,35 @@ def test_get_note_forward_links():
         pytest.fail(f"Failed to get note backlinks: {str(e)}")
 
 
+def test_get_link_edge_list():
+    """Test retrieving all link edges between notes"""
+    try:
+        # Create two notes with a link between them
+        note1 = note_create("Source Note", "This links to [[2]]")
+        note2 = note_create("Target Note", "This is the target")
+
+        # Get all link edges
+        edges = get_link_edge_list()
+
+        # Verify we got a list of LinkEdge objects
+        assert isinstance(edges, list)
+        assert all(isinstance(edge, LinkEdge) for edge in edges)
+
+        # Verify each edge has the required fields
+        for edge in edges:
+            assert isinstance(edge.from_, int)
+            assert isinstance(edge.to, int)
+
+        # Find our test edge
+        test_edge = next(
+            (edge for edge in edges if edge.from_ == note1["id"] and edge.to == 2),
+            None
+        )
+        assert test_edge is not None
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get link edges: {str(e)}")
+
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
     try:
