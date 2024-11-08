@@ -2127,6 +2127,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_render_markdown() {
+        // Test HTML rendering
+        let html_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** and _italic_ text.".to_string(),
+            format: Some("html".to_string()),
+        };
+
+        let html_response = render_markdown(Json(html_request))
+            .await
+            .expect("Failed to render HTML");
+
+        assert!(html_response.contains("<h1>Test Header</h1>"));
+        assert!(html_response.contains("<strong>bold</strong>"));
+        assert!(html_response.contains("<em>italic</em>"));
+
+        // Test plain text (markdown) rendering
+        let md_request = RenderMarkdownRequest {
+            content: "# Test Header\n\nThis is **bold** and _italic_ text.".to_string(),
+            format: None,
+        };
+
+        let md_response = render_markdown(Json(md_request))
+            .await
+            .expect("Failed to render markdown");
+
+        assert!(md_response.contains("# Test Header"));
+        assert!(md_response.contains("**bold**"));
+        assert!(md_response.contains("_italic_"));
+    }
+
+    #[tokio::test]
     async fn test_note_rendering() {
         use crate::schema::notes::dsl::*;
 
