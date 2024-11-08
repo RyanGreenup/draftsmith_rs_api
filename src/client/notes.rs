@@ -2,8 +2,8 @@ use crate::api::compute_all_note_hashes;
 pub use crate::api::tags::{AttachTagRequest, CreateTagRequest};
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BacklinkResponse, BatchUpdateRequest,
-    BatchUpdateResponse, CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse,
-    UpdateAssetRequest, UpdateNoteRequest,
+    BatchUpdateResponse, CreateNoteRequest, ForwardLinkResponse, ListAssetsParams, NoteHash,
+    NoteTreeNode, TagResponse, UpdateAssetRequest, UpdateNoteRequest,
 };
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
@@ -508,6 +508,22 @@ pub async fn get_all_note_hashes(base_url: &str) -> Result<Vec<NoteHash>, NoteEr
 }
 // ** Search ..................................................................
 // *** DB FTS .................................................................
+pub async fn get_forward_links(
+    base_url: &str,
+    note_id: i32,
+) -> Result<Vec<ForwardLinkResponse>, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/forward-links", base_url, note_id);
+    let response = reqwest::get(&url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let forward_links = response.json::<Vec<ForwardLinkResponse>>().await?;
+    Ok(forward_links)
+}
+
 pub async fn get_backlinks(
     base_url: &str,
     note_id: i32,
@@ -1442,6 +1458,69 @@ mod tests {
             hash1.hash, updated_hash1.hash,
             "Hash should change when note content changes"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_forward_links() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some target notes that will be linked to
+        let target_note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note 1".to_string(),
+                content: "This is target note 1".to_string(),
+            },
+        )
+        .await?;
+
+        let target_note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note 2".to_string(),
+                content: "This is target note 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Create a source note that links to both targets
+        let source_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Source Note".to_string(),
+                content: format!(
+                    "This note links to [[{}]] and [[{}]]",
+                    target_note1.id, target_note2.id
+                ),
+            },
+        )
+        .await?;
+
+        // Test getting forward links
+        let forward_links = get_forward_links(base_url, source_note.id).await?;
+
+        // Verify results
+        assert_eq!(forward_links.len(), 2, "Expected exactly 2 forward links");
+
+        let link_ids: Vec<i32> = forward_links.iter().map(|l| l.id).collect();
+        assert!(
+            link_ids.contains(&target_note1.id),
+            "Missing forward link to note 1"
+        );
+        assert!(
+            link_ids.contains(&target_note2.id),
+            "Missing forward link to note 2"
+        );
+
+        // Test getting forward links for note with no links
+        let no_links = get_forward_links(base_url, target_note1.id).await?;
+        assert_eq!(no_links.len(), 0, "Expected no forward links");
+
+        // Test getting forward links for non-existent note
+        let result = get_forward_links(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
 
         Ok(())
     }
