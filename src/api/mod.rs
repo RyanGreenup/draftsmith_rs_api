@@ -195,6 +195,11 @@ pub struct SearchQuery {
 }
 
 #[derive(Deserialize)]
+pub struct RenderMarkdownRequest {
+    content: String,
+}
+
+#[derive(Deserialize)]
 pub struct CreateAssetRequest {
     pub note_id: Option<i32>,
     pub filename: Option<String>,
