@@ -582,14 +582,14 @@ def test_download_asset_by_filename():
         try:
             # Upload test asset with specific filename
             created_asset = upload_asset(temp_path)
-            
+
             # Create output path for downloaded file
             download_path = os.path.join(tempfile.gettempdir(), "downloaded_test.png")
 
             try:
                 # Get filename from asset location
                 filename = os.path.basename(created_asset.location)
-                
+
                 # Download the asset by filename
                 download_asset(filename, download_path)
 
@@ -805,17 +805,19 @@ def test_get_note_backlinks():
         # First create two notes - one that links to another
         target_note = note_create("Target Note", "This is the target note")
         target_id = target_note["id"]
-        
-        linking_note = note_create("Linking Note", f"This note links to [[{target_id}]]")
-        
+
+        linking_note = note_create(
+            "Linking Note", f"This note links to [[{target_id}]]"
+        )
+
         # Get backlinks for the target note
         backlinks = get_note_backlinks(target_id)
-        
+
         # Verify we got a list of Note objects
         assert isinstance(backlinks, list)
         assert len(backlinks) > 0
         assert all(isinstance(note, Note) for note in backlinks)
-        
+
         # Find our linking note in the backlinks
         linking_note_found = next(
             (note for note in backlinks if note.id == linking_note["id"]), None

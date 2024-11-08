@@ -1152,7 +1152,9 @@ def batch_update_notes(
     return BatchUpdateNotesResponse.model_validate(response.json())
 
 
-def get_note_backlinks(note_id: int, base_url: str = "http://localhost:37240") -> list[Note]:
+def get_note_backlinks(
+    note_id: int, base_url: str = "http://localhost:37240"
+) -> list[Note]:
     """
     Get all notes that link to the specified note
 
