@@ -197,6 +197,8 @@ pub struct SearchQuery {
 #[derive(Deserialize)]
 pub struct RenderMarkdownRequest {
     content: String,
+    #[serde(default)]
+    format: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1173,7 +1175,10 @@ async fn get_link_edge_list(
 async fn render_markdown(
     Json(payload): Json<RenderMarkdownRequest>,
 ) -> Result<String, StatusCode> {
-    Ok(draftsmith_render::process_md(&payload.content))
+    match payload.format.as_deref() {
+        Some("html") => Ok(draftsmith_render::parse_md_to_html(&payload.content)),
+        _ => Ok(draftsmith_render::process_md(&payload.content))
+    }
 }
 
 async fn cleanup_orphaned_assets(state: AppState) {
