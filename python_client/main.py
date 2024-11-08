@@ -42,10 +42,12 @@ class BatchUpdateNotesResponse(BaseModel):
 class DeleteNoteResponse(BaseModel):
     message: str
     deleted_id: int
-    
+
+
 class LinkEdge(BaseModel):
     """Represents a link between two notes"""
-    from_: int = Field(alias='from')  # from is a Python keyword
+
+    from_: int = Field(alias="from")  # from is a Python keyword
     to: int
 
 
@@ -1208,13 +1210,13 @@ def get_note_forward_links(
 
 def get_link_edge_list(base_url: str = "http://localhost:37240") -> List[LinkEdge]:
     """Get all link edges between notes
-    
+
     Args:
         base_url: The base URL of the API (default: http://localhost:37240)
-        
+
     Returns:
         List[LinkEdge]: List of all link edges between notes
-        
+
     Raises:
         requests.exceptions.RequestException: If the request fails
     """
@@ -1222,9 +1224,10 @@ def get_link_edge_list(base_url: str = "http://localhost:37240") -> List[LinkEdg
         f"{base_url}/notes/flat/link-edge-list",
         headers={"Content-Type": "application/json"},
     )
-    
+
     response.raise_for_status()
     return [LinkEdge.model_validate(edge) for edge in response.json()]
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """

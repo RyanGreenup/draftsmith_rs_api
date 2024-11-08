@@ -908,13 +908,13 @@ def test_get_link_edge_list():
 
         # Find our test edge
         test_edge = next(
-            (edge for edge in edges if edge.from_ == note1["id"] and edge.to == 2),
-            None
+            (edge for edge in edges if edge.from_ == note1["id"] and edge.to == 2), None
         )
         assert test_edge is not None
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get link edges: {str(e)}")
+
 
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""
