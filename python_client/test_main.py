@@ -694,10 +694,18 @@ def test_batch_update_notes():
         note2 = note_create("Test Note 2", "Original content 2")
 
         # Create batch update request
-        request = BatchUpdateNotesRequest(updates=[
-            (note1["id"], UpdateNoteRequest(content="# Heading 1\nUpdated Content 1")),
-            (note2["id"], UpdateNoteRequest(content="# Heading 2\nUpdated Content 2"))
-        ])
+        request = BatchUpdateNotesRequest(
+            updates=[
+                (
+                    note1["id"],
+                    UpdateNoteRequest(content="# Heading 1\nUpdated Content 1"),
+                ),
+                (
+                    note2["id"],
+                    UpdateNoteRequest(content="# Heading 2\nUpdated Content 2"),
+                ),
+            ]
+        )
 
         # Perform batch update
         result = batch_update_notes(request)
@@ -722,6 +730,7 @@ def test_batch_update_notes():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to batch update notes: {str(e)}")
+
 
 def test_update_note():
     """Test updating a note through the API endpoint"""

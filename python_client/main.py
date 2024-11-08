@@ -11,6 +11,14 @@ import tempfile
 import os
 
 
+class Note(BaseModel):
+    id: int
+    title: str
+    content: str
+    created_at: datetime
+    modified_at: datetime
+
+
 class CreateNoteRequest(BaseModel):
     title: str
     content: str
@@ -20,20 +28,14 @@ class UpdateNoteRequest(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
 
+
 class BatchUpdateNotesRequest(BaseModel):
     updates: list[tuple[int, UpdateNoteRequest]]
+
 
 class BatchUpdateNotesResponse(BaseModel):
     updated: list[Note]
     failed: list[int]
-
-
-class Note(BaseModel):
-    id: int
-    title: str
-    content: str
-    created_at: datetime
-    modified_at: datetime
 
 
 class NoteWithoutContent(BaseModel):
@@ -1086,7 +1088,9 @@ def update_note(
     return Note.model_validate(response.json())
 
 
-def batch_update_notes(request: BatchUpdateNotesRequest, base_url: str = "http://localhost:37240") -> BatchUpdateNotesResponse:
+def batch_update_notes(
+    request: BatchUpdateNotesRequest, base_url: str = "http://localhost:37240"
+) -> BatchUpdateNotesResponse:
     """
     Update multiple notes in a single request
 
@@ -1102,17 +1106,20 @@ def batch_update_notes(request: BatchUpdateNotesRequest, base_url: str = "http:/
     """
     # Transform the updates list into the API's expected format
     payload = {
-        "updates": [[id, update.model_dump(exclude_none=True)] for id, update in request.updates]
+        "updates": [
+            [id, update.model_dump(exclude_none=True)] for id, update in request.updates
+        ]
     }
 
     response = requests.put(
         f"{base_url}/notes/flat/batch",
         headers={"Content-Type": "application/json"},
-        json=payload
+        json=payload,
     )
 
     response.raise_for_status()
     return BatchUpdateNotesResponse.model_validate(response.json())
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
