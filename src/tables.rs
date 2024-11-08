@@ -214,6 +214,19 @@ pub struct NoteBad {
     pub fts: Option<Tsvector>,
 }
 
+impl NoteBad {
+    pub fn as_select() -> (
+        crate::schema::notes::id,
+        crate::schema::notes::title,
+        crate::schema::notes::content,
+        crate::schema::notes::created_at,
+        crate::schema::notes::modified_at,
+    ) {
+        use crate::schema::notes::dsl::*;
+        (id, title, content, created_at, modified_at)
+    }
+}
+
 #[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
