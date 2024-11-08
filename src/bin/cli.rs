@@ -900,10 +900,16 @@ async fn main() {
                         }
                     }
                 }
-                AssetCommands::List { note_id: _ } => {
-                    // TODO: Implement asset listing logic
-                    eprintln!("Asset listing not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::List { note_id } => {
+                    match rust_cli_app::client::assets::list_assets(&url, note_id).await {
+                        Ok(assets) => {
+                            println!("{}", serde_json::to_string_pretty(&assets).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error listing assets: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 AssetCommands::Get { id: _, output: _ } => {
                     // TODO: Implement get asset logic
