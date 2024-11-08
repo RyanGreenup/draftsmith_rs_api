@@ -2,8 +2,8 @@ use crate::api::compute_all_note_hashes;
 pub use crate::api::tags::{AttachTagRequest, CreateTagRequest};
 pub use crate::api::{
     compute_note_hash, AssetResponse, AttachChildRequest, BacklinkResponse, BatchUpdateRequest,
-    BatchUpdateResponse, CreateNoteRequest, ForwardLinkResponse, ListAssetsParams, NoteHash,
-    NoteTreeNode, TagResponse, UpdateAssetRequest, UpdateNoteRequest,
+    BatchUpdateResponse, CreateNoteRequest, ForwardLinkResponse, LinkEdge, ListAssetsParams,
+    NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest, UpdateNoteRequest,
 };
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
@@ -553,6 +553,13 @@ pub async fn fts_search_notes(
     let notes = response.json::<Vec<NoteWithoutFts>>().await?;
     Ok(notes)
 }
+
+pub async fn get_link_edge_list(base_url: &str) -> Result<Vec<LinkEdge>, NoteError> {
+    let url = format!("{}/notes/flat/link-edge-list", base_url);
+    let response = reqwest::get(&url).await?.error_for_status()?;
+    let edges = response.json::<Vec<LinkEdge>>().await?;
+    Ok(edges)
+}
 // *** Typesense ..............................................................
 // **** Semantic ..............................................................
 // **** TODO Hybrid ...........................................................
@@ -802,13 +809,6 @@ mod tests {
             find_node(&parent_node.children, child_note.id).is_none(),
             "Child note still attached after detachment"
         );
-    }
-
-    use lazy_static::lazy_static;
-    use std::sync::Mutex;
-
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
     }
 
     #[tokio::test]
@@ -1654,6 +1654,109 @@ mod tests {
         // Test non-existent term
         let results = fts_search_notes(base_url, "nonexistentterm").await?;
         assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+    #[tokio::test]
+    async fn test_get_link_edge_list() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some test notes with links
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        let note3 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 3".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        // Update notes with links using actual IDs
+        update_note(
+            base_url,
+            note1.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]] and [[{}]]", note2.id, note3.id),
+            },
+        )
+        .await?;
+
+        update_note(
+            base_url,
+            note2.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]]", note3.id),
+            },
+        )
+        .await?;
+
+        update_note(
+            base_url,
+            note3.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links back to [[{}]] and self [[{}]]", note1.id, note3.id),
+            },
+        )
+        .await?;
+
+        // Give the server time to process updates
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Get the edge list
+        let edges = get_link_edge_list(base_url).await?;
+
+        // Verify expected edges exist
+        let has_edge =
+            |from: i32, to: i32| -> bool { edges.iter().any(|e| e.from == from && e.to == to) };
+
+        assert!(
+            has_edge(note1.id, note2.id),
+            "Missing edge from note1 to note2"
+        );
+        assert!(
+            has_edge(note1.id, note3.id),
+            "Missing edge from note1 to note3"
+        );
+        assert!(
+            has_edge(note2.id, note3.id),
+            "Missing edge from note2 to note3"
+        );
+        assert!(
+            has_edge(note3.id, note1.id),
+            "Missing edge from note3 to note1"
+        );
+        assert!(
+            has_edge(note3.id, note3.id),
+            "Missing self-referential edge in note3"
+        );
 
         Ok(())
     }
