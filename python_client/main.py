@@ -37,6 +37,7 @@ class BatchUpdateNotesResponse(BaseModel):
     updated: list[Note]
     failed: list[int]
 
+
 class DeleteNoteResponse(BaseModel):
     message: str
     deleted_id: int
@@ -1092,7 +1093,9 @@ def update_note(
     return Note.model_validate(response.json())
 
 
-def delete_note(note_id: int, base_url: str = "http://localhost:37240") -> DeleteNoteResponse:
+def delete_note(
+    note_id: int, base_url: str = "http://localhost:37240"
+) -> DeleteNoteResponse:
     """
     Delete a note by its ID
 
