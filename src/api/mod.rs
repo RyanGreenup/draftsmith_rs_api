@@ -1,6 +1,6 @@
 use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
-use crate::tables::{NewNote, Note, NoteHierarchy, NoteWithoutFts};
+use crate::tables::{NewNote, NoteBad, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
 pub mod hierarchy;
 mod state;
@@ -387,7 +387,7 @@ async fn get_note(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .first::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(note.into()))
@@ -408,7 +408,7 @@ async fn update_single_note(
     pool: Arc<Pool>,
     note_id: i32,
     update: UpdateNoteRequest,
-) -> Result<Note, DieselError> {
+) -> Result<NoteBad, DieselError> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = pool.get().map_err(|_| DieselError::RollbackTransaction)?;
@@ -420,11 +420,11 @@ async fn update_single_note(
     if let Some(new_title) = update.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
     }
 }
 
@@ -477,11 +477,11 @@ async fn update_note(
     let updated_note = if let Some(new_title) = payload.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
     }
     .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -650,7 +650,7 @@ async fn create_note(
 
     let note = diesel::insert_into(notes::table)
         .values(&new_note)
-        .get_result::<Note>(&mut conn)
+        .get_result::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((StatusCode::CREATED, Json(note.into())))
@@ -670,7 +670,7 @@ async fn render_note_html(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .first::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(draftsmith_render::parse_md_to_html(&note.content))
@@ -689,7 +689,7 @@ async fn render_note_md(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .first::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(draftsmith_render::process_md(&note.content))
@@ -1070,7 +1070,7 @@ async fn get_forward_links(
     // First get the source note
     let source_note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .first::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     // Extract all [[id]] patterns from the content
@@ -1087,7 +1087,7 @@ async fn get_forward_links(
     // Get all linked notes
     let linked_notes = notes
         .filter(id.eq_any(linked_ids))
-        .load::<Note>(&mut conn)
+        .load::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let responses = linked_notes
@@ -1114,7 +1114,7 @@ async fn get_backlinks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // First verify the target note exists
-    if notes.find(note_id).first::<Note>(&mut conn).is_err() {
+    if notes.find(note_id).first::<NoteBad>(&mut conn).is_err() {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -1123,7 +1123,7 @@ async fn get_backlinks(
 
     let backlinks = notes
         .filter(content.like(format!("%{}%", link_pattern)))
-        .load::<Note>(&mut conn)
+        .load::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let responses = backlinks
@@ -1150,7 +1150,7 @@ async fn get_link_edge_list(
 
     // Get all notes
     let all_notes = notes
-        .load::<Note>(&mut conn)
+        .load::<NoteBad>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Extract all links using regex
@@ -1414,7 +1414,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create note 1");
 
         let note2 = diesel::insert_into(crate::schema::notes::table)
@@ -1424,7 +1424,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create note 2");
 
         let _cleanup = TestCleanup {
@@ -1469,7 +1469,7 @@ mod tests {
         use crate::schema::notes::dsl::*;
         let updated_notes = notes
             .filter(id.eq_any(vec![note1.id, note2.id]))
-            .load::<Note>(&mut conn)
+            .load::<NoteBad>(&mut conn)
             .expect("Failed to load updated notes");
 
         assert_eq!(updated_notes.len(), 2, "Expected 2 notes in database");
@@ -1580,7 +1580,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create note 1");
 
         let note2 = diesel::insert_into(crate::schema::notes::table)
@@ -1590,7 +1590,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create note 2");
 
         let _cleanup = TestCleanup {
@@ -2179,7 +2179,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create test note 1");
 
         let note2 = diesel::insert_into(notes)
@@ -2189,7 +2189,7 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create test note 2");
 
         let _cleanup = TestCleanup {
