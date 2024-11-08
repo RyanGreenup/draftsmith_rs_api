@@ -695,8 +695,7 @@ def test_update_note():
 
         # Create update request
         update_request = UpdateNoteRequest(
-            title="Updated Title",
-            content="Updated content for my note"
+            title="Updated Title", content="Updated content for my note"
         )
 
         # Update the note
@@ -712,6 +711,7 @@ def test_update_note():
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to update note: {str(e)}")
+
 
 def test_get_notes_tree():
     """Test retrieving notes in tree structure"""

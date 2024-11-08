@@ -15,6 +15,7 @@ class CreateNoteRequest(BaseModel):
     title: str
     content: str
 
+
 class UpdateNoteRequest(BaseModel):
     title: str
     content: str
@@ -1050,7 +1051,9 @@ def search_notes(query: str, base_url: str = "http://localhost:37240") -> list[N
     return [Note.model_validate(note) for note in response.json()]
 
 
-def update_note(note_id: int, request: UpdateNoteRequest, base_url: str = "http://localhost:37240") -> Note:
+def update_note(
+    note_id: int, request: UpdateNoteRequest, base_url: str = "http://localhost:37240"
+) -> Note:
     """
     Update an existing note
 
@@ -1074,6 +1077,7 @@ def update_note(note_id: int, request: UpdateNoteRequest, base_url: str = "http:
 
     response.raise_for_status()
     return Note.model_validate(response.json())
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
