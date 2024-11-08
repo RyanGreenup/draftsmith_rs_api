@@ -310,6 +310,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
+        .route("/render/markdown", post(render_markdown))
         .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route("/notes/flat/:id/forward-links", get(get_forward_links))
         .route("/notes/flat/link-edge-list", get(get_link_edge_list))
@@ -1162,6 +1163,12 @@ async fn get_link_edge_list(
     }
 
     Ok(Json(edges))
+}
+
+async fn render_markdown(
+    Json(payload): Json<RenderMarkdownRequest>,
+) -> Result<String, StatusCode> {
+    Ok(draftsmith_render::process_md(&payload.content))
 }
 
 async fn cleanup_orphaned_assets(state: AppState) {
