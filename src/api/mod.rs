@@ -1714,6 +1714,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_backlinks() {
+        let state = setup_test_state();
+        let pool = state.pool.as_ref().clone();
+        let mut conn = pool.get().expect("Failed to get connection");
+
+        // Create target note
+        let target_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note".to_string(),
+                content: "This is the target note".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note")
+        .1
+        .0;
+
+        // Create notes that link to the target
+        let linking_note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Linking Note 1".to_string(),
+                content: format!("This note links to [[{}]]", target_note.id),
+            }),
+        )
+        .await
+        .expect("Failed to create linking note 1")
+        .1
+        .0;
+
+        let linking_note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Linking Note 2".to_string(),
+                content: format!("Another note that links to [[{}]] in its content", target_note.id),
+            }),
+        )
+        .await
+        .expect("Failed to create linking note 2")
+        .1
+        .0;
+
+        // Create a note that doesn't link to the target
+        let unrelated_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Unrelated Note".to_string(),
+                content: "This note has no links".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create unrelated note")
+        .1
+        .0;
+
+        // Test getting backlinks
+        let backlinks = get_backlinks(State(state.clone()), Path(target_note.id))
+            .await
+            .expect("Failed to get backlinks")
+            .0;
+
+        // Verify results
+        assert_eq!(backlinks.len(), 2, "Expected exactly 2 backlinks");
+        
+        let backlink_ids: Vec<i32> = backlinks.iter().map(|b| b.id).collect();
+        assert!(backlink_ids.contains(&linking_note1.id), "Missing backlink from note 1");
+        assert!(backlink_ids.contains(&linking_note2.id), "Missing backlink from note 2");
+        assert!(!backlink_ids.contains(&unrelated_note.id), "Unrelated note should not be included");
+
+        // Test getting backlinks for non-existent note
+        let non_existent_result = get_backlinks(State(state.clone()), Path(99999))
+            .await;
+        assert!(non_existent_result.is_err(), "Expected error for non-existent note");
+
+        // Clean up
+        let _ = delete_note(Path(target_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(linking_note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(linking_note2.id), State(state.clone())).await;
+        let _ = delete_note(Path(unrelated_note.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
     async fn test_note_rendering() {
         use crate::schema::notes::dsl::*;
 
