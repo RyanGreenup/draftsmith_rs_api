@@ -15,8 +15,8 @@ class Note(BaseModel):
     id: int
     title: str
     content: str
-    created_at: datetime
-    modified_at: datetime
+    created_at: Optional[datetime] = None
+    modified_at: Optional[datetime] = None
 
 
 class CreateNoteRequest(BaseModel):
