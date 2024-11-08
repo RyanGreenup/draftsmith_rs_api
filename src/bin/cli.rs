@@ -877,43 +877,93 @@ async fn main() {
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
-                    file: _,
-                    note_id: _,
-                    description: _,
-                    filename: _,
+                    file,
+                    note_id,
+                    description,
+                    filename,
                 } => {
-                    // TODO: Implement asset creation logic
-                    eprintln!("Asset creation not yet implemented");
-                    std::process::exit(1);
+                    match rust_cli_app::client::assets::create_asset(
+                        &url,
+                        &file,
+                        note_id,
+                        description,
+                        filename,
+                    )
+                    .await
+                    {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                AssetCommands::List { note_id: _ } => {
-                    // TODO: Implement asset listing logic
-                    eprintln!("Asset listing not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::List { note_id } => {
+                    match rust_cli_app::client::assets::list_assets(&url, note_id).await {
+                        Ok(assets) => {
+                            println!("{}", serde_json::to_string_pretty(&assets).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error listing assets: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                AssetCommands::Get { id: _, output: _ } => {
-                    // TODO: Implement get asset logic
-                    eprintln!("Asset retrieval not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::Get { id, output } => {
+                    match rust_cli_app::client::assets::get_asset(&url, id, &output).await {
+                        Ok(_) => {
+                            println!("Asset {} downloaded to {}", id, output.display());
+                        }
+                        Err(e) => {
+                            eprintln!("Error retrieving asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                AssetCommands::GetByName { path: _, output: _ } => {
-                    // TODO: Implement get by name logic
-                    eprintln!("Asset retrieval by name not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::GetByName { path, output } => {
+                    match rust_cli_app::client::assets::get_asset_by_name(&url, &path, &output)
+                        .await
+                    {
+                        Ok(_) => {
+                            println!("Asset '{}' downloaded to {}", path, output.display());
+                        }
+                        Err(e) => {
+                            eprintln!("Error retrieving asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 AssetCommands::Update {
-                    id: _,
-                    note_id: _,
-                    description: _,
+                    id,
+                    note_id,
+                    description,
                 } => {
-                    // TODO: Implement update logic
-                    eprintln!("Asset update not yet implemented");
-                    std::process::exit(1);
+                    let request = rust_cli_app::api::UpdateAssetRequest {
+                        note_id,
+                        description,
+                    };
+                    match rust_cli_app::client::assets::update_asset(&url, id, request).await {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error updating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                AssetCommands::Delete { id: _ } => {
-                    // TODO: Implement delete logic
-                    eprintln!("Asset deletion not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::Delete { id } => {
+                    match rust_cli_app::client::assets::delete_asset(&url, id).await {
+                        Ok(_) => {
+                            println!("Asset {} deleted successfully", id);
+                        }
+                        Err(e) => {
+                            eprintln!("Error deleting asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
             },
             ClientCommands::Tags { id, command } => match command {
