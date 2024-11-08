@@ -806,7 +806,9 @@ def test_get_note_backlinks():
         target_note = note_create("Target Note", "This is the target note")
         target_id = target_note["id"]
 
-        linking_note = note_create("Linking Note", f"This note links to [[{target_id}]]")
+        linking_note = note_create(
+            "Linking Note", f"This note links to [[{target_id}]]"
+        )
 
         # Get backlinks for the target note
         backlinks = get_note_backlinks(target_id)
@@ -834,7 +836,9 @@ def test_get_note_forward_links():
         target_note = note_create("Target Note", "This is the target note")
         target_id = target_note["id"]
 
-        linking_note = note_create("Linking Note", f"This note links to [[{target_id}]]")
+        linking_note = note_create(
+            "Linking Note", f"This note links to [[{target_id}]]"
+        )
         linking_id = linking_note["id"]
 
         # Get forward links for the linking note
