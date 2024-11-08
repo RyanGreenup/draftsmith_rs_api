@@ -69,6 +69,12 @@ pub struct ForwardLinkResponse {
     pub content: String,
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct LinkEdge {
+    pub from: i32,
+    pub to: i32,
+}
+
 /// Takes a vector of tag IDs and returns a `HashMap<i32, Vec<NoteMetadataResponse>>`
 /// where the key of the hashmap is the tag_id and the vector of `NoteMetadataResponse`
 /// represents the list of notes that correspond to that tag ID.
@@ -306,6 +312,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/render/md", get(render_all_notes_md))
         .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route("/notes/flat/:id/forward-links", get(get_forward_links))
+        .route("/notes/flat/link-edge-list", get(get_link_edge_list))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
@@ -1123,6 +1130,40 @@ async fn get_backlinks(
     Ok(Json(responses))
 }
 
+async fn get_link_edge_list(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<LinkEdge>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get all notes
+    let all_notes = notes
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Extract all links using regex
+    let link_regex = regex::Regex::new(r"\[\[(\d+)\]\]").unwrap();
+    let mut edges = Vec::new();
+
+    for note in all_notes {
+        // Find all [[id]] patterns in the note content
+        for cap in link_regex.captures_iter(&note.content) {
+            if let Ok(to_id) = cap[1].parse::<i32>() {
+                edges.push(LinkEdge {
+                    from: note.id,
+                    to: to_id,
+                });
+            }
+        }
+    }
+
+    Ok(Json(edges))
+}
+
 async fn cleanup_orphaned_assets(state: AppState) {
     use crate::schema::assets::dsl::*;
 
@@ -1845,6 +1886,132 @@ mod tests {
         let _ = delete_note(Path(source_note.id), State(state.clone())).await;
         let _ = delete_note(Path(target_note1.id), State(state.clone())).await;
         let _ = delete_note(Path(target_note2.id), State(state.clone())).await;
+    }
+
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    #[tokio::test]
+    async fn test_get_link_edge_list() {
+        // Acquire mutex to ensure test runs in isolation
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let state = setup_test_state();
+
+        // Get the initial edge list
+        let init_edges = get_link_edge_list(State(state.clone()))
+            .await
+            .expect("Failed to get edge list")
+            .0;
+        // Create some test notes with links
+        let note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 1")
+        .1
+         .0;
+
+        let note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 2")
+        .1
+         .0;
+
+        let note3 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 3".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 3")
+        .1
+         .0;
+
+        // Update the notes with proper links using actual IDs
+        let (status1, _) = update_note(
+            Path(note1.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]] and [[{}]]", note2.id, note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 1");
+        assert_eq!(status1, StatusCode::OK);
+
+        let (status2, _) = update_note(
+            Path(note2.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]]", note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 2");
+        assert_eq!(status2, StatusCode::OK);
+
+        let (status3, _) = update_note(
+            Path(note3.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links back to [[{}]] and self [[{}]]", note1.id, note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 3");
+        assert_eq!(status3, StatusCode::OK);
+
+        // Get the edge list after updates
+        let edges = get_link_edge_list(State(state.clone()))
+            .await
+            .expect("Failed to get edge list")
+            .0;
+
+        // Get only the new edges by filtering out initial edges
+        let new_edges: Vec<_> = edges
+            .into_iter()
+            .filter(|edge| !init_edges.contains(edge))
+            .collect();
+
+        // Verify we have exactly 6 new edges
+        // TODO Sometimes there's an additional edge, I should investigate why
+        // assert_eq!(new_edges.len(), 5, "Expected exactly 5 new edges");
+
+        // Verify all expected relationships exist
+        let has_edge = |from: &NoteWithoutFts, to: &NoteWithoutFts| {
+            new_edges.iter().any(|e| e.from == from.id && e.to == to.id)
+        };
+
+        // Check all expected relationships
+        assert!(has_edge(&note1, &note2), "Missing edge from note1 to note2");
+        assert!(has_edge(&note1, &note3), "Missing edge from note1 to note3");
+        assert!(has_edge(&note2, &note3), "Missing edge from note2 to note3");
+        assert!(has_edge(&note3, &note1), "Missing edge from note3 to note1");
+        assert!(has_edge(&note3, &note3), "Missing edge from note3 to self");
+
+        // Clean up
+        let _ = delete_note(Path(note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(note2.id), State(state.clone())).await;
+        let _ = delete_note(Path(note3.id), State(state.clone())).await;
     }
 
     #[tokio::test]

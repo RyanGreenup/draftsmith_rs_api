@@ -784,7 +784,10 @@ async fn main() {
                     if let Some(note_id) = id {
                         match rust_cli_app::client::get_forward_links(&url, note_id).await {
                             Ok(forward_links) => {
-                                println!("{}", serde_json::to_string_pretty(&forward_links).unwrap());
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&forward_links).unwrap()
+                                );
                             }
                             Err(rust_cli_app::client::NoteError::NotFound(id)) => {
                                 eprintln!("Error: Note with id {} not found", id);
