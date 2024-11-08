@@ -1338,10 +1338,13 @@ def test_get_rendered_notes():
         for note in notes:
             assert note.id > 0
             assert isinstance(note.rendered_content, str)
-            assert note.rendered_content.startswith("# ")  # All rendered notes start with H1
+            assert note.rendered_content.startswith(
+                "# "
+            )  # All rendered notes start with H1
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get rendered notes: {str(e)}")
+
 
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""

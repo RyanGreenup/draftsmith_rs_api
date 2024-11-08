@@ -129,8 +129,10 @@ class Asset(BaseModel):
 
 class RenderedNote(BaseModel):
     """Represents a note with rendered markdown content"""
+
     id: int
     rendered_content: str
+
 
 class TreeTagWithNotes(BaseModel):
     id: int
@@ -1253,6 +1255,7 @@ def get_rendered_notes(base_url: str = "http://localhost:37240") -> list[Rendere
 
     response.raise_for_status()
     return [RenderedNote.model_validate(note) for note in response.json()]
+
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
