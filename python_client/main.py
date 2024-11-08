@@ -1,4 +1,5 @@
 from typing import Optional, BinaryIO, Literal, List
+from pydantic import BaseModel, Field
 from datetime import datetime, date
 from pathlib import Path
 from decimal import Decimal
