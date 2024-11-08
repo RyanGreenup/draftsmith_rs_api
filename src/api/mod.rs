@@ -409,7 +409,7 @@ async fn update_single_note(
     pool: Arc<Pool>,
     note_id: i32,
     update: UpdateNoteRequest,
-) -> Result<NoteBad, DieselError> {
+) -> Result<NoteWithoutFts, DieselError> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = pool.get().map_err(|_| DieselError::RollbackTransaction)?;
@@ -421,11 +421,13 @@ async fn update_single_note(
     if let Some(new_title) = update.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<NoteBad>(&mut conn)
+            .select(NoteWithoutFts::as_select())
+            .get_result(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<NoteBad>(&mut conn)
+            .select(NoteWithoutFts::as_select())
+            .get_result(&mut conn)
     }
 }
 
