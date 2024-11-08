@@ -934,13 +934,23 @@ async fn main() {
                     }
                 }
                 AssetCommands::Update {
-                    id: _,
-                    note_id: _,
-                    description: _,
+                    id,
+                    note_id,
+                    description,
                 } => {
-                    // TODO: Implement update logic
-                    eprintln!("Asset update not yet implemented");
-                    std::process::exit(1);
+                    let request = rust_cli_app::api::UpdateAssetRequest {
+                        note_id,
+                        description,
+                    };
+                    match rust_cli_app::client::assets::update_asset(&url, id, request).await {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error updating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 AssetCommands::Delete { id: _ } => {
                     // TODO: Implement delete logic
