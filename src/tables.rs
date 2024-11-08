@@ -214,7 +214,7 @@ pub struct NoteBad {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable, Serialize, Deserialize, Clone)]
+#[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
     pub id: i32,
