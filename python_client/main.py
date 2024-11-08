@@ -1257,6 +1257,46 @@ def get_rendered_notes(base_url: str = "http://localhost:37240") -> list[Rendere
     return [RenderedNote.model_validate(note) for note in response.json()]
 
 
+def get_rendered_note(note_id: int, base_url: str = "http://localhost:37240") -> str:
+    """Get a single note with its content rendered as markdown
+
+    Args:
+        note_id: ID of the note to render
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        str: The rendered markdown content
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat/{note_id}/render/md",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return response.text
+    """Get all notes with their content rendered as markdown
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[RenderedNote]: List of notes with rendered markdown content
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat/render/md",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [RenderedNote.model_validate(note) for note in response.json()]
+
+
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
     Retrieve all notes in a tree structure

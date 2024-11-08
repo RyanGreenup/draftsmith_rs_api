@@ -1346,6 +1346,42 @@ def test_get_rendered_notes():
         pytest.fail(f"Failed to get rendered notes: {str(e)}")
 
 
+def test_get_rendered_note():
+    """Test getting a single note with rendered markdown content"""
+    try:
+        # Get rendered note with ID 1
+        rendered_content = get_rendered_note(1)
+
+        # Verify we got a string
+        assert isinstance(rendered_content, str)
+        assert "Welcome to your new note-taking system!" in rendered_content
+        assert "DraftSmith helps you organize" in rendered_content
+        assert "Key Features:" in rendered_content
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get rendered note: {str(e)}")
+    """Test getting all notes with rendered markdown content"""
+    try:
+        # Get rendered notes
+        notes = get_rendered_notes()
+
+        # Verify we got a list of RenderedNote objects
+        assert isinstance(notes, list)
+        assert len(notes) > 0
+        assert all(isinstance(note, RenderedNote) for note in notes)
+
+        # Verify each note has the required fields
+        for note in notes:
+            assert note.id > 0
+            assert isinstance(note.rendered_content, str)
+            assert note.rendered_content.startswith(
+                "# "
+            )  # All rendered notes start with H1
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to get rendered notes: {str(e)}")
+
+
 def test_update_notes_tree():
     """Test updating the entire notes tree structure"""
     try:
