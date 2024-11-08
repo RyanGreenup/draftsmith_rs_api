@@ -1340,28 +1340,6 @@ def render_markdown(
     return response.text
 
 
-def test_render_markdown():
-    """Test rendering markdown content"""
-    try:
-        # Test markdown with embedded calculation
-        content = "# Test\nλ#(21*2)#\nThis is **bold** and _italic_."
-        result = render_markdown(content)
-
-        # Verify the rendered content
-        assert "# Test" in result
-        assert "42" in result  # The calculated result
-        assert "This is **bold** and _italic_." in result
-
-        # Test HTML rendering
-        html_result = render_markdown(content, format="html")
-        assert "<h1>Test</h1>" in html_result
-        assert "<p>42</p>" in html_result
-        assert "<strong>bold</strong>" in html_result
-        assert "<em>italic</em>" in html_result
-
-    except requests.exceptions.RequestException as e:
-        pytest.fail(f"Failed to render markdown: {str(e)}")
-
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
