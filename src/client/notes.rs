@@ -1,9 +1,9 @@
 use crate::api::compute_all_note_hashes;
 pub use crate::api::tags::{AttachTagRequest, CreateTagRequest};
 pub use crate::api::{
-    compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
-    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest,
-    UpdateNoteRequest,
+    compute_note_hash, AssetResponse, AttachChildRequest, BacklinkResponse, BatchUpdateRequest,
+    BatchUpdateResponse, CreateNoteRequest, ForwardLinkResponse, LinkEdge, ListAssetsParams,
+    NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest, UpdateNoteRequest,
 };
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
@@ -508,6 +508,38 @@ pub async fn get_all_note_hashes(base_url: &str) -> Result<Vec<NoteHash>, NoteEr
 }
 // ** Search ..................................................................
 // *** DB FTS .................................................................
+pub async fn get_forward_links(
+    base_url: &str,
+    note_id: i32,
+) -> Result<Vec<ForwardLinkResponse>, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/forward-links", base_url, note_id);
+    let response = reqwest::get(&url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let forward_links = response.json::<Vec<ForwardLinkResponse>>().await?;
+    Ok(forward_links)
+}
+
+pub async fn get_backlinks(
+    base_url: &str,
+    note_id: i32,
+) -> Result<Vec<BacklinkResponse>, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/backlinks", base_url, note_id);
+    let response = reqwest::get(&url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let backlinks = response.json::<Vec<BacklinkResponse>>().await?;
+    Ok(backlinks)
+}
+
 pub async fn fts_search_notes(
     base_url: &str,
     query: &str,
@@ -520,6 +552,13 @@ pub async fn fts_search_notes(
     let response = reqwest::get(&url).await?.error_for_status()?;
     let notes = response.json::<Vec<NoteWithoutFts>>().await?;
     Ok(notes)
+}
+
+pub async fn get_link_edge_list(base_url: &str) -> Result<Vec<LinkEdge>, NoteError> {
+    let url = format!("{}/notes/flat/link-edge-list", base_url);
+    let response = reqwest::get(&url).await?.error_for_status()?;
+    let edges = response.json::<Vec<LinkEdge>>().await?;
+    Ok(edges)
 }
 // *** Typesense ..............................................................
 // **** Semantic ..............................................................
@@ -770,13 +809,6 @@ mod tests {
             find_node(&parent_node.children, child_note.id).is_none(),
             "Child note still attached after detachment"
         );
-    }
-
-    use lazy_static::lazy_static;
-    use std::sync::Mutex;
-
-    lazy_static! {
-        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
     }
 
     #[tokio::test]
@@ -1431,6 +1463,145 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_forward_links() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some target notes that will be linked to
+        let target_note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note 1".to_string(),
+                content: "This is target note 1".to_string(),
+            },
+        )
+        .await?;
+
+        let target_note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note 2".to_string(),
+                content: "This is target note 2".to_string(),
+            },
+        )
+        .await?;
+
+        // Create a source note that links to both targets
+        let source_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Source Note".to_string(),
+                content: format!(
+                    "This note links to [[{}]] and [[{}]]",
+                    target_note1.id, target_note2.id
+                ),
+            },
+        )
+        .await?;
+
+        // Test getting forward links
+        let forward_links = get_forward_links(base_url, source_note.id).await?;
+
+        // Verify results
+        assert_eq!(forward_links.len(), 2, "Expected exactly 2 forward links");
+
+        let link_ids: Vec<i32> = forward_links.iter().map(|l| l.id).collect();
+        assert!(
+            link_ids.contains(&target_note1.id),
+            "Missing forward link to note 1"
+        );
+        assert!(
+            link_ids.contains(&target_note2.id),
+            "Missing forward link to note 2"
+        );
+
+        // Test getting forward links for note with no links
+        let no_links = get_forward_links(base_url, target_note1.id).await?;
+        assert_eq!(no_links.len(), 0, "Expected no forward links");
+
+        // Test getting forward links for non-existent note
+        let result = get_forward_links(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_backlinks() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a target note
+        let target_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note".to_string(),
+                content: "This is the target note".to_string(),
+            },
+        )
+        .await?;
+
+        // Create notes that link to the target
+        let linking_note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Linking Note 1".to_string(),
+                content: format!("This note links to [[{}]]", target_note.id),
+            },
+        )
+        .await?;
+
+        let linking_note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Linking Note 2".to_string(),
+                content: format!(
+                    "Another note that links to [[{}]] in its content",
+                    target_note.id
+                ),
+            },
+        )
+        .await?;
+
+        // Create an unrelated note
+        let unrelated_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Unrelated Note".to_string(),
+                content: "This note has no links".to_string(),
+            },
+        )
+        .await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Test getting backlinks
+        let backlinks = get_backlinks(base_url, target_note.id).await?;
+
+        // Verify results
+        assert_eq!(backlinks.len(), 2, "Expected exactly 2 backlinks");
+
+        let backlink_ids: Vec<i32> = backlinks.iter().map(|b| b.id).collect();
+        assert!(
+            backlink_ids.contains(&linking_note1.id),
+            "Missing backlink from note 1"
+        );
+        assert!(
+            backlink_ids.contains(&linking_note2.id),
+            "Missing backlink from note 2"
+        );
+        assert!(
+            !backlink_ids.contains(&unrelated_note.id),
+            "Unrelated note should not be included"
+        );
+
+        // Test getting backlinks for non-existent note
+        let result = get_backlinks(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_fts_search_notes() -> Result<(), Box<dyn std::error::Error>> {
         let base_url = BASE_URL;
 
@@ -1483,6 +1654,109 @@ mod tests {
         // Test non-existent term
         let results = fts_search_notes(base_url, "nonexistentterm").await?;
         assert!(results.is_empty());
+
+        Ok(())
+    }
+
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+    #[tokio::test]
+    async fn test_get_link_edge_list() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some test notes with links
+        let note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        let note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        let note3 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Note 3".to_string(),
+                content: String::new(), // Will update after creating all notes
+            },
+        )
+        .await?;
+
+        // Update notes with links using actual IDs
+        update_note(
+            base_url,
+            note1.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]] and [[{}]]", note2.id, note3.id),
+            },
+        )
+        .await?;
+
+        update_note(
+            base_url,
+            note2.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]]", note3.id),
+            },
+        )
+        .await?;
+
+        update_note(
+            base_url,
+            note3.id,
+            UpdateNoteRequest {
+                title: None,
+                content: format!("Links back to [[{}]] and self [[{}]]", note1.id, note3.id),
+            },
+        )
+        .await?;
+
+        // Give the server time to process updates
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Get the edge list
+        let edges = get_link_edge_list(base_url).await?;
+
+        // Verify expected edges exist
+        let has_edge =
+            |from: i32, to: i32| -> bool { edges.iter().any(|e| e.from == from && e.to == to) };
+
+        assert!(
+            has_edge(note1.id, note2.id),
+            "Missing edge from note1 to note2"
+        );
+        assert!(
+            has_edge(note1.id, note3.id),
+            "Missing edge from note1 to note3"
+        );
+        assert!(
+            has_edge(note2.id, note3.id),
+            "Missing edge from note2 to note3"
+        );
+        assert!(
+            has_edge(note3.id, note1.id),
+            "Missing edge from note3 to note1"
+        );
+        assert!(
+            has_edge(note3.id, note3.id),
+            "Missing self-referential edge in note3"
+        );
 
         Ok(())
     }

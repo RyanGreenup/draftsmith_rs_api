@@ -39,6 +39,8 @@ VALUES
 '
     || '- Task management
 '
+    || '- Links, e.g. [[2]]
+'
     || '- Full-text search
 '
     || '- Asset attachments'

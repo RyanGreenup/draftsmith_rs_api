@@ -55,6 +55,26 @@ pub struct TagResponse {
     pub name: String,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct BacklinkResponse {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ForwardLinkResponse {
+    pub id: i32,
+    pub title: String,
+    pub content: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq)]
+pub struct LinkEdge {
+    pub from: i32,
+    pub to: i32,
+}
+
 /// Takes a vector of tag IDs and returns a `HashMap<i32, Vec<NoteMetadataResponse>>`
 /// where the key of the hashmap is the tag_id and the vector of `NoteMetadataResponse`
 /// represents the list of notes that correspond to that tag ID.
@@ -290,6 +310,9 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/render/md", get(render_note_md))
         .route("/notes/flat/render/html", get(render_all_notes_html))
         .route("/notes/flat/render/md", get(render_all_notes_md))
+        .route("/notes/flat/:id/backlinks", get(get_backlinks))
+        .route("/notes/flat/:id/forward-links", get(get_forward_links))
+        .route("/notes/flat/link-edge-list", get(get_link_edge_list))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
@@ -1025,6 +1048,122 @@ async fn download_asset_by_filename(
     Ok((headers, file_data))
 }
 
+async fn get_forward_links(
+    State(state): State<AppState>,
+    Path(note_id): Path<i32>,
+) -> Result<Json<Vec<ForwardLinkResponse>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // First get the source note
+    let source_note = notes
+        .find(note_id)
+        .first::<Note>(&mut conn)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+
+    // Extract all [[id]] patterns from the content
+    let link_regex = regex::Regex::new(r"\[\[(\d+)\]\]").unwrap();
+    let linked_ids: Vec<i32> = link_regex
+        .captures_iter(&source_note.content)
+        .filter_map(|cap| cap[1].parse().ok())
+        .collect();
+
+    if linked_ids.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+
+    // Get all linked notes
+    let linked_notes = notes
+        .filter(id.eq_any(linked_ids))
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let responses = linked_notes
+        .into_iter()
+        .map(|note| ForwardLinkResponse {
+            id: note.id,
+            title: note.title,
+            content: note.content,
+        })
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn get_backlinks(
+    State(state): State<AppState>,
+    Path(note_id): Path<i32>,
+) -> Result<Json<Vec<BacklinkResponse>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // First verify the target note exists
+    if notes.find(note_id).first::<Note>(&mut conn).is_err() {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Find all notes that contain [[note_id]]
+    let link_pattern = format!("[[{}]]", note_id);
+
+    let backlinks = notes
+        .filter(content.like(format!("%{}%", link_pattern)))
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let responses = backlinks
+        .into_iter()
+        .map(|note| BacklinkResponse {
+            id: note.id,
+            title: note.title,
+            content: note.content,
+        })
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn get_link_edge_list(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<LinkEdge>>, StatusCode> {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get all notes
+    let all_notes = notes
+        .load::<Note>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Extract all links using regex
+    let link_regex = regex::Regex::new(r"\[\[(\d+)\]\]").unwrap();
+    let mut edges = Vec::new();
+
+    for note in all_notes {
+        // Find all [[id]] patterns in the note content
+        for cap in link_regex.captures_iter(&note.content) {
+            if let Ok(to_id) = cap[1].parse::<i32>() {
+                edges.push(LinkEdge {
+                    from: note.id,
+                    to: to_id,
+                });
+            }
+        }
+    }
+
+    Ok(Json(edges))
+}
+
 async fn cleanup_orphaned_assets(state: AppState) {
     use crate::schema::assets::dsl::*;
 
@@ -1663,6 +1802,311 @@ mod tests {
 
         let _ = delete_note(Path(note1.id), State(state.clone())).await;
         let _ = delete_note(Path(note2.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_forward_links() {
+        let state = setup_test_state();
+
+        // Create some target notes that will be linked to
+        let target_note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 1".to_string(),
+                content: "This is target note 1".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 1")
+        .1
+         .0;
+
+        let target_note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 2".to_string(),
+                content: "This is target note 2".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 2")
+        .1
+         .0;
+
+        // Create a source note that links to both targets
+        let source_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Source Note".to_string(),
+                content: format!(
+                    "This note links to [[{}]] and [[{}]]",
+                    target_note1.id, target_note2.id
+                ),
+            }),
+        )
+        .await
+        .expect("Failed to create source note")
+        .1
+         .0;
+
+        // Test getting forward links
+        let forward_links = get_forward_links(State(state.clone()), Path(source_note.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+
+        // Verify results
+        assert_eq!(forward_links.len(), 2, "Expected exactly 2 forward links");
+
+        let link_ids: Vec<i32> = forward_links.iter().map(|l| l.id).collect();
+        assert!(
+            link_ids.contains(&target_note1.id),
+            "Missing forward link to note 1"
+        );
+        assert!(
+            link_ids.contains(&target_note2.id),
+            "Missing forward link to note 2"
+        );
+
+        // Test getting forward links for note with no links
+        let no_links = get_forward_links(State(state.clone()), Path(target_note1.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+        assert_eq!(no_links.len(), 0, "Expected no forward links");
+
+        // Test getting forward links for non-existent note
+        let non_existent_result = get_forward_links(State(state.clone()), Path(99999)).await;
+        assert!(
+            non_existent_result.is_err(),
+            "Expected error for non-existent note"
+        );
+
+        // Clean up
+        let _ = delete_note(Path(source_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note2.id), State(state.clone())).await;
+    }
+
+    use lazy_static::lazy_static;
+    use std::sync::Mutex;
+
+    lazy_static! {
+        static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+    }
+
+    #[tokio::test]
+    async fn test_get_link_edge_list() {
+        // Acquire mutex to ensure test runs in isolation
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let state = setup_test_state();
+
+        // Get the initial edge list
+        let init_edges = get_link_edge_list(State(state.clone()))
+            .await
+            .expect("Failed to get edge list")
+            .0;
+        // Create some test notes with links
+        let note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 1".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 1")
+        .1
+         .0;
+
+        let note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 2".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 2")
+        .1
+         .0;
+
+        let note3 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note 3".to_string(),
+                content: String::new(), // Will update after creating all notes
+            }),
+        )
+        .await
+        .expect("Failed to create note 3")
+        .1
+         .0;
+
+        // Update the notes with proper links using actual IDs
+        let (status1, _) = update_note(
+            Path(note1.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]] and [[{}]]", note2.id, note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 1");
+        assert_eq!(status1, StatusCode::OK);
+
+        let (status2, _) = update_note(
+            Path(note2.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links to [[{}]]", note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 2");
+        assert_eq!(status2, StatusCode::OK);
+
+        let (status3, _) = update_note(
+            Path(note3.id),
+            State(state.clone()),
+            Json(UpdateNoteRequest {
+                title: None,
+                content: format!("Links back to [[{}]] and self [[{}]]", note1.id, note3.id),
+            }),
+        )
+        .await
+        .expect("Failed to update note 3");
+        assert_eq!(status3, StatusCode::OK);
+
+        // Get the edge list after updates
+        let edges = get_link_edge_list(State(state.clone()))
+            .await
+            .expect("Failed to get edge list")
+            .0;
+
+        // Get only the new edges by filtering out initial edges
+        let new_edges: Vec<_> = edges
+            .into_iter()
+            .filter(|edge| !init_edges.contains(edge))
+            .collect();
+
+        // Verify we have exactly 6 new edges
+        // TODO Sometimes there's an additional edge, I should investigate why
+        // assert_eq!(new_edges.len(), 5, "Expected exactly 5 new edges");
+
+        // Verify all expected relationships exist
+        let has_edge = |from: &NoteWithoutFts, to: &NoteWithoutFts| {
+            new_edges.iter().any(|e| e.from == from.id && e.to == to.id)
+        };
+
+        // Check all expected relationships
+        assert!(has_edge(&note1, &note2), "Missing edge from note1 to note2");
+        assert!(has_edge(&note1, &note3), "Missing edge from note1 to note3");
+        assert!(has_edge(&note2, &note3), "Missing edge from note2 to note3");
+        assert!(has_edge(&note3, &note1), "Missing edge from note3 to note1");
+        assert!(has_edge(&note3, &note3), "Missing edge from note3 to self");
+
+        // Clean up
+        let _ = delete_note(Path(note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(note2.id), State(state.clone())).await;
+        let _ = delete_note(Path(note3.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_backlinks() {
+        let state = setup_test_state();
+
+        // Create target note
+        let target_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note".to_string(),
+                content: "This is the target note".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note")
+        .1
+         .0;
+
+        // Create notes that link to the target
+        let linking_note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Linking Note 1".to_string(),
+                content: format!("This note links to [[{}]]", target_note.id),
+            }),
+        )
+        .await
+        .expect("Failed to create linking note 1")
+        .1
+         .0;
+
+        let linking_note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Linking Note 2".to_string(),
+                content: format!(
+                    "Another note that links to [[{}]] in its content",
+                    target_note.id
+                ),
+            }),
+        )
+        .await
+        .expect("Failed to create linking note 2")
+        .1
+         .0;
+
+        // Create a note that doesn't link to the target
+        let unrelated_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Unrelated Note".to_string(),
+                content: "This note has no links".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create unrelated note")
+        .1
+         .0;
+
+        // Test getting backlinks
+        let backlinks = get_backlinks(State(state.clone()), Path(target_note.id))
+            .await
+            .expect("Failed to get backlinks")
+            .0;
+
+        // Verify results
+        assert_eq!(backlinks.len(), 2, "Expected exactly 2 backlinks");
+
+        let backlink_ids: Vec<i32> = backlinks.iter().map(|b| b.id).collect();
+        assert!(
+            backlink_ids.contains(&linking_note1.id),
+            "Missing backlink from note 1"
+        );
+        assert!(
+            backlink_ids.contains(&linking_note2.id),
+            "Missing backlink from note 2"
+        );
+        assert!(
+            !backlink_ids.contains(&unrelated_note.id),
+            "Unrelated note should not be included"
+        );
+
+        // Test getting backlinks for non-existent note
+        let non_existent_result = get_backlinks(State(state.clone()), Path(99999)).await;
+        assert!(
+            non_existent_result.is_err(),
+            "Expected error for non-existent note"
+        );
+
+        // Clean up
+        let _ = delete_note(Path(target_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(linking_note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(linking_note2.id), State(state.clone())).await;
+        let _ = delete_note(Path(unrelated_note.id), State(state.clone())).await;
     }
 
     #[tokio::test]

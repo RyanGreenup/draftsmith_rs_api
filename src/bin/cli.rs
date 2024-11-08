@@ -294,6 +294,10 @@ enum NotesCommands {
         /// Directory to save notes to
         dir: String,
     },
+    /// Get forward links for a note
+    ForwardLinks,
+    /// Get all link edges between notes
+    LinkEdges,
     /// Flat API commands
     Flat {
         #[command(subcommand)]
@@ -334,6 +338,8 @@ enum NotesCommands {
         #[command(subcommand)]
         command: SearchCommands,
     },
+    /// Get backlinks for a note
+    Backlinks,
 }
 
 #[derive(Subcommand)]
@@ -756,6 +762,60 @@ async fn main() {
                         }
                     }
                 },
+                NotesCommands::Backlinks => {
+                    if let Some(note_id) = id {
+                        match rust_cli_app::client::get_backlinks(&url, note_id).await {
+                            Ok(backlinks) => {
+                                println!("{}", serde_json::to_string_pretty(&backlinks).unwrap());
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for backlinks command");
+                        std::process::exit(1);
+                    }
+                }
+                NotesCommands::ForwardLinks => {
+                    if let Some(note_id) = id {
+                        match rust_cli_app::client::get_forward_links(&url, note_id).await {
+                            Ok(forward_links) => {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&forward_links).unwrap()
+                                );
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for forward-links command");
+                        std::process::exit(1);
+                    }
+                }
+                NotesCommands::LinkEdges => {
+                    match rust_cli_app::client::get_link_edge_list(&url).await {
+                        Ok(edges) => {
+                            println!("{}", serde_json::to_string_pretty(&edges).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
