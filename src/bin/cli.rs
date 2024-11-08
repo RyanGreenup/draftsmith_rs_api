@@ -432,7 +432,7 @@ async fn main() {
                 format,
             } => {
                 // Read input file
-                let content = match fs::read_to_string(&input).await {
+                let content = match std::fs::read_to_string(&input).await {
                     Ok(content) => content,
                     Err(e) => {
                         eprintln!("Error reading input file: {}", e);
@@ -456,7 +456,7 @@ async fn main() {
                         // Write to output file or stdout
                         match output {
                             Some(path) => {
-                                if let Err(e) = fs::write(&path, rendered).await {
+                                if let Err(e) = std::fs::write(&path, rendered).await {
                                     eprintln!("Error writing output file: {}", e);
                                     std::process::exit(1);
                                 }
