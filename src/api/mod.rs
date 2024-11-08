@@ -387,7 +387,7 @@ async fn get_note(
 
     let note = notes
         .find(note_id)
-        .first::<NoteBad>(&mut conn)
+        .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     Ok(Json(note.into()))
