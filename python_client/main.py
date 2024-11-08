@@ -1,4 +1,4 @@
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Literal
 from datetime import datetime, date
 from pathlib import Path
 from decimal import Decimal
@@ -36,6 +36,10 @@ class BatchUpdateNotesRequest(BaseModel):
 class BatchUpdateNotesResponse(BaseModel):
     updated: list[Note]
     failed: list[int]
+
+class DeleteNoteResponse(BaseModel):
+    message: str
+    deleted_id: int
 
 
 class NoteWithoutContent(BaseModel):
@@ -1086,6 +1090,30 @@ def update_note(
 
     response.raise_for_status()
     return Note.model_validate(response.json())
+
+
+def delete_note(note_id: int, base_url: str = "http://localhost:37240") -> DeleteNoteResponse:
+    """
+    Delete a note by its ID
+
+    Args:
+        note_id: The ID of the note to delete
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        DeleteNoteResponse: Response containing success message and deleted ID
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+        requests.exceptions.HTTPError: If the note is not found (404)
+    """
+    response = requests.delete(
+        f"{base_url}/notes/flat/{note_id}",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return DeleteNoteResponse.model_validate(response.json())
 
 
 def batch_update_notes(

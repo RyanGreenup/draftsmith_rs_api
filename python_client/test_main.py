@@ -686,6 +686,30 @@ def test_search_notes():
         pytest.fail(f"Failed to search notes: {str(e)}")
 
 
+def test_delete_note():
+    """Test deleting a note through the API endpoint"""
+    try:
+        # First create a note to delete
+        created = note_create("Test Note", "Test content")
+        note_id = created["id"]
+
+        # Delete the note
+        result = delete_note(note_id)
+
+        # Verify the response structure
+        assert isinstance(result, DeleteNoteResponse)
+        assert result.deleted_id == note_id
+        assert f"Note {note_id} successfully deleted" in result.message
+
+        # Verify the note was deleted by trying to get it
+        with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+            get_note(note_id)
+        assert exc_info.value.response.status_code == 404
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to delete note: {str(e)}")
+
+
 def test_batch_update_notes():
     """Test updating multiple notes in a single request"""
     try:
