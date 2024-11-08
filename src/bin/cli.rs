@@ -87,6 +87,13 @@ enum RenderType {
     Md,
 }
 
+#[derive(clap::ValueEnum, Clone)]
+enum RenderFormat {
+    Html,
+    Text,
+    Pdf,
+}
+
 #[derive(Subcommand)]
 enum TasksCommands {
     /// List all tasks or get a specific task by ID
@@ -256,6 +263,18 @@ enum TagsCommands {
 
 #[derive(Subcommand)]
 enum ClientCommands {
+    /// Render markdown content
+    Render {
+        /// Input markdown file
+        #[arg(short, long)]
+        input: PathBuf,
+        /// Output file (optional - defaults to stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Output format
+        #[arg(short, long, value_enum, default_value_t = RenderFormat::Text)]
+        format: RenderFormat,
+    },
     /// Notes related commands
     Notes {
         /// Optional note ID
@@ -407,6 +426,51 @@ async fn main() {
             axum::serve(listener, app).tcp_nodelay(true).await.unwrap();
         }
         Commands::Client { url, command } => match command {
+            ClientCommands::Render {
+                input,
+                output,
+                format,
+            } => {
+                // Read input file
+                let content = match fs::read_to_string(&input).await {
+                    Ok(content) => content,
+                    Err(e) => {
+                        eprintln!("Error reading input file: {}", e);
+                        std::process::exit(1);
+                    }
+                };
+
+                // Create render request
+                let request = rust_cli_app::client::notes::RenderMarkdownRequest {
+                    content,
+                    format: Some(match format {
+                        RenderFormat::Html => "html".to_string(),
+                        RenderFormat::Text => "text".to_string(),
+                        RenderFormat::Pdf => "pdf".to_string(),
+                    }),
+                };
+
+                // Render content
+                match rust_cli_app::client::notes::render_markdown(&url, request).await {
+                    Ok(rendered) => {
+                        // Write to output file or stdout
+                        match output {
+                            Some(path) => {
+                                if let Err(e) = fs::write(&path, rendered).await {
+                                    eprintln!("Error writing output file: {}", e);
+                                    std::process::exit(1);
+                                }
+                                println!("Output written to {}", path.display());
+                            }
+                            None => println!("{}", rendered),
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error rendering markdown: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
             ClientCommands::Notes { id, command } => match command {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::List { metadata_only } => {
