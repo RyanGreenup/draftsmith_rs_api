@@ -877,14 +877,28 @@ async fn main() {
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
-                    file: _,
-                    note_id: _,
-                    description: _,
-                    filename: _,
+                    file,
+                    note_id,
+                    description,
+                    filename,
                 } => {
-                    // TODO: Implement asset creation logic
-                    eprintln!("Asset creation not yet implemented");
-                    std::process::exit(1);
+                    match rust_cli_app::client::assets::create_asset(
+                        &url,
+                        &file,
+                        note_id,
+                        description,
+                        filename,
+                    )
+                    .await
+                    {
+                        Ok(asset) => {
+                            println!("{}", serde_json::to_string_pretty(&asset).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error creating asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 AssetCommands::List { note_id: _ } => {
                     // TODO: Implement asset listing logic
