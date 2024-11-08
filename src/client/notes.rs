@@ -1,9 +1,9 @@
 use crate::api::compute_all_note_hashes;
 pub use crate::api::tags::{AttachTagRequest, CreateTagRequest};
 pub use crate::api::{
-    compute_note_hash, AssetResponse, AttachChildRequest, BatchUpdateRequest, BatchUpdateResponse,
-    CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse, UpdateAssetRequest,
-    UpdateNoteRequest,
+    compute_note_hash, AssetResponse, AttachChildRequest, BacklinkResponse, BatchUpdateRequest,
+    BatchUpdateResponse, CreateNoteRequest, ListAssetsParams, NoteHash, NoteTreeNode, TagResponse,
+    UpdateAssetRequest, UpdateNoteRequest,
 };
 pub use crate::tables::{HierarchyMapping, NoteWithParent, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API};
@@ -508,6 +508,22 @@ pub async fn get_all_note_hashes(base_url: &str) -> Result<Vec<NoteHash>, NoteEr
 }
 // ** Search ..................................................................
 // *** DB FTS .................................................................
+pub async fn get_backlinks(
+    base_url: &str,
+    note_id: i32,
+) -> Result<Vec<BacklinkResponse>, NoteError> {
+    let url = format!("{}/{FLAT_API}/{}/backlinks", base_url, note_id);
+    let response = reqwest::get(&url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let backlinks = response.json::<Vec<BacklinkResponse>>().await?;
+    Ok(backlinks)
+}
+
 pub async fn fts_search_notes(
     base_url: &str,
     query: &str,
@@ -1426,6 +1442,82 @@ mod tests {
             hash1.hash, updated_hash1.hash,
             "Hash should change when note content changes"
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_backlinks() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a target note
+        let target_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Target Note".to_string(),
+                content: "This is the target note".to_string(),
+            },
+        )
+        .await?;
+
+        // Create notes that link to the target
+        let linking_note1 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Linking Note 1".to_string(),
+                content: format!("This note links to [[{}]]", target_note.id),
+            },
+        )
+        .await?;
+
+        let linking_note2 = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Linking Note 2".to_string(),
+                content: format!(
+                    "Another note that links to [[{}]] in its content",
+                    target_note.id
+                ),
+            },
+        )
+        .await?;
+
+        // Create an unrelated note
+        let unrelated_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "Unrelated Note".to_string(),
+                content: "This note has no links".to_string(),
+            },
+        )
+        .await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Test getting backlinks
+        let backlinks = get_backlinks(base_url, target_note.id).await?;
+
+        // Verify results
+        assert_eq!(backlinks.len(), 2, "Expected exactly 2 backlinks");
+
+        let backlink_ids: Vec<i32> = backlinks.iter().map(|b| b.id).collect();
+        assert!(
+            backlink_ids.contains(&linking_note1.id),
+            "Missing backlink from note 1"
+        );
+        assert!(
+            backlink_ids.contains(&linking_note2.id),
+            "Missing backlink from note 2"
+        );
+        assert!(
+            !backlink_ids.contains(&unrelated_note.id),
+            "Unrelated note should not be included"
+        );
+
+        // Test getting backlinks for non-existent note
+        let result = get_backlinks(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
 
         Ok(())
     }

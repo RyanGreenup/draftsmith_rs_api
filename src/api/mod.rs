@@ -55,7 +55,7 @@ pub struct TagResponse {
     pub name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BacklinkResponse {
     pub id: i32,
     pub title: String,
@@ -1045,17 +1045,13 @@ async fn get_backlinks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // First verify the target note exists
-    if notes
-        .find(note_id)
-        .first::<Note>(&mut conn)
-        .is_err()
-    {
+    if notes.find(note_id).first::<Note>(&mut conn).is_err() {
         return Err(StatusCode::NOT_FOUND);
     }
 
     // Find all notes that contain [[note_id]]
     let link_pattern = format!("[[{}]]", note_id);
-    
+
     let backlinks = notes
         .filter(content.like(format!("%{}%", link_pattern)))
         .load::<Note>(&mut conn)
@@ -1716,8 +1712,6 @@ mod tests {
     #[tokio::test]
     async fn test_get_backlinks() {
         let state = setup_test_state();
-        let pool = state.pool.as_ref().clone();
-        let mut conn = pool.get().expect("Failed to get connection");
 
         // Create target note
         let target_note = create_note(
@@ -1730,7 +1724,7 @@ mod tests {
         .await
         .expect("Failed to create target note")
         .1
-        .0;
+         .0;
 
         // Create notes that link to the target
         let linking_note1 = create_note(
@@ -1743,19 +1737,22 @@ mod tests {
         .await
         .expect("Failed to create linking note 1")
         .1
-        .0;
+         .0;
 
         let linking_note2 = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
                 title: "Linking Note 2".to_string(),
-                content: format!("Another note that links to [[{}]] in its content", target_note.id),
+                content: format!(
+                    "Another note that links to [[{}]] in its content",
+                    target_note.id
+                ),
             }),
         )
         .await
         .expect("Failed to create linking note 2")
         .1
-        .0;
+         .0;
 
         // Create a note that doesn't link to the target
         let unrelated_note = create_note(
@@ -1768,7 +1765,7 @@ mod tests {
         .await
         .expect("Failed to create unrelated note")
         .1
-        .0;
+         .0;
 
         // Test getting backlinks
         let backlinks = get_backlinks(State(state.clone()), Path(target_note.id))
@@ -1778,16 +1775,27 @@ mod tests {
 
         // Verify results
         assert_eq!(backlinks.len(), 2, "Expected exactly 2 backlinks");
-        
+
         let backlink_ids: Vec<i32> = backlinks.iter().map(|b| b.id).collect();
-        assert!(backlink_ids.contains(&linking_note1.id), "Missing backlink from note 1");
-        assert!(backlink_ids.contains(&linking_note2.id), "Missing backlink from note 2");
-        assert!(!backlink_ids.contains(&unrelated_note.id), "Unrelated note should not be included");
+        assert!(
+            backlink_ids.contains(&linking_note1.id),
+            "Missing backlink from note 1"
+        );
+        assert!(
+            backlink_ids.contains(&linking_note2.id),
+            "Missing backlink from note 2"
+        );
+        assert!(
+            !backlink_ids.contains(&unrelated_note.id),
+            "Unrelated note should not be included"
+        );
 
         // Test getting backlinks for non-existent note
-        let non_existent_result = get_backlinks(State(state.clone()), Path(99999))
-            .await;
-        assert!(non_existent_result.is_err(), "Expected error for non-existent note");
+        let non_existent_result = get_backlinks(State(state.clone()), Path(99999)).await;
+        assert!(
+            non_existent_result.is_err(),
+            "Expected error for non-existent note"
+        );
 
         // Clean up
         let _ = delete_note(Path(target_note.id), State(state.clone())).await;
