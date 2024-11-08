@@ -127,6 +127,11 @@ class Asset(BaseModel):
     created_at: datetime
 
 
+class RenderedNote(BaseModel):
+    """Represents a note with rendered markdown content"""
+    id: int
+    rendered_content: str
+
 class TreeTagWithNotes(BaseModel):
     id: int
     name: str
@@ -1228,6 +1233,26 @@ def get_link_edge_list(base_url: str = "http://localhost:37240") -> List[LinkEdg
     response.raise_for_status()
     return [LinkEdge.model_validate(edge) for edge in response.json()]
 
+
+def get_rendered_notes(base_url: str = "http://localhost:37240") -> list[RenderedNote]:
+    """Get all notes with their content rendered as markdown
+
+    Args:
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        list[RenderedNote]: List of notes with rendered markdown content
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    response = requests.get(
+        f"{base_url}/notes/flat/render/md",
+        headers={"Content-Type": "application/json"},
+    )
+
+    response.raise_for_status()
+    return [RenderedNote.model_validate(note) for note in response.json()]
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
