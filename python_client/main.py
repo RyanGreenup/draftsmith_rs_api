@@ -1236,20 +1236,23 @@ def get_link_edge_list(base_url: str = "http://localhost:37240") -> List[LinkEdg
     return [LinkEdge.model_validate(edge) for edge in response.json()]
 
 
-def get_rendered_notes(base_url: str = "http://localhost:37240") -> list[RenderedNote]:
-    """Get all notes with their content rendered as markdown
+def get_rendered_notes(
+    base_url: str = "http://localhost:37240", format: Literal["md", "html"] = "md"
+) -> list[RenderedNote]:
+    """Get all notes with their content rendered as markdown or HTML
 
     Args:
         base_url: The base URL of the API (default: http://localhost:37240)
+        format: The format to render notes in, either "md" or "html" (default: "md")
 
     Returns:
-        list[RenderedNote]: List of notes with rendered markdown content
+        list[RenderedNote]: List of notes with rendered content
 
     Raises:
         requests.exceptions.RequestException: If the request fails
     """
     response = requests.get(
-        f"{base_url}/notes/flat/render/md",
+        f"{base_url}/notes/flat/render/{format}",
         headers={"Content-Type": "application/json"},
     )
 

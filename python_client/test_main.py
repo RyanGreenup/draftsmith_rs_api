@@ -1326,21 +1326,31 @@ def test_create_tag():
 def test_get_rendered_notes():
     """Test getting all notes with rendered markdown content"""
     try:
-        # Get rendered notes
-        notes = get_rendered_notes()
+        # Get rendered notes in both formats
+        md_notes = get_rendered_notes(format="md")
+        html_notes = get_rendered_notes(format="html")
 
-        # Verify we got a list of RenderedNote objects
-        assert isinstance(notes, list)
-        assert len(notes) > 0
-        assert all(isinstance(note, RenderedNote) for note in notes)
+        # Verify we got lists of RenderedNote objects
+        assert isinstance(md_notes, list)
+        assert isinstance(html_notes, list)
+        assert len(md_notes) > 0
+        assert len(html_notes) > 0
+        assert all(isinstance(note, RenderedNote) for note in md_notes)
+        assert all(isinstance(note, RenderedNote) for note in html_notes)
 
-        # Verify each note has the required fields
-        for note in notes:
+        # Verify each markdown note has the required fields
+        for note in md_notes:
             assert note.id > 0
             assert isinstance(note.rendered_content, str)
             assert note.rendered_content.startswith(
                 "# "
             )  # All rendered notes start with H1
+
+        # Verify each HTML note has the required fields
+        for note in html_notes:
+            assert note.id > 0
+            assert isinstance(note.rendered_content, str)
+            assert "<h1>" in note.rendered_content  # HTML notes contain h1 tags
 
     except requests.exceptions.RequestException as e:
         pytest.fail(f"Failed to get rendered notes: {str(e)}")
