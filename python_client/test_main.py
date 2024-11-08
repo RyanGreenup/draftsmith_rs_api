@@ -686,6 +686,43 @@ def test_search_notes():
         pytest.fail(f"Failed to search notes: {str(e)}")
 
 
+def test_batch_update_notes():
+    """Test updating multiple notes in a single request"""
+    try:
+        # First create two notes to update
+        note1 = note_create("Test Note 1", "Original content 1")
+        note2 = note_create("Test Note 2", "Original content 2")
+
+        # Create batch update request
+        request = BatchUpdateNotesRequest(updates=[
+            (note1["id"], UpdateNoteRequest(content="# Heading 1\nUpdated Content 1")),
+            (note2["id"], UpdateNoteRequest(content="# Heading 2\nUpdated Content 2"))
+        ])
+
+        # Perform batch update
+        result = batch_update_notes(request)
+
+        # Verify the response structure
+        assert isinstance(result, BatchUpdateNotesResponse)
+        assert len(result.updated) == 2
+        assert len(result.failed) == 0
+
+        # Verify each updated note
+        for note in result.updated:
+            assert isinstance(note, Note)
+            assert note.created_at is not None
+            assert note.modified_at is not None
+
+            if note.id == note1["id"]:
+                assert note.title == "Heading 1"  # API extracts title from content
+                assert note.content == "# Heading 1\nUpdated Content 1"
+            elif note.id == note2["id"]:
+                assert note.title == "Heading 2"
+                assert note.content == "# Heading 2\nUpdated Content 2"
+
+    except requests.exceptions.RequestException as e:
+        pytest.fail(f"Failed to batch update notes: {str(e)}")
+
 def test_update_note():
     """Test updating a note through the API endpoint"""
     try:

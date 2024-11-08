@@ -17,8 +17,15 @@ class CreateNoteRequest(BaseModel):
 
 
 class UpdateNoteRequest(BaseModel):
-    title: str
-    content: str
+    title: Optional[str] = None
+    content: Optional[str] = None
+
+class BatchUpdateNotesRequest(BaseModel):
+    updates: list[tuple[int, UpdateNoteRequest]]
+
+class BatchUpdateNotesResponse(BaseModel):
+    updated: list[Note]
+    failed: list[int]
 
 
 class Note(BaseModel):
@@ -1078,6 +1085,34 @@ def update_note(
     response.raise_for_status()
     return Note.model_validate(response.json())
 
+
+def batch_update_notes(request: BatchUpdateNotesRequest, base_url: str = "http://localhost:37240") -> BatchUpdateNotesResponse:
+    """
+    Update multiple notes in a single request
+
+    Args:
+        request: The batch update request containing note IDs and their updates
+        base_url: The base URL of the API (default: http://localhost:37240)
+
+    Returns:
+        BatchUpdateNotesResponse: Contains lists of successfully updated notes and failed note IDs
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+    """
+    # Transform the updates list into the API's expected format
+    payload = {
+        "updates": [[id, update.model_dump(exclude_none=True)] for id, update in request.updates]
+    }
+
+    response = requests.put(
+        f"{base_url}/notes/flat/batch",
+        headers={"Content-Type": "application/json"},
+        json=payload
+    )
+
+    response.raise_for_status()
+    return BatchUpdateNotesResponse.model_validate(response.json())
 
 def get_notes_tree(base_url: str = "http://localhost:37240") -> list[TreeNote]:
     """
