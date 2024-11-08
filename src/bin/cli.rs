@@ -952,10 +952,16 @@ async fn main() {
                         }
                     }
                 }
-                AssetCommands::Delete { id: _ } => {
-                    // TODO: Implement delete logic
-                    eprintln!("Asset deletion not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::Delete { id } => {
+                    match rust_cli_app::client::assets::delete_asset(&url, id).await {
+                        Ok(_) => {
+                            println!("Asset {} deleted successfully", id);
+                        }
+                        Err(e) => {
+                            eprintln!("Error deleting asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
             },
             ClientCommands::Tags { id, command } => match command {
