@@ -1172,12 +1172,15 @@ async fn get_link_edge_list(
     Ok(Json(edges))
 }
 
-async fn render_markdown(
-    Json(payload): Json<RenderMarkdownRequest>,
-) -> Result<String, StatusCode> {
+/// Renders markdown content to HTML or plain text
+/// # Parameters
+///
+/// - `content`: The markdown content to render
+/// - `format`: The output format, either "html" or None (markdown)
+async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<String, StatusCode> {
     match payload.format.as_deref() {
         Some("html") => Ok(draftsmith_render::parse_md_to_html(&payload.content)),
-        _ => Ok(draftsmith_render::process_md(&payload.content))
+        _ => Ok(draftsmith_render::process_md(&payload.content)),
     }
 }
 
