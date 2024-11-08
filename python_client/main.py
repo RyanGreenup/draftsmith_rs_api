@@ -136,6 +136,7 @@ class RenderedNote(BaseModel):
 
 class RenderMarkdownRequest(BaseModel):
     """Request to render markdown content"""
+
     content: str
     format: Optional[Literal["text", "html", "pdf"]] = None
 
@@ -1313,7 +1314,7 @@ def get_rendered_note(
 def render_markdown(
     content: str,
     format: Optional[Literal["text", "html", "pdf"]] = None,
-    base_url: str = "http://localhost:37240"
+    base_url: str = "http://localhost:37240",
 ) -> str:
     """Render markdown content to the specified format
 
@@ -1329,22 +1330,21 @@ def render_markdown(
         requests.exceptions.RequestException: If the request fails
     """
     request = RenderMarkdownRequest(content=content, format=format)
-    
+
     response = requests.post(
         f"{base_url}/render/markdown",
         headers={"Content-Type": "application/json"},
-        data=request.model_dump_json(exclude_none=True)
+        data=request.model_dump_json(exclude_none=True),
     )
 
     response.raise_for_status()
     return response.text
 
 
-
 def render_markdown(
     content: str,
     format: Optional[Literal["text", "html", "pdf"]] = None,
-    base_url: str = "http://localhost:37240"
+    base_url: str = "http://localhost:37240",
 ) -> str:
     """Render markdown content to the specified format
 
@@ -1360,11 +1360,11 @@ def render_markdown(
         requests.exceptions.RequestException: If the request fails
     """
     request = RenderMarkdownRequest(content=content, format=format)
-    
+
     response = requests.post(
         f"{base_url}/render/markdown",
         headers={"Content-Type": "application/json"},
-        data=request.model_dump_json(exclude_none=True)
+        data=request.model_dump_json(exclude_none=True),
     )
 
     response.raise_for_status()
