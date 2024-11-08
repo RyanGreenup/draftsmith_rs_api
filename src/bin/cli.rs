@@ -296,6 +296,8 @@ enum NotesCommands {
     },
     /// Get forward links for a note
     ForwardLinks,
+    /// Get all link edges between notes
+    LinkEdges,
     /// Flat API commands
     Flat {
         #[command(subcommand)]
@@ -801,6 +803,17 @@ async fn main() {
                     } else {
                         eprintln!("Error: --id is required for forward-links command");
                         std::process::exit(1);
+                    }
+                }
+                NotesCommands::LinkEdges => {
+                    match rust_cli_app::client::get_link_edge_list(&url).await {
+                        Ok(edges) => {
+                            println!("{}", serde_json::to_string_pretty(&edges).unwrap());
+                        }
+                        Err(e) => {
+                            eprintln!("Error: {}", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             },
