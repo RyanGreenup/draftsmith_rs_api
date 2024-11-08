@@ -421,7 +421,7 @@ async fn update_single_note(
     if let Some(new_title) = update.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .select(NoteWithoutFts::as_select())
+            .returning(NoteWithoutFts::as_select())
             .get_result(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
