@@ -911,15 +911,27 @@ async fn main() {
                         }
                     }
                 }
-                AssetCommands::Get { id: _, output: _ } => {
-                    // TODO: Implement get asset logic
-                    eprintln!("Asset retrieval not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::Get { id, output } => {
+                    match rust_cli_app::client::assets::get_asset(&url, id, &output).await {
+                        Ok(_) => {
+                            println!("Asset {} downloaded to {}", id, output.display());
+                        }
+                        Err(e) => {
+                            eprintln!("Error retrieving asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
-                AssetCommands::GetByName { path: _, output: _ } => {
-                    // TODO: Implement get by name logic
-                    eprintln!("Asset retrieval by name not yet implemented");
-                    std::process::exit(1);
+                AssetCommands::GetByName { path, output } => {
+                    match rust_cli_app::client::assets::get_asset_by_name(&url, &path, &output).await {
+                        Ok(_) => {
+                            println!("Asset '{}' downloaded to {}", path, output.display());
+                        }
+                        Err(e) => {
+                            eprintln!("Error retrieving asset: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 AssetCommands::Update {
                     id: _,
