@@ -1186,19 +1186,9 @@ def get_note_forward_links(note_id: int, base_url: str = "http://localhost:37240
 
     Raises:
         requests.exceptions.RequestException: If the request fails
-
-    Args:
-        note_id: The ID of the note to get backlinks for
-        base_url: The base URL of the API (default: http://localhost:37240)
-
-    Returns:
-        list[Note]: List of notes that link to the specified note
-
-    Raises:
-        requests.exceptions.RequestException: If the request fails
     """
     response = requests.get(
-        f"{base_url}/notes/flat/{note_id}/backlinks",
+        f"{base_url}/notes/flat/{note_id}/forward-links",
         headers={"Content-Type": "application/json"},
     )
 
