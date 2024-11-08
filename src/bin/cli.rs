@@ -294,6 +294,8 @@ enum NotesCommands {
         /// Directory to save notes to
         dir: String,
     },
+    /// Get forward links for a note
+    ForwardLinks,
     /// Flat API commands
     Flat {
         #[command(subcommand)]
@@ -775,6 +777,26 @@ async fn main() {
                         }
                     } else {
                         eprintln!("Error: --id is required for backlinks command");
+                        std::process::exit(1);
+                    }
+                }
+                NotesCommands::ForwardLinks => {
+                    if let Some(note_id) = id {
+                        match rust_cli_app::client::get_forward_links(&url, note_id).await {
+                            Ok(forward_links) => {
+                                println!("{}", serde_json::to_string_pretty(&forward_links).unwrap());
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for forward-links command");
                         std::process::exit(1);
                     }
                 }
