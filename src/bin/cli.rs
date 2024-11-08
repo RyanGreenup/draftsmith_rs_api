@@ -90,8 +90,6 @@ enum RenderType {
 #[derive(clap::ValueEnum, Clone)]
 enum RenderFormat {
     Html,
-    Text,
-    Pdf,
 }
 
 #[derive(Subcommand)]
@@ -271,9 +269,9 @@ enum ClientCommands {
         /// Output file (optional - defaults to stdout)
         #[arg(short, long)]
         output: Option<PathBuf>,
-        /// Output format
-        #[arg(short, long, value_enum, default_value_t = RenderFormat::Text)]
-        format: RenderFormat,
+        /// Output format (HTML if specified, otherwise markdown)
+        #[arg(short, long, value_enum)]
+        format: Option<RenderFormat>,
     },
     /// Notes related commands
     Notes {
@@ -432,7 +430,7 @@ async fn main() {
                 format,
             } => {
                 // Read input file
-                let content = match std::fs::read_to_string(&input).await {
+                let content = match std::fs::read_to_string(&input) {
                     Ok(content) => content,
                     Err(e) => {
                         eprintln!("Error reading input file: {}", e);
@@ -443,11 +441,7 @@ async fn main() {
                 // Create render request
                 let request = rust_cli_app::client::notes::RenderMarkdownRequest {
                     content,
-                    format: Some(match format {
-                        RenderFormat::Html => "html".to_string(),
-                        RenderFormat::Text => "text".to_string(),
-                        RenderFormat::Pdf => "pdf".to_string(),
-                    }),
+                    format: format.map(|_| "html".to_string()),
                 };
 
                 // Render content
@@ -456,7 +450,7 @@ async fn main() {
                         // Write to output file or stdout
                         match output {
                             Some(path) => {
-                                if let Err(e) = std::fs::write(&path, rendered).await {
+                                if let Err(e) = std::fs::write(&path, rendered) {
                                     eprintln!("Error writing output file: {}", e);
                                     std::process::exit(1);
                                 }
