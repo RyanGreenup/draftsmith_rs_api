@@ -11,14 +11,6 @@ import tempfile
 import os
 
 
-class Note(BaseModel):
-    id: int
-    title: str
-    content: str
-    created_at: datetime
-    modified_at: datetime
-
-
 class CreateNoteRequest(BaseModel):
     title: str
     content: str
