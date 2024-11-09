@@ -66,7 +66,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
       clear: left;
     }}
 </style>
-<div class="card card-compact bg-base-100 w-1/6 shadow-xl ds-float-right-clear">
+<div class="card card-compact bg-base-100 w-80 shadow-xl ds-float-right-clear">
     <figure>
         <img
             src="/m/{filename}"
