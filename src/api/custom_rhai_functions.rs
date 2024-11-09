@@ -84,6 +84,33 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         div
     }
 
+    fn radial_progress(percentage: i64) -> String {
+        assert!(percentage <= 100, "Percentage must be between 0 and 100");
+
+        format!(
+            r#"<div class="radial-progress" style="--value:{};" role="progressbar">{}%</div>"#,
+            percentage, percentage
+        )
+    }
+
+    fn rating_stars(rating: i64) -> String {
+        assert!(rating <= 5, "Rating must be between 0 and 5");
+
+        let mut stars_html = String::from(r#"<div class="rating">"#);
+
+        for i in 0..5 {
+            if i < rating {
+                stars_html.push_str(r#"<input type="radio" name="rating-1" class="mask mask-star" checked="checked" />"#);
+            } else {
+                stars_html
+                    .push_str(r#"<input type="radio" name="rating-1" class="mask mask-star" />"#);
+            }
+        }
+
+        stars_html.push_str("</div>");
+        stars_html
+    }
+
     fn transclusion_to_md(note_id: i64) -> String {
         match RecursionGuard::new(note_id) {
             None => {
@@ -141,6 +168,12 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("concat", concat);
+        }),
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("rating_stars", rating_stars);
+        }),
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("radial_progress", radial_progress);
         }),
         Box::new(move |engine: &mut Engine| {
             let separator = separator.to_string(); // Clone it here so we can move it into the next closure
