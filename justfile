@@ -8,8 +8,7 @@ server-down:
     fuser 37240/tcp -k
 
 server-up:
-    just reset-db && clear && RUST_DEBUG=1 cargo run --bin cli serve
-
+    just reset-db && clear && RUST_DEBUG=1 cargo run --bin cli serve -a 0.0.0.0:37240
 server-up-disown:
     just server-up & disown
 
