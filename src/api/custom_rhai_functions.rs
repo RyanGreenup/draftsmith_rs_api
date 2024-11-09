@@ -1,8 +1,9 @@
 use crate::api::get_note_content;
-use crate::tables::NoteWithoutFts;
 use diesel::prelude::*;
 use draftsmith_render::processor::{CustomFn, Processor};
-use rhai::Engine;
+use lazy_static::lazy_static;
+use rhai::{Engine, ImmutableString};
+use std::sync::Mutex;
 
 // enum for html vs markdown
 enum RenderTarget {
@@ -10,12 +11,48 @@ enum RenderTarget {
     Markdown,
 }
 
-pub fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
+// Defines a global, mutable vector protected by a Mutex for tracking recursion path
+lazy_static! {
+    static ref RECURSION_PATH: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+}
+
+// RAII guard for managing recursion stack
+struct RecursionGuard {
+    note_id: i64,
+}
+
+impl RecursionGuard {
+    fn new(note_id: i64) -> Option<Self> {
+        let mut vec = RECURSION_PATH
+            .lock()
+            .expect("Failed to lock recursion vector");
+        if vec.contains(&note_id) {
+            // Found recursion - leave the vector as is so we can show the full path
+            None
+        } else {
+            vec.push(note_id);
+            Some(Self { note_id })
+        }
+    }
+}
+
+impl Drop for RecursionGuard {
+    fn drop(&mut self) {
+        let mut vec = RECURSION_PATH
+            .lock()
+            .expect("Failed to lock recursion vector");
+        if let Some(pos) = vec.iter().position(|&x| x == self.note_id) {
+            vec.truncate(pos); // Remove this and all subsequent items
+        }
+    }
+}
+
+fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     // Register custom functions
     fn double(x: i64) -> i64 {
         x * 2
     }
-    fn concat(a: String, b: String) -> String {
+    fn concat(a: ImmutableString, b: ImmutableString) -> String {
         format!("{}{}", a, b)
     }
 
@@ -47,16 +84,50 @@ pub fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn>
         div
     }
 
-    // TODO how to deal with recursion
-    // TODO consider a card class
     fn transclusion_to_md(note_id: i64) -> String {
-        let content = get_note_content(note_id as i32);
-        process_md(&content)
+        match RecursionGuard::new(note_id) {
+            None => {
+                let vec = RECURSION_PATH
+                    .lock()
+                    .expect("Failed to lock recursion vector");
+                let path = vec
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                format!(
+                    "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
+                    path, note_id
+                )
+            }
+            Some(_guard) => {
+                let content = get_note_content(note_id as i32);
+                process_md(&content)
+            }
+        }
     }
 
     fn transclusion_to_html(note_id: i64) -> String {
-        let content = get_note_content(note_id as i32);
-        parse_md_to_html(&content)
+        match RecursionGuard::new(note_id) {
+            None => {
+                let vec = RECURSION_PATH
+                    .lock()
+                    .expect("Failed to lock recursion vector");
+                let path = vec
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                format!(
+                    "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
+                    path, note_id
+                )
+            }
+            Some(_guard) => {
+                let content = get_note_content(note_id as i32);
+                parse_md_to_html(&content)
+            }
+        }
     }
 
     let separator = "¶"; // This will be cloned into the closure below
