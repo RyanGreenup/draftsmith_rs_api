@@ -52,7 +52,7 @@ pub fn build_custom_rhai_functions() -> Vec<CustomFn> {
         }),
     ];
 
-    return functions;
+    functions
 }
 
 pub fn parse_md_to_html(document: &str) -> String {
