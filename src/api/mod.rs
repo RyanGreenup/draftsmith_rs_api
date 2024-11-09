@@ -375,6 +375,23 @@ async fn list_notes(
     }
 }
 
+fn get_connection() -> PgConnection {
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    PgConnection::establish(&database_url).expect("Error connecting to database")
+}
+
+pub fn get_note_content(note_id: i32) -> String {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = get_connection();
+
+    notes
+        .find(note_id)
+        .select(content)
+        .first::<String>(&mut conn)
+        .expect("Error loading note content")
+}
+
 async fn get_note(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
