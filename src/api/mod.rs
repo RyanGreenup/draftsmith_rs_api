@@ -1,7 +1,8 @@
 use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
-use crate::tables::{NewNote, NoteBad, NoteHierarchy, NoteWithoutFts};
+use crate::tables::{NewNote, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
+pub mod custom_rhai_functions;
 pub mod hierarchy;
 mod state;
 pub mod tags;
@@ -391,7 +392,7 @@ async fn get_note(
         .first(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(note.into()))
+    Ok(Json(note))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -452,7 +453,7 @@ async fn update_notes(
 
     for (result, note_id) in results {
         match result {
-            Ok(note) => updated.push(note.into()),
+            Ok(note) => updated.push(note),
             Err(_) => failed.push(note_id),
         }
     }
@@ -490,7 +491,7 @@ async fn update_note(
     }
     .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok((StatusCode::OK, Json(updated_note.into())))
+    Ok((StatusCode::OK, Json(updated_note)))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -659,7 +660,7 @@ async fn create_note(
         .get_result::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok((StatusCode::CREATED, Json(note.into())))
+    Ok((StatusCode::CREATED, Json(note)))
 }
 
 // Single note rendering handlers
@@ -680,7 +681,7 @@ async fn render_note_html(
         .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(draftsmith_render::parse_md_to_html(&note.content))
+    Ok(custom_rhai_functions::parse_md_to_html(&note.content))
 }
 
 async fn render_note_md(
@@ -700,7 +701,7 @@ async fn render_note_md(
         .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(draftsmith_render::process_md(&note.content))
+    Ok(custom_rhai_functions::process_md(&note.content))
 }
 
 // All notes rendering handlers
@@ -722,7 +723,7 @@ async fn render_all_notes_html(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                draftsmith_render::parse_md_to_html(&note.content)
+                custom_rhai_functions::parse_md_to_html(&note.content)
             ),
         })
         .collect();
@@ -748,7 +749,7 @@ async fn render_all_notes_md(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                draftsmith_render::process_md(&note.content)
+                custom_rhai_functions::process_md(&note.content)
             ),
         })
         .collect();
@@ -1196,8 +1197,8 @@ async fn get_link_edge_list(
 /// - `format`: The output format, either "html" or None (markdown)
 async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<String, StatusCode> {
     match payload.format.as_deref() {
-        Some("html") => Ok(draftsmith_render::parse_md_to_html(&payload.content)),
-        _ => Ok(draftsmith_render::process_md(&payload.content)),
+        Some("html") => Ok(custom_rhai_functions::parse_md_to_html(&payload.content)),
+        _ => Ok(custom_rhai_functions::process_md(&payload.content)),
     }
 }
 

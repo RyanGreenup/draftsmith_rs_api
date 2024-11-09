@@ -214,6 +214,10 @@ pub struct NoteBad {
     pub fts: Option<Tsvector>,
 }
 
+/// This is a hold-over struct, use NoteWithoutFts instead.
+/// Initially in development this struct loaded the FTS field, but this caused many issues with deserialization.
+/// To fix this the NoteWithoutFts struct was created to exclude the FTS field.
+/// Eventually the field was removed from this struct, but it is kept around so I don't have to change all the tests (#TODO).
 impl NoteBad {
     pub fn as_select() -> (
         crate::schema::notes::id,
