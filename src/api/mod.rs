@@ -1,7 +1,8 @@
 use crate::client::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
-use crate::tables::{NewNote, Note, NoteHierarchy, NoteWithoutFts};
+use crate::tables::{NewNote, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
+pub mod custom_rhai_functions;
 pub mod hierarchy;
 mod state;
 pub mod tags;
@@ -387,10 +388,11 @@ async fn get_note(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .first(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(Json(note.into()))
+    Ok(Json(note))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -408,7 +410,7 @@ async fn update_single_note(
     pool: Arc<Pool>,
     note_id: i32,
     update: UpdateNoteRequest,
-) -> Result<Note, DieselError> {
+) -> Result<NoteWithoutFts, DieselError> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = pool.get().map_err(|_| DieselError::RollbackTransaction)?;
@@ -420,11 +422,13 @@ async fn update_single_note(
     if let Some(new_title) = update.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result(&mut conn)
     }
 }
 
@@ -449,7 +453,7 @@ async fn update_notes(
 
     for (result, note_id) in results {
         match result {
-            Ok(note) => updated.push(note.into()),
+            Ok(note) => updated.push(note),
             Err(_) => failed.push(note_id),
         }
     }
@@ -477,15 +481,17 @@ async fn update_note(
     let updated_note = if let Some(new_title) = payload.title {
         diesel::update(notes.find(note_id))
             .set((title.eq(new_title), changes))
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
     } else {
         diesel::update(notes.find(note_id))
             .set(changes)
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
     }
     .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok((StatusCode::OK, Json(updated_note.into())))
+    Ok((StatusCode::OK, Json(updated_note)))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -650,10 +656,11 @@ async fn create_note(
 
     let note = diesel::insert_into(notes::table)
         .values(&new_note)
-        .get_result::<Note>(&mut conn)
+        .returning(NoteWithoutFts::as_select())
+        .get_result::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    Ok((StatusCode::CREATED, Json(note.into())))
+    Ok((StatusCode::CREATED, Json(note)))
 }
 
 // Single note rendering handlers
@@ -670,10 +677,11 @@ async fn render_note_html(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(draftsmith_render::parse_md_to_html(&note.content))
+    Ok(custom_rhai_functions::parse_md_to_html(&note.content))
 }
 
 async fn render_note_md(
@@ -689,10 +697,11 @@ async fn render_note_md(
 
     let note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(draftsmith_render::process_md(&note.content))
+    Ok(custom_rhai_functions::process_md(&note.content))
 }
 
 // All notes rendering handlers
@@ -714,7 +723,7 @@ async fn render_all_notes_html(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                draftsmith_render::parse_md_to_html(&note.content)
+                custom_rhai_functions::parse_md_to_html(&note.content)
             ),
         })
         .collect();
@@ -740,7 +749,7 @@ async fn render_all_notes_md(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                draftsmith_render::process_md(&note.content)
+                custom_rhai_functions::process_md(&note.content)
             ),
         })
         .collect();
@@ -1070,7 +1079,8 @@ async fn get_forward_links(
     // First get the source note
     let source_note = notes
         .find(note_id)
-        .first::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
     // Extract all [[id]] patterns from the content
@@ -1087,7 +1097,8 @@ async fn get_forward_links(
     // Get all linked notes
     let linked_notes = notes
         .filter(id.eq_any(linked_ids))
-        .load::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let responses = linked_notes
@@ -1114,7 +1125,12 @@ async fn get_backlinks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // First verify the target note exists
-    if notes.find(note_id).first::<Note>(&mut conn).is_err() {
+    if notes
+        .find(note_id)
+        .select(NoteWithoutFts::as_select())
+        .first::<NoteWithoutFts>(&mut conn)
+        .is_err()
+    {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -1123,7 +1139,8 @@ async fn get_backlinks(
 
     let backlinks = notes
         .filter(content.like(format!("%{}%", link_pattern)))
-        .load::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let responses = backlinks
@@ -1150,7 +1167,8 @@ async fn get_link_edge_list(
 
     // Get all notes
     let all_notes = notes
-        .load::<Note>(&mut conn)
+        .select(NoteWithoutFts::as_select())
+        .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Extract all links using regex
@@ -1179,8 +1197,8 @@ async fn get_link_edge_list(
 /// - `format`: The output format, either "html" or None (markdown)
 async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<String, StatusCode> {
     match payload.format.as_deref() {
-        Some("html") => Ok(draftsmith_render::parse_md_to_html(&payload.content)),
-        _ => Ok(draftsmith_render::process_md(&payload.content)),
+        Some("html") => Ok(custom_rhai_functions::parse_md_to_html(&payload.content)),
+        _ => Ok(custom_rhai_functions::process_md(&payload.content)),
     }
 }
 
@@ -1414,7 +1432,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create note 1");
 
         let note2 = diesel::insert_into(crate::schema::notes::table)
@@ -1424,7 +1443,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create note 2");
 
         let _cleanup = TestCleanup {
@@ -1469,7 +1489,8 @@ mod tests {
         use crate::schema::notes::dsl::*;
         let updated_notes = notes
             .filter(id.eq_any(vec![note1.id, note2.id]))
-            .load::<Note>(&mut conn)
+            .select(NoteWithoutFts::as_select())
+            .load::<NoteWithoutFts>(&mut conn)
             .expect("Failed to load updated notes");
 
         assert_eq!(updated_notes.len(), 2, "Expected 2 notes in database");
@@ -1580,7 +1601,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create note 1");
 
         let note2 = diesel::insert_into(crate::schema::notes::table)
@@ -1590,7 +1612,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create note 2");
 
         let _cleanup = TestCleanup {
@@ -2179,7 +2202,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create test note 1");
 
         let note2 = diesel::insert_into(notes)
@@ -2189,7 +2213,8 @@ mod tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .returning(NoteWithoutFts::as_select())
+            .get_result::<NoteWithoutFts>(&mut conn)
             .expect("Failed to create test note 2");
 
         let _cleanup = TestCleanup {

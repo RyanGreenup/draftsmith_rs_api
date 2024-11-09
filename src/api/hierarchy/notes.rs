@@ -321,7 +321,7 @@ mod note_hierarchy_tests {
     use super::*;
     use crate::api::tests::{setup_test_state, TestCleanup};
     use crate::api::DieselError;
-    use crate::tables::Note;
+    use crate::tables::NoteBad;
     use axum::extract::State;
     use axum::Json;
 
@@ -397,7 +397,7 @@ mod note_hierarchy_tests {
                     child1_content.clone(),
                     child2_content.clone(),
                 ]))
-                .load::<Note>(conn)
+                .load::<NoteBad>(conn)
                 .expect("Failed to load notes from database");
 
             assert_eq!(
@@ -484,7 +484,7 @@ mod note_hierarchy_tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create root note");
 
         let child1_note = diesel::insert_into(notes)
@@ -494,7 +494,7 @@ mod note_hierarchy_tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create child1 note");
 
         let child2_note = diesel::insert_into(notes)
@@ -504,7 +504,7 @@ mod note_hierarchy_tests {
                 created_at: Some(chrono::Utc::now().naive_utc()),
                 modified_at: Some(chrono::Utc::now().naive_utc()),
             })
-            .get_result::<Note>(&mut conn)
+            .get_result::<NoteBad>(&mut conn)
             .expect("Failed to create child2 note");
 
         // Create initial hierarchy: root -> child1 -> child2
@@ -597,7 +597,7 @@ mod note_hierarchy_tests {
         use crate::schema::notes::dsl::id as notes_id;
         let updated_notes = notes
             .filter(notes_id.eq_any(vec![root_id, child1_id, child2_id]))
-            .load::<Note>(&mut conn)
+            .load::<NoteBad>(&mut conn)
             .expect("Failed to load notes from database");
 
         assert_eq!(updated_notes.len(), 3);

@@ -205,7 +205,7 @@ pub struct NewNoteType<'a> {
 
 #[derive(Debug, Queryable, Selectable)]
 #[diesel(table_name = crate::schema::notes)]
-pub struct Note {
+pub struct NoteBad {
     pub id: i32,
     pub title: String,
     pub content: String,
@@ -214,7 +214,24 @@ pub struct Note {
     pub fts: Option<Tsvector>,
 }
 
-#[derive(Debug, Queryable, Serialize, Deserialize, Clone)]
+/// This is a hold-over struct, use NoteWithoutFts instead.
+/// Initially in development this struct loaded the FTS field, but this caused many issues with deserialization.
+/// To fix this the NoteWithoutFts struct was created to exclude the FTS field.
+/// Eventually the field was removed from this struct, but it is kept around so I don't have to change all the tests (#TODO).
+impl NoteBad {
+    pub fn as_select() -> (
+        crate::schema::notes::id,
+        crate::schema::notes::title,
+        crate::schema::notes::content,
+        crate::schema::notes::created_at,
+        crate::schema::notes::modified_at,
+    ) {
+        use crate::schema::notes::dsl::*;
+        (id, title, content, created_at, modified_at)
+    }
+}
+
+#[derive(Debug, Queryable, Selectable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = crate::schema::notes)]
 pub struct NoteWithoutFts {
     pub id: i32,
@@ -246,8 +263,8 @@ impl NoteWithoutFts {
 // ```
 //
 // As in the api::create_note function.
-impl From<Note> for NoteWithoutFts {
-    fn from(note: Note) -> Self {
+impl From<NoteBad> for NoteWithoutFts {
+    fn from(note: NoteBad) -> Self {
         Self {
             id: note.id,
             title: note.title,
@@ -467,7 +484,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             dbg!(format!("Created Note #: {:?}", created_note.id));
@@ -479,7 +496,7 @@ mod tests {
             // Test Read
             let read_note = notes::table
                 .find(created_note.id)
-                .first::<Note>(conn)
+                .first::<NoteBad>(conn)
                 .expect("Error loading note");
 
             assert_eq!(read_note.id, created_note.id);
@@ -488,7 +505,7 @@ mod tests {
             // Test Update
             let updated_note = diesel::update(notes::table.find(created_note.id))
                 .set(notes::content.eq("Updated content"))
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error updating note");
 
             assert_eq!(updated_note.content, "Updated content");
@@ -502,7 +519,7 @@ mod tests {
             assert_eq!(deleted_count, 1);
 
             // Verify deletion
-            let find_result = notes::table.find(created_note.id).first::<Note>(conn);
+            let find_result = notes::table.find(created_note.id).first::<NoteBad>(conn);
 
             assert!(matches!(find_result, Err(DieselError::NotFound)));
 
@@ -698,7 +715,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             // Test Create
@@ -773,7 +790,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             let new_attribute = NewAttribute {
@@ -866,7 +883,7 @@ mod tests {
 
             let created_parent = diesel::insert_into(notes::table)
                 .values(&new_parent_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving parent note");
 
             let new_child_note = NewNote {
@@ -878,7 +895,7 @@ mod tests {
 
             let created_child = diesel::insert_into(notes::table)
                 .values(&new_child_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving child note");
 
             // Test Create
@@ -952,7 +969,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             // Test Create
@@ -1034,7 +1051,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             let new_note_type = NewNoteType {
@@ -1116,12 +1133,12 @@ mod tests {
 
             let created_note1 = diesel::insert_into(notes::table)
                 .values(&new_note1)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving note 1");
 
             let created_note2 = diesel::insert_into(notes::table)
                 .values(&new_note2)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving note 2");
 
             let new_note_type1 = NewNoteType {
@@ -1207,7 +1224,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             // Test Create
@@ -1378,7 +1395,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             let new_task = NewTask {
@@ -1483,7 +1500,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             // Verify content and title
@@ -1509,7 +1526,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             let new_task = NewTask {
@@ -1617,7 +1634,7 @@ mod tests {
 
             let created_note1 = diesel::insert_into(notes::table)
                 .values(&new_note1)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving parent note");
 
             let new_note2 = NewNote {
@@ -1629,7 +1646,7 @@ mod tests {
 
             let created_note2 = diesel::insert_into(notes::table)
                 .values(&new_note2)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving child note");
 
             let new_parent_task = NewTask {
@@ -1752,7 +1769,7 @@ mod tests {
 
             let created_note = diesel::insert_into(notes::table)
                 .values(&new_note)
-                .get_result::<Note>(conn)
+                .get_result::<NoteBad>(conn)
                 .expect("Error saving new note");
 
             let new_tag = NewTag {
