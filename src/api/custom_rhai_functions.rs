@@ -1,9 +1,16 @@
+use crate::api::get_note_content;
 use crate::tables::NoteWithoutFts;
 use diesel::prelude::*;
 use draftsmith_render::processor::{CustomFn, Processor};
 use rhai::Engine;
 
-pub fn build_custom_rhai_functions() -> Vec<CustomFn> {
+// enum for html vs markdown
+enum RenderTarget {
+    Html,
+    Markdown,
+}
+
+pub fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     // Register custom functions
     fn double(x: i64) -> i64 {
         x * 2
@@ -12,40 +19,51 @@ pub fn build_custom_rhai_functions() -> Vec<CustomFn> {
         format!("{}{}", a, b)
     }
 
-    fn transclusion(note_id: i64) -> String {
-        let note_id = note_id as i32; // Rhai uses i64, Diesel uses i32
-                                      // TODO this should be a public function: establish_connection
-        dotenv::dotenv().ok();
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
-        let mut conn =
-            PgConnection::establish(&database_url).expect("Error connecting to database");
+    // TODO this should take a css from the site
+    fn thumbnail(filename: &str, title: &str, description: &str) -> String {
+        let div = format!(
+            r#"
+<style>
+    .ds-float-right-clear {{
+      float: right;
+      clear: left;
+    }}
+</style>
+<div class="card card-compact bg-base-100 w-1/6 shadow-xl ds-float-right-clear">
+    <figure>
+        <img
+            src="/m/{filename}"
+            alt="{filename}" />
+    </figure>
+    <div class="card-body">
+        <h3 class="card-title">{title}</h3>
+            <p>{description}</p>
+    </div>
+</div>"#,
+            filename = filename,
+            title = title,
+            description = description
+        );
+        div
+    }
 
-        // This should be merged with crate::api::get_note
-        use crate::schema::notes::dsl::*;
-        let note = notes
-            .find(note_id)
-            .select(content)
-            .first(&mut conn)
-            .unwrap_or_else(|_| format!("Note with id {note_id} not found."));
+    // TODO how to deal with recursion
+    // TODO consider a card class
+    fn transclusion_to_md(note_id: i64) -> String {
+        let content = get_note_content(note_id as i32);
+        process_md(&content)
+    }
 
-        // TODO
-        // Now parse this to html (This requires rethinking tbh, should transclusions involve pulling out a note and re-rendering it?)
-        // How are recursive transclusions handled?
-        // Should markdown be transcluded instead
-        // But then those rhai blocks
-        // NOTE
-        // Probably register a different transclusion function for html
-        // and markdown outputs.
-        // This function could take an enum argument
-        String::from(note)
+    fn transclusion_to_html(note_id: i64) -> String {
+        let content = get_note_content(note_id as i32);
+        parse_md_to_html(&content)
     }
 
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
-    let functions: Vec<CustomFn> = vec![
+    let mut functions: Vec<CustomFn> = vec![
         Box::new(|engine: &mut Engine| {
-            engine.register_fn("transclusion", transclusion);
+            engine.register_fn("thumbnail", thumbnail);
         }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("double", double);
@@ -87,16 +105,25 @@ pub fn build_custom_rhai_functions() -> Vec<CustomFn> {
         }),
     ];
 
+    match render_target {
+        RenderTarget::Html => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
+            engine.register_fn("transclusion", transclusion_to_html);
+        })]),
+        RenderTarget::Markdown => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
+            engine.register_fn("transclusion", transclusion_to_md);
+        })]),
+    }
+
     functions
 }
 
 pub fn parse_md_to_html(document: &str) -> String {
-    let functions = build_custom_rhai_functions();
+    let functions = build_custom_rhai_functions(RenderTarget::Html);
     draftsmith_render::parse_md_to_html(document, Some(functions))
 }
 
 pub fn process_md(document: &str) -> String {
-    let functions = build_custom_rhai_functions();
+    let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));
     processor.process(document)
 }
