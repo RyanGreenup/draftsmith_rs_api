@@ -286,7 +286,6 @@ pub fn create_router(pool: Pool) -> Router {
     let max_body_size = 1024 * 1024 * 1024; // 1 GB
 
     Router::new()
-        .layer(DefaultBodyLimit::max(max_body_size))
         .merge(tags::create_router())
         .merge(tasks::create_router())
         .route("/assets", post(create_asset).get(list_assets))
@@ -326,6 +325,7 @@ pub fn create_router(pool: Pool) -> Router {
             "/assets/download/*filepath",
             get(download_asset_by_filename),
         )
+        .layer(DefaultBodyLimit::max(max_body_size))
         .with_state(state)
 }
 
