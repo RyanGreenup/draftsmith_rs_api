@@ -1,3 +1,5 @@
+use crate::tables::NoteWithoutFts;
+use diesel::prelude::*;
 use draftsmith_render::processor::{CustomFn, Processor};
 use rhai::Engine;
 
@@ -9,9 +11,42 @@ pub fn build_custom_rhai_functions() -> Vec<CustomFn> {
     fn concat(a: String, b: String) -> String {
         format!("{}{}", a, b)
     }
+
+    fn transclusion(note_id: i64) -> String {
+        let note_id = note_id as i32; // Rhai uses i64, Diesel uses i32
+                                      // TODO this should be a public function: establish_connection
+        dotenv::dotenv().ok();
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env file");
+        let mut conn =
+            PgConnection::establish(&database_url).expect("Error connecting to database");
+
+        // This should be merged with crate::api::get_note
+        use crate::schema::notes::dsl::*;
+        let note = notes
+            .find(note_id)
+            .select(content)
+            .first(&mut conn)
+            .unwrap_or_else(|_| format!("Note with id {note_id} not found."));
+
+        // TODO
+        // Now parse this to html (This requires rethinking tbh, should transclusions involve pulling out a note and re-rendering it?)
+        // How are recursive transclusions handled?
+        // Should markdown be transcluded instead
+        // But then those rhai blocks
+        // NOTE
+        // Probably register a different transclusion function for html
+        // and markdown outputs.
+        // This function could take an enum argument
+        String::from(note)
+    }
+
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("transclusion", transclusion);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("double", double);
         }),
