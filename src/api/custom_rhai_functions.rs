@@ -1,7 +1,7 @@
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use lazy_static::lazy_static;
-use rhai::{Engine, ImmutableString};
+use rhai::{Array, Engine, ImmutableString};
 use std::sync::Mutex;
 
 // enum for html vs markdown
@@ -184,9 +184,90 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         div
     }
 
+    #[allow(unused_assignments)]
+    fn timeline(events: Array) -> String {
+        let mut html_output = String::from(
+            r#"<ul class="timeline timeline-snap-icon max-md:timeline-compact timeline-vertical">"#,
+        );
+
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..events.len() {
+            let mut year = ImmutableString::new();
+            let mut title = ImmutableString::new();
+            let mut description = ImmutableString::new();
+            match events[i].clone().into_array() {
+                Ok(event) => {
+                    match event[0].clone().into_immutable_string() {
+                        Ok(y) => {
+                            year = y;
+                        }
+                        Err(e) => {
+                            return format!("Error parsing events: {e}");
+                        }
+                    }
+                    match event[1].clone().into_immutable_string() {
+                        Ok(s) => {
+                            title = s;
+                        }
+                        Err(e) => {
+                            return format!("Error parsing events: {e}");
+                        }
+                    }
+                    match event[2].clone().into_immutable_string() {
+                        Ok(s) => {
+                            description = s;
+                        }
+                        Err(e) => {
+                            return format!("Error parsing events: {e}");
+                        }
+                    }
+                }
+                Err(_) => {
+                    return "Error parsing events".to_string();
+                }
+            }
+            html_output.push_str(&format!(
+            r#"<li>
+    <div class="timeline-middle">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-5 w-5">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
+        </svg>
+    </div>
+    <div class="timeline-start mb-10 md:text-end">
+        <time class="font-mono italic">{}</time>
+        <div class="text-lg font-black">{}</div>
+        {}
+    </div>
+    <hr />
+</li>"#,
+            year, title, description
+        ));
+        }
+
+        html_output.push_str("</ul>");
+        html_output
+    }
+
+    /*
+        fn timeline(years: Array) -> String {
+            // let years = vec!["1984", "1998"];
+            let titles = vec!["First Macintosh computer", "iMac"];
+            let descriptions = vec![
+            "The Apple Macintosh—later rebranded as the Macintosh 128K—is the original Apple Macintosh personal computer. It played a pivotal role in establishing desktop publishing as a general office function. The motherboard, a 9 in (23 cm) CRT monitor, and a floppy drive were housed in a beige case with integrated carrying handle; it came with a keyboard and single-button mouse.",
+            "iMac is a family of all-in-one Mac desktop computers designed and built by Apple Inc. It has been the primary part of Apple's consumer desktop offerings since its debut in August 1998, and has evolved through seven distinct forms.",
+        ];
+
+            let timeline = timeline_html(years, &titles, &descriptions);
+            timeline
+        }
+    */
+
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("timeline", timeline);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("figure", figure);
         }),
