@@ -380,6 +380,18 @@ fn get_connection() -> PgConnection {
     PgConnection::establish(&database_url).expect("Error connecting to database")
 }
 
+pub fn get_note_title(note_id: i32) -> String {
+    use crate::schema::notes::dsl::*;
+
+    let mut conn = get_connection();
+
+    notes
+        .find(note_id)
+        .select(title)
+        .first::<String>(&mut conn)
+        .expect("Error loading note content")
+}
+
 pub fn get_note_content(note_id: i32) -> String {
     use crate::schema::notes::dsl::*;
 

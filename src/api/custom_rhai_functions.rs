@@ -1,5 +1,4 @@
-use crate::api::get_note_content;
-use diesel::prelude::*;
+use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use lazy_static::lazy_static;
 use rhai::{Engine, ImmutableString};
@@ -56,34 +55,6 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         format!("{}{}", a, b)
     }
 
-    // TODO this should take a css from the site
-    fn thumbnail(filename: &str, title: &str, description: &str) -> String {
-        let div = format!(
-            r#"
-<style>
-    .ds-float-right-clear {{
-      float: right;
-      clear: left;
-    }}
-</style>
-<div class="card card-compact bg-base-100 w-80 shadow-xl ds-float-right-clear">
-    <figure>
-        <img
-            src="/m/{filename}"
-            alt="{filename}" />
-    </figure>
-    <div class="card-body">
-        <h3 class="card-title">{title}</h3>
-            <p>{description}</p>
-    </div>
-</div>"#,
-            filename = filename,
-            title = title,
-            description = description
-        );
-        div
-    }
-
     fn radial_progress(percentage: i64) -> String {
         assert!(percentage <= 100, "Percentage must be between 0 and 100");
 
@@ -109,6 +80,12 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
 
         stars_html.push_str("</div>");
         stars_html
+    }
+
+    fn link(note_id: i64) -> String {
+        let title = get_note_title(note_id as i32);
+        // TODO is flask /note, what about Qt? How are wikilinks handled?
+        format!("[{}](/{})", title, note_id)
     }
 
     fn transclusion_to_md(note_id: i64) -> String {
@@ -157,14 +134,73 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
+    fn image(src: &str, width: i64, alt: &str) -> String {
+        format!(
+            r#"<p><img src="/m/{src}" style="width:{width}%" alt="{alt}" /></p>"#,
+            src = src,
+            width = width,
+            alt = alt
+        )
+    }
+
+    fn figure(image_html: ImmutableString, caption: &str, float: bool) -> String {
+        let mut div = r#"<div class="card card-compact bg-base-100 w-80 shadow-xl">"#;
+        if float {
+            div = r#"<div class="card card-compact bg-base-100 w-80 shadow-xl" style="float: right; clear: left;">"#;
+        }
+        format!(
+            r#"
+{}
+<figure>
+{}
+</figure>
+<div class="card-body">
+<p>{}</p>
+</div>
+</div>"#,
+            div, image_html, caption,
+        )
+    }
+
+    // TODO this should take a css from the site and asign the div class
+    fn thumbnail(filename: &str, title: &str, description: &str) -> String {
+        let div = format!(
+            r#"
+<div class="card card-compact bg-base-100 w-80 shadow-xl" style="float: right; clear: left">
+    <figure>
+        <img
+            src="/m/{filename}"
+            alt="{filename}" />
+    </figure>
+    <div class="card-body">
+        <h3 class="card-title">{title}</h3>
+            <p>{description}</p>
+    </div>
+</div>"#,
+            filename = filename,
+            title = title,
+            description = description
+        );
+        div
+    }
+
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("figure", figure);
+        }),
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("image", image);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("thumbnail", thumbnail);
         }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("double", double);
+        }),
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("link", link);
         }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("concat", concat);
