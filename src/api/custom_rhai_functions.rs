@@ -91,7 +91,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
-    fn transclusion_to_md(note_id: i64) -> String {
+    fn handle_recursion(note_id: i64) -> Option<String> {
         match RecursionGuard::new(note_id) {
             None => {
                 let vec = RECURSION_PATH
@@ -102,53 +102,38 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
                     .map(|id| id.to_string())
                     .collect::<Vec<_>>()
                     .join(" → ");
-                format!(
+                Some(format!(
                     "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
                     path, note_id
-                )
+                ))
             }
-            Some(_guard) => {
-                if note_id > 0 {
-                    let content = match get_note_content(note_id as i32) {
-                        Ok(content) => content,
-                        Err(e) => return format!("Error fetching note content: {e}"),
-                    };
-                    process_md(&content)
-                } else {
-                    format!("ID must be > 0, id: {note_id} invalid")
-                }
-            }
+            Some(_guard) => None,
         }
     }
 
-    fn transclusion_to_html(note_id: i64) -> String {
-        match RecursionGuard::new(note_id) {
-            None => {
-                let vec = RECURSION_PATH
-                    .lock()
-                    .expect("Failed to lock recursion vector");
-                let path = vec
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" → ");
-                format!(
-                    "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
-                    path, note_id
-                )
+    fn process_content(note_id: i64, processor: fn(&str) -> String) -> String {
+        if note_id > 0 {
+            match get_note_content(note_id as i32) {
+                Ok(content) => processor(&content),
+                Err(e) => format!("Error fetching note content: {}", e),
             }
-            Some(_guard) => {
-                if note_id > 0 {
-                    let content = match get_note_content(note_id as i32) {
-                        Ok(content) => content,
-                        Err(e) => return format!("Error fetching note content: {e}"),
-                    };
-                    parse_md_to_html(&content)
-                } else {
-                    format!("ID must be > 0, id: {note_id} invalid")
-                }
-            }
+        } else {
+            format!("ID must be > 0, id: {} invalid", note_id)
         }
+    }
+
+    fn transclusion_to_md(note_id: i64) -> String {
+        if let Some(recursion_msg) = handle_recursion(note_id) {
+            return recursion_msg;
+        }
+        process_content(note_id, |content| process_md(content))
+    }
+
+    fn transclusion_to_html(note_id: i64) -> String {
+        if let Some(recursion_msg) = handle_recursion(note_id) {
+            return recursion_msg;
+        }
+        process_content(note_id, |content| parse_md_to_html(content))
     }
 
     fn image(src: &str, width: i64, alt: &str) -> String {
