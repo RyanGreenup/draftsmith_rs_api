@@ -187,6 +187,21 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         div
     }
 
+    fn video_player_html(video_filename: &str) -> String {
+        format!(
+            r#"
+<details open><summary>📼</summary>
+<div class="max-w-xl mx-auto bg-white p-4 border border-gray-300 rounded-lg shadow-md resize overflow-auto">
+<video class="w-full h-auto" controls>
+<source src="/m/{filename}" type="video/mp4">
+</video>
+</div>
+</details>
+    "#,
+            filename = video_filename
+        )
+    }
+
     fn list_assets(pattern: &str) -> Dynamic {
         let pattern = format!("./uploads/{}", pattern);
         let mut files = Vec::new();
@@ -324,6 +339,9 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("video", video_player_html);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("list_assets", list_assets);
         }),
