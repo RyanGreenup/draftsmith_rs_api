@@ -1,7 +1,8 @@
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
+use glob::glob;
 use lazy_static::lazy_static;
-use rhai::{Array, Engine, ImmutableString};
+use rhai::{Array, Dynamic, Engine, ImmutableString};
 use std::sync::Mutex;
 
 // enum for html vs markdown
@@ -186,6 +187,62 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         div
     }
 
+    fn list_assets(pattern: &str) -> Dynamic {
+        let pattern = format!("./uploads/{}", pattern);
+        let mut files = Vec::new();
+
+        // Attempt to get entries from the glob pattern
+        let entries = match glob(&pattern) {
+            Ok(entries) => entries,
+            Err(e) => {
+                eprintln!("Error processing glob pattern: {}", e);
+                return Array::new().into(); // Return an empty array on error
+            }
+        };
+
+        for entry in entries {
+            match entry {
+                Ok(path) => {
+                    if let Some(path_str) = path.to_str() {
+                        // Convert path to string and remove "./uploads/" prefix
+                        files.push(ImmutableString::from(path_str.replace("uploads/", "")));
+                    } else {
+                        eprintln!("Error converting path to string for: {:?}", path);
+                    }
+                }
+                Err(e) => eprintln!("Error processing an entry: {}", e),
+            }
+        }
+
+        files.into() // Return the array wrapped in Dynamic
+    }
+
+    fn gallery(title: ImmutableString, images: Array) -> String {
+        let mut out = String::new();
+
+        for im in images {
+            let image_src = format!("/m/{}", im);
+            out.push_str("<div><img src=\"");
+            out.push_str(&image_src);
+            out.push_str("\" class=\"gallery-image\" /></div>");
+        }
+
+        let div_start = format!(
+            r#"
+<div class="max-w-4xl mx-auto bg-white p-6 border border-gray-200 rounded-lg shadow-md">
+<h2 class="text-2xl font-bold">{}</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+"#,
+            title
+        );
+        let div_end = r#"
+    </div>
+</div>
+"#;
+
+        [div_start, out, div_end.to_string()].concat().to_string()
+    }
+
     #[allow(unused_assignments)]
     fn timeline(events: Array) -> String {
         let mut html_output = String::from(
@@ -267,6 +324,12 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("list_assets", list_assets);
+        }),
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("gallery", gallery);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("timeline", timeline);
         }),
