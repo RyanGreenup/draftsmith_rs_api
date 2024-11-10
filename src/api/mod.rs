@@ -380,19 +380,15 @@ fn get_connection() -> PgConnection {
     PgConnection::establish(&database_url).expect("Error connecting to database")
 }
 
-pub fn get_note_title(note_id: i32) -> String {
+pub fn get_note_title(note_id: i32) -> Result<std::string::String, diesel::result::Error> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = get_connection();
 
-    notes
-        .find(note_id)
-        .select(title)
-        .first::<String>(&mut conn)
-        .expect("Error loading note content")
+    notes.find(note_id).select(title).first::<String>(&mut conn)
 }
 
-pub fn get_note_content(note_id: i32) -> String {
+pub fn get_note_content(note_id: i32) -> Result<std::string::String, diesel::result::Error> {
     use crate::schema::notes::dsl::*;
 
     let mut conn = get_connection();
@@ -401,7 +397,6 @@ pub fn get_note_content(note_id: i32) -> String {
         .find(note_id)
         .select(content)
         .first::<String>(&mut conn)
-        .expect("Error loading note content")
 }
 
 async fn get_note(

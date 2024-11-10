@@ -85,7 +85,10 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     fn link(note_id: i64) -> String {
         let title = get_note_title(note_id as i32);
         // TODO is flask /note, what about Qt? How are wikilinks handled?
-        format!("[{}](/{})", title, note_id)
+        match title {
+            Err(e) => format!("Note not found: {}. Error: {e}", note_id),
+            Ok(title) => format!("[{}](/note/{})", title, note_id),
+        }
     }
 
     fn transclusion_to_md(note_id: i64) -> String {
@@ -105,8 +108,15 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
                 )
             }
             Some(_guard) => {
-                let content = get_note_content(note_id as i32);
-                process_md(&content)
+                if note_id > 0 {
+                    let content = match get_note_content(note_id as i32) {
+                        Ok(content) => content,
+                        Err(e) => return format!("Error fetching note content: {e}"),
+                    };
+                    process_md(&content)
+                } else {
+                    format!("ID must be > 0, id: {note_id} invalid")
+                }
             }
         }
     }
@@ -128,8 +138,15 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
                 )
             }
             Some(_guard) => {
-                let content = get_note_content(note_id as i32);
-                parse_md_to_html(&content)
+                if note_id > 0 {
+                    let content = match get_note_content(note_id as i32) {
+                        Ok(content) => content,
+                        Err(e) => return format!("Error fetching note content: {e}"),
+                    };
+                    parse_md_to_html(&content)
+                } else {
+                    format!("ID must be > 0, id: {note_id} invalid")
+                }
             }
         }
     }
