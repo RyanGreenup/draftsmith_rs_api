@@ -65,6 +65,44 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         )
     }
 
+    fn remap_key(val: &str) -> &str {
+        match val {
+            "C" => "Ctrl",
+            "A" => "Alt",
+            "S" => "Shift",
+            "s" => "🐧",
+            "M" => "Alt", // Assuming "M" should map to "Meta" or possibly "Alt"
+            "F1" | "F2" | "F3" | "F4" | "F5" | "F6" | "F7" | "F8" | "F9" | "F10" | "F11"
+            | "F12" => val,
+            "Home" | "End" | "PageUp" | "PageDown" | "Insert" | "Delete" | "Tab" | "Enter"
+            | "Esc" => val,
+            _ => val,
+        }
+    }
+
+    fn keyboard_shortcut_to_kbd_html(input: &str) -> String {
+        let start = r#"<kbd class="kbd">"#;
+        let end = r#"</kbd>"#;
+        let mut output = String::new();
+
+        let shortcuts: Vec<&str> = input.split('-').collect();
+        let num_shortcuts = shortcuts.len();
+
+        for (i, shortcut) in shortcuts.iter().enumerate() {
+            let mapped = remap_key(shortcut);
+            output.push_str(start);
+            output.push_str(mapped);
+            output.push_str(end);
+
+            // Append '+' between kbd elements, except after the last one
+            if i < num_shortcuts - 1 {
+                output.push_str("+");
+            }
+        }
+
+        output
+    }
+
     fn rating_stars(rating: i64) -> String {
         assert!(rating <= 5, "Rating must be between 0 and 5");
 
@@ -191,7 +229,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         format!(
             r#"
 <details open><summary>📼</summary>
-<div class="max-w-xl mx-auto bg-white p-4 border border-gray-300 rounded-lg shadow-md resize overflow-auto">
+<div class="max-w-xl mx-auto p-4 border border-gray-300 rounded-lg shadow-md resize overflow-auto">
 <video class="w-full h-auto" controls>
 <source src="/m/{filename}" type="video/mp4">
 </video>
@@ -244,7 +282,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
 
         let div_start = format!(
             r#"
-<div class="max-w-4xl mx-auto bg-white p-6 border border-gray-200 rounded-lg shadow-md">
+<div class="max-w-4xl mx-auto p-6 border border-gray-200 rounded-lg shadow-md">
 <h2 class="text-2xl font-bold">{}</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
 "#,
@@ -339,6 +377,9 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("kbd", keyboard_shortcut_to_kbd_html);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("video", video_player_html);
         }),
