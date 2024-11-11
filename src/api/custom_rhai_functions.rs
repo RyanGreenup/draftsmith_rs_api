@@ -103,6 +103,24 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         output
     }
 
+    fn generate_diff_html(before: &str, after: &str) -> String {
+        format!(
+            r#"
+<div class="diff aspect-[16/9]">
+  <div class="diff-item-1">
+    {before}
+  </div>
+  <div class="diff-item-2">
+    {after}
+  </div>
+  <div class="diff-resizer"></div>
+</div>
+"#,
+            before = before,
+            after = after
+        )
+    }
+
     fn rating_stars(rating: i64) -> String {
         assert!(rating <= 5, "Rating must be between 0 and 5");
 
@@ -377,6 +395,9 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("diff_display", generate_diff_html);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("kbd", keyboard_shortcut_to_kbd_html);
         }),
