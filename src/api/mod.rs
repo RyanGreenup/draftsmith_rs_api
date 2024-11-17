@@ -1158,25 +1158,31 @@ async fn get_backlinks(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    // Find all notes that contain [[note_id]]
-    let link_pattern = format!("[[{}]]", note_id);
-
-    let backlinks = notes
-        .filter(content.like(format!("%{}%", link_pattern)))
+    // Get all notes
+    let all_notes = notes
         .select(NoteWithoutFts::as_select())
         .load::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let responses = backlinks
-        .into_iter()
-        .map(|note| BacklinkResponse {
-            id: note.id,
-            title: note.title,
-            content: note.content,
-        })
-        .collect();
+    // Check rendered content of each note for links
+    let link_pattern = format!("[[{}]]", note_id);
+    let mut backlinks = Vec::new();
 
-    Ok(Json(responses))
+    for note in all_notes {
+        // Render the note's content
+        let rendered_content = custom_rhai_functions::process_md(&note.content);
+        
+        // Check if the rendered content contains the link pattern
+        if rendered_content.contains(&link_pattern) {
+            backlinks.push(BacklinkResponse {
+                id: note.id,
+                title: note.title,
+                content: note.content,
+            });
+        }
+    }
+
+    Ok(Json(backlinks))
 }
 
 async fn get_link_edge_list(
