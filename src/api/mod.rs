@@ -1172,9 +1172,11 @@ async fn get_backlinks(
     for note in all_notes {
         // Render the note's content
         let rendered_content = custom_rhai_functions::process_md(&note.content);
-        
+
         // Check if the rendered content contains either link pattern
-        if rendered_content.contains(&wikilink_pattern) || rendered_content.contains(&markdown_link_pattern) {
+        if rendered_content.contains(&wikilink_pattern)
+            || rendered_content.contains(&markdown_link_pattern)
+        {
             backlinks.push(BacklinkResponse {
                 id: note.id,
                 title: note.title,
