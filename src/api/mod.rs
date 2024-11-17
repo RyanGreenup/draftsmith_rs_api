@@ -1165,15 +1165,16 @@ async fn get_backlinks(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Check rendered content of each note for links
-    let link_pattern = format!("[[{}]]", note_id);
+    let wikilink_pattern = format!("[[{}]]", note_id);
+    let markdown_link_pattern = format!("]({})", note_id);
     let mut backlinks = Vec::new();
 
     for note in all_notes {
         // Render the note's content
         let rendered_content = custom_rhai_functions::process_md(&note.content);
-
-        // Check if the rendered content contains the link pattern
-        if rendered_content.contains(&link_pattern) {
+        
+        // Check if the rendered content contains either link pattern
+        if rendered_content.contains(&wikilink_pattern) || rendered_content.contains(&markdown_link_pattern) {
             backlinks.push(BacklinkResponse {
                 id: note.id,
                 title: note.title,
