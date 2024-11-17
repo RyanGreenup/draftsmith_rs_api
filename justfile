@@ -4,6 +4,9 @@ reset-db:
     rm -rf ./uploads
     diesel migration run
 
+migrations:
+    diesel migration run
+
 server-down:
     fuser 37240/tcp -k
 
