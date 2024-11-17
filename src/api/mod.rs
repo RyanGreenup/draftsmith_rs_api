@@ -1171,7 +1171,7 @@ async fn get_backlinks(
     for note in all_notes {
         // Render the note's content
         let rendered_content = custom_rhai_functions::process_md(&note.content);
-        
+
         // Check if the rendered content contains the link pattern
         if rendered_content.contains(&link_pattern) {
             backlinks.push(BacklinkResponse {
