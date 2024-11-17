@@ -221,9 +221,9 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     }
 
     fn figure(image_html: ImmutableString, caption: &str, float: bool) -> String {
-        let mut div = r#"<div class="card card-compact bg-base-100 w-80 shadow-xl">"#;
+        let mut div = r#"<div class="card card-compact bg-transparent w-80 shadow-xl">"#;
         if float {
-            div = r#"<div class="card card-compact bg-base-100 w-80 shadow-xl" style="float: right; clear: left;">"#;
+            div = r#"<div class="card card-compact bg-transparent w-80 shadow-xl" style="float: right; clear: left;">"#;
         }
         format!(
             r#"
@@ -243,7 +243,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     fn thumbnail(filename: &str, title: &str, description: &str) -> String {
         let div = format!(
             r#"
-<div class="card card-compact bg-base-100 w-80 shadow-xl" style="float: right; clear: left">
+<div class="card card-compact bg-transparent w-80 shadow-xl" style="float: right; clear: left">
     <figure>
         <img
             src="/m/{filename}"
@@ -413,6 +413,9 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
     let mut functions: Vec<CustomFn> = vec![
+        Box::new(|engine: &mut Engine| {
+            engine.register_fn("phone", embed_input_in_phone_mockup);
+        }),
         Box::new(|engine: &mut Engine| {
             engine.register_fn("diff_display", generate_diff_html);
         }),
