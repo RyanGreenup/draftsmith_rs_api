@@ -103,6 +103,24 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         output
     }
 
+    fn embed_input_in_phone_mockup(input: &str) -> String {
+        let html = format!(
+            r#"
+<div class="mockup-phone">
+  <div class="camera"></div>
+  <div class="display">
+    <div class="artboard artboard-demo phone-1">
+    {}
+    </div>
+  </div>
+</div>
+"#,
+            input
+        );
+
+        html
+    }
+
     fn generate_diff_html(before: &str, after: &str) -> String {
         format!(
             r#"
