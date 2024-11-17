@@ -220,34 +220,46 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         )
     }
 
-    fn figure(image_html: ImmutableString, caption: &str, float: bool) -> String {
-        let mut div = r#"<div class="card card-compact bg-transparent w-80 shadow-xl">"#;
-        if float {
-            div = r#"<div class="card card-compact bg-transparent w-80 shadow-xl" style="float: right; clear: left;">"#;
-        }
-        format!(
+    /* TODO figure out the daisy UI reactivity classes -- they are not working so I've used basic css to override */
+    fn figure(filename: &str, title: &str, description: &str, size: i64) -> String {
+        let div = format!(
             r#"
-{}
-<figure>
-{}
-</figure>
-<div class="card-body">
-<p>{}</p>
-</div>
+<div class="card card-compact bg-transparent w-auto shadow-xl clear-left" style="width: {size}px">
+    <figure>
+        <a = href="/m/{filename}">
+        <img
+            src="/m/{filename}"
+            alt="{filename}"
+            width={size}
+            />
+        </a>
+    </figure>
+    <div class="card-body">
+        <h3 class="card-title">{title}</h3>
+            <p>{description}</p>
+    </div>
 </div>"#,
-            div, image_html, caption,
-        )
+            size = size,
+            filename = filename,
+            title = title,
+            description = description
+        );
+        div
     }
 
     // TODO this should take a css from the site and asign the div class
     fn thumbnail(filename: &str, title: &str, description: &str) -> String {
         let div = format!(
             r#"
-<div class="card card-compact bg-transparent w-80 shadow-xl" style="float: right; clear: left">
+<div class="card card-compact bg-transparent w-auto shadow-xl clear-left" style="float: right; clear: left; width: 150px">
     <figure>
+        <a = href="/m/{filename}">
         <img
             src="/m/{filename}"
-            alt="{filename}" />
+            alt="{filename}"
+            width=150
+            />
+        </a>
     </figure>
     <div class="card-body">
         <h3 class="card-title">{title}</h3>
