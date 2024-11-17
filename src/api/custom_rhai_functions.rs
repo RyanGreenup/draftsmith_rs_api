@@ -264,7 +264,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     fn video_player_html(video_filename: &str) -> String {
         format!(
             r#"
-<details open><summary>📼</summary>
+<details class="collapse border border-base-300 bg-base-100 rounded-lg shadow-lg" open><summary>📼</summary>
 <div class="max-w-xl mx-auto p-4 border border-gray-300 rounded-lg shadow-md resize overflow-auto">
 <video class="w-full h-auto" controls>
 <source src="/m/{filename}" type="video/mp4">
