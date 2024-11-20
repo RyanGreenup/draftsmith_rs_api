@@ -296,6 +296,52 @@ async fn get_note_path(
     }
 }
 
+/// This function replaces links to notes with their title
+/// Example:
+///     [[1]] -> [Note Title](1)
+///     [[33|Custom Title]] -> [Custom Title](33)
+/// This is useful for automatically updating links when a note title changes
+/// and having dynamic content.
+/// If the link is below a parent, it will be relative.
+pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel::result::Error> {
+    use crate::api::get_note_content;
+    let content = get_note_content(note_id)?;
+
+    // Regular expression to match both [[id]] and [[id|title]] formats
+    let link_regex = regex::Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
+
+    let mut result = content.clone();
+    let mut last_end = 0;
+    let mut new_content = String::new();
+
+    for cap in link_regex.captures_iter(&content) {
+        let whole_match = cap.get(0).unwrap();
+        let target_id: i32 = cap[1].parse().unwrap();
+
+        // Get the path for this link
+        let path = match get_note_path(&target_id, Some(&note_id)) {
+            Ok(p) => p,
+            Err(_) => continue, // Skip this link if we can't get the path
+        };
+
+        // Use custom title if provided, otherwise use the path
+        let display_text = cap.get(2).map(|m| m.as_str()).unwrap_or(&path);
+
+        // Add the text between the last match and this one
+        new_content.push_str(&content[last_end..whole_match.start()]);
+
+        // Add the new formatted link
+        new_content.push_str(&format!("[{}]({})", display_text, target_id));
+
+        last_end = whole_match.end();
+    }
+
+    // Add any remaining content after the last match
+    new_content.push_str(&content[last_end..]);
+
+    Ok(new_content)
+}
+
 // Handler for the PUT /notes/tree endpoint
 #[debug_handler]
 
@@ -450,6 +496,7 @@ mod note_hierarchy_tests {
     use crate::tables::NoteBad;
     use axum::extract::State;
     use axum::Json;
+    use crate::api::CreateNoteRequest;
 
     /// Tests the function to update notes from a supplied tree structure
     /// This can't use a conn.test_transaction block because
@@ -833,5 +880,101 @@ mod note_hierarchy_tests {
             pool: state.pool.as_ref().clone(),
             note_ids: vec![note_a.id, note_b.id, note_c.id],
         };
+    }
+
+    #[tokio::test]
+    async fn test_get_note_content_and_replace_links() {
+        let state = setup_test_state();
+        use crate::api::{create_note, delete_note};
+
+        // Create a hierarchy of notes
+        let root_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Root".to_string(),
+                content: "Root content".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create root note")
+        .1
+        .0;
+
+        let child_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Child".to_string(),
+                content: "Child content".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create child note")
+        .1
+        .0;
+
+        let unrelated_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Unrelated".to_string(),
+                content: "Unrelated content".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create unrelated note")
+        .1
+        .0;
+
+        // Set up hierarchy
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                child_note_id: child_note.id,
+                parent_note_id: Some(root_note.id),
+            }),
+        )
+        .await
+        .expect("Failed to attach child note");
+
+        // Create a note with various types of links
+        let test_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note".to_string(),
+                content: format!(
+                    "Link to child: [[{}]]\nLink to unrelated: [[{}]]\nCustom title link: [[{}|Custom]]",
+                    child_note.id, unrelated_note.id, root_note.id
+                ),
+            }),
+        )
+        .await
+        .expect("Failed to create test note")
+        .1
+        .0;
+
+        // Attach test note under root
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                child_note_id: test_note.id,
+                parent_note_id: Some(root_note.id),
+            }),
+        )
+        .await
+        .expect("Failed to attach test note");
+
+        // Get the processed content
+        let processed_content = get_note_content_and_replace_links(test_note.id)
+            .expect("Failed to process content");
+
+        // Verify the links are replaced correctly
+        assert!(processed_content.contains(&format!("[Child]({})", child_note.id)));
+        assert!(processed_content.contains(&format!("[/ Unrelated]({})", unrelated_note.id)));
+        assert!(processed_content.contains(&format!("[Custom]({})", root_note.id)));
+
+        // Clean up
+        let _ = delete_note(Path(root_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(child_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(unrelated_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(test_note.id), State(state.clone())).await;
     }
 }

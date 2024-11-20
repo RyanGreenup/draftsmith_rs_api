@@ -186,6 +186,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
+
     fn process_content(note_id: i64, processor: fn(&str) -> String) -> String {
         if note_id > 0 {
             match get_note_content(note_id as i32) {
@@ -528,3 +529,4 @@ pub fn process_md(document: &str) -> String {
     let mut processor = Processor::new(Some(functions));
     processor.process(document)
 }
+
