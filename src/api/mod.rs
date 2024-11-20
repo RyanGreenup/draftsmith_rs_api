@@ -553,7 +553,6 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
 
     Ok(new_content)
 }
-}
 
 async fn get_note(
     Path(note_id): Path<i32>,
