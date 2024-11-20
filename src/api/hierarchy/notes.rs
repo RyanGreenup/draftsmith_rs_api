@@ -2,7 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
+use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path, get_note_content};
 use crate::tables::NewNoteTag;
 use std::collections::HashMap;
 
@@ -308,17 +308,17 @@ pub async fn get_note_content_and_replace_links(
     note_id: i32
 ) -> Result<String, StatusCode> {
     let content = get_note_content(note_id).map_err(|_| StatusCode::NOT_FOUND)?;
-    
+
     // Regular expression to match both [[id]] and [[id|title]] formats
     let link_regex = regex::Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
-    
+
     let mut last_end = 0;
     let mut new_content = String::new();
 
     for cap in link_regex.captures_iter(&content) {
         let whole_match = cap.get(0).unwrap();
         let target_id: i32 = cap[1].parse().unwrap();
-        
+
         // Get the path for this link
         let path = match get_note_path(state, &target_id, Some(&note_id)).await {
             Ok(p) => p,
@@ -330,10 +330,10 @@ pub async fn get_note_content_and_replace_links(
 
         // Add the text between the last match and this one
         new_content.push_str(&content[last_end..whole_match.start()]);
-        
+
         // Add the new formatted link
         new_content.push_str(&format!("[{}]({})", display_text, target_id));
-        
+
         last_end = whole_match.end();
     }
 
@@ -965,7 +965,7 @@ mod note_hierarchy_tests {
 
         // Get the processed content
         let processed_content =
-            get_note_content_and_replace_links(test_note.id).expect("Failed to process content");
+            get_note_content_and_replace_links(test_note.id).await.expect("Failed to process content");
 
         // Verify the links are replaced correctly
         assert!(processed_content.contains(&format!("[Child]({})", child_note.id)));
