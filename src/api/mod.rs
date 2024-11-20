@@ -1,4 +1,6 @@
 use crate::client::NoteError;
+// TODO API should not import from client, only client from API,
+//      consider use crate::api::hierarchy::notes::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
@@ -39,7 +41,9 @@ struct RenderedNote {
 use crate::api::hierarchy::notes::{
     attach_child_note, detach_child_note, get_note_tree, update_note_tree,
 };
-pub use hierarchy::notes::NoteTreeNode;
+pub use hierarchy::notes::{
+    get_all_note_paths, get_relative_note_path, get_single_note_path, NoteTreeNode,
+};
 use sha2::{Digest, Sha256};
 use state::{AppState, Pool};
 use std::collections::{HashMap, HashSet};
