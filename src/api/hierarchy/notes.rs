@@ -210,7 +210,8 @@ async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, Status
         };
 
         // Store the path for this node's ID
-        paths.insert(node.id, node_path.clone());
+        // Use a leading / so there's no ambiguity for relative paths
+        paths.insert(node.id, format!("/ {}", node_path));
 
         // Recursively process children
         for child in &node.children {
@@ -226,9 +227,34 @@ async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, Status
     Ok(paths)
 }
 
-async fn get_note_path(state: &AppState, id: &i32) -> Result<String, StatusCode> {
+async fn get_note_path(
+    state: &AppState,
+    id: &i32,
+    from_id: Option<&i32>,
+) -> Result<String, StatusCode> {
+    // Get all paths
     let paths = get_note_paths(state).await?;
-    paths.get(id).cloned().ok_or(StatusCode::NOT_FOUND)
+    let pullout_path = |id| paths.get(id).ok_or(StatusCode::NOT_FOUND);
+    let path = pullout_path(id)?;
+    match from_id {
+        None => return Ok(path.clone()),
+        Some(from_id) => {
+            let from_path = pullout_path(from_id)?;
+            if path.contains(from_path) {
+                // Remove the from_path from the path
+                let mut trimmed_path = path.replace(from_path, "").trim().to_string();
+                // Now remove the leading /
+                let leader = "/ ";
+                if trimmed_path.starts_with(leader) {
+                    trimmed_path = trimmed_path[leader.len()..].to_string();
+                }
+                return Ok(trimmed_path);
+            } else {
+                // Just return the full path if the id is not under the from_id
+                return Ok(path.clone());
+            }
+        }
+    }
 }
 
 // Handler for the PUT /notes/tree endpoint
@@ -725,16 +751,22 @@ mod note_hierarchy_tests {
         .unwrap();
 
         // Test getting path for note C
-        let path = get_note_path(&state, &note_c.id).await.unwrap();
-        assert_eq!(path, "Note A / Note B / Note C");
+        let path = get_note_path(&state, &note_c.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A / Note B / Note C");
 
         // Test getting path for note B
-        let path = get_note_path(&state, &note_b.id).await.unwrap();
-        assert_eq!(path, "Note A / Note B");
+        let path = get_note_path(&state, &note_b.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A / Note B");
 
         // Test getting path for note A
-        let path = get_note_path(&state, &note_a.id).await.unwrap();
-        assert_eq!(path, "Note A");
+        let path = get_note_path(&state, &note_a.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A");
+
+        // Test getting path for note C From Note A
+        let path = get_note_path(&state, &note_c.id, Some(&note_a.id))
+            .await
+            .unwrap();
+        assert_eq!(path, "Note B / Note C");
 
         // Clean up
         let _cleanup = TestCleanup {
