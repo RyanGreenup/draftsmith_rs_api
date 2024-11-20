@@ -192,6 +192,34 @@ pub async fn get_note_tree(
     Ok(Json(tree))
 }
 
+/// Get all note paths
+#[debug_handler]
+pub async fn get_all_note_paths(
+    State(state): State<AppState>,
+) -> Result<Json<HashMap<i32, String>>, StatusCode> {
+    get_note_paths(&state)
+        .await
+        .map(Json)
+}
+
+/// Get path for a single note  
+#[debug_handler]
+pub async fn get_single_note_path(
+    State(state): State<AppState>,
+    Path(note_id): Path<i32>,
+) -> Result<String, StatusCode> {
+    get_note_path(&state, &note_id, None).await
+}
+
+/// Get relative path from one note to another
+#[debug_handler]
+pub async fn get_relative_note_path(
+    State(state): State<AppState>,
+    Path((note_id, from_id)): Path<(i32, i32)>,
+) -> Result<String, StatusCode> {
+    get_note_path(&state, &note_id, Some(&from_id)).await
+}
+
 async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, StatusCode> {
     // Get the full tree structure
     let tree = get_note_tree(State(state.clone())).await?.0;

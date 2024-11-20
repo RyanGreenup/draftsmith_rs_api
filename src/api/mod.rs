@@ -321,6 +321,9 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route("/notes/flat/:id/forward-links", get(get_forward_links))
         .route("/notes/flat/link-edge-list", get(get_link_edge_list))
+        .route("/notes/paths", get(get_all_note_paths))
+        .route("/notes/:id/path", get(get_single_note_path))
+        .route("/notes/:id/path/:from_id", get(get_relative_note_path))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
