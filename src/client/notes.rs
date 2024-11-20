@@ -1854,20 +1854,22 @@ mod tests {
         let base_url = BASE_URL;
 
         // Create some test notes with a hierarchy
+        let root_note_title = "Root Note";
         let root_note = create_note(
             base_url,
             CreateNoteRequest {
-                title: "Root Note".to_string(),
-                content: "Root content".to_string(),
+                title: "".to_string(),
+                content: format!("# {}", root_note_title),
             },
         )
         .await?;
 
+        let child_note_title = "Child Note";
         let child_note = create_note(
             base_url,
             CreateNoteRequest {
-                title: "Child Note".to_string(),
-                content: "Child content".to_string(),
+                title: "".to_string(),
+                content: format!("# {}", child_note_title),
             },
         )
         .await?;
@@ -1891,7 +1893,7 @@ mod tests {
         // Test getting single note path
         let root_path = get_note_path(base_url, root_note.id).await?;
         assert!(root_path.starts_with("/ "));
-        
+
         let child_path = get_note_path(base_url, child_note.id).await?;
         assert!(child_path.contains(&root_path));
         assert!(child_path.ends_with("Child Note"));
