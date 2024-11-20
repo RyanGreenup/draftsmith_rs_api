@@ -447,11 +447,7 @@ mod task_hierarchy_tests {
 
                 let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
                     .iter()
-                    .filter_map(|h| {
-                        h.child_task_id
-                            .zip(h.parent_task_id)
-                            .map(|(child, parent)| (child, parent))
-                    })
+                    .filter_map(|h| h.child_task_id.zip(h.parent_task_id))
                     .collect();
 
                 let tree = build_generic_tree(&task_data, &hierarchy_tuples)

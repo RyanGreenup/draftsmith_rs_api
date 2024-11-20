@@ -584,6 +584,46 @@ pub async fn render_markdown(
     Ok(rendered)
 }
 
+/// Get all note paths as a map of note IDs to their full paths
+pub async fn get_all_note_paths(base_url: &str) -> Result<HashMap<i32, String>, NoteError> {
+    let url = format!("{}/notes/paths", base_url);
+    let response = reqwest::get(url).await?.error_for_status()?;
+    let paths = response.json::<HashMap<i32, String>>().await?;
+    Ok(paths)
+}
+
+/// Get the full path for a specific note
+pub async fn get_note_path(base_url: &str, note_id: i32) -> Result<String, NoteError> {
+    let url = format!("{}/notes/{}/path", base_url, note_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let path = response.text().await?;
+    Ok(path)
+}
+
+/// Get the relative path from one note to another
+pub async fn get_relative_note_path(
+    base_url: &str,
+    note_id: i32,
+    from_id: i32,
+) -> Result<String, NoteError> {
+    let url = format!("{}/notes/{}/path/{}", base_url, note_id, from_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let path = response.text().await?;
+    Ok(path)
+}
+
 // *** Typesense ..............................................................
 // **** Semantic ..............................................................
 // **** TODO Hybrid ...........................................................
@@ -1805,6 +1845,67 @@ mod tests {
         let md_result = render_markdown(base_url, md_request).await?;
         assert!(md_result.contains("# Test Header"));
         assert!(md_result.contains("**bold**"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_note_paths() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create some test notes with a hierarchy
+        let root_note_title = "Root Note";
+        let root_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "".to_string(),
+                content: format!("# {}", root_note_title),
+            },
+        )
+        .await?;
+
+        let child_note_title = "Child Note";
+        let child_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "".to_string(),
+                content: format!("# {}", child_note_title),
+            },
+        )
+        .await?;
+
+        // Attach child to root
+        let attach_request = AttachChildRequest {
+            child_note_id: child_note.id,
+            parent_note_id: Some(root_note.id),
+        };
+        attach_child_note(base_url, attach_request).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Test getting all paths
+        let all_paths = get_all_note_paths(base_url).await?;
+        assert!(!all_paths.is_empty());
+        assert!(all_paths.contains_key(&root_note.id));
+        assert!(all_paths.contains_key(&child_note.id));
+
+        // Test getting single note path
+        let root_path = get_note_path(base_url, root_note.id).await?;
+        assert!(root_path.starts_with("/ "));
+
+        let child_path = get_note_path(base_url, child_note.id).await?;
+        assert!(child_path.contains(&root_path));
+        assert!(child_path.ends_with("Child Note"));
+
+        // Test getting relative path
+        let relative_path = get_relative_note_path(base_url, child_note.id, root_note.id).await?;
+        assert!(!relative_path.starts_with("/ ")); // Relative paths don't start with root
+        assert!(relative_path.contains("Child Note"));
+
+        // Test non-existent note
+        let result = get_note_path(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
 
         Ok(())
     }

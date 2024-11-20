@@ -96,7 +96,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
 
             // Append '+' between kbd elements, except after the last one
             if i < num_shortcuts - 1 {
-                output.push_str("+");
+                output.push('+');
             }
         }
 
@@ -201,14 +201,14 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         if let Some(recursion_msg) = handle_recursion(note_id) {
             return recursion_msg;
         }
-        process_content(note_id, |content| process_md(content))
+        process_content(note_id, process_md)
     }
 
     fn transclusion_to_html(note_id: i64) -> String {
         if let Some(recursion_msg) = handle_recursion(note_id) {
             return recursion_msg;
         }
-        process_content(note_id, |content| parse_md_to_html(content))
+        process_content(note_id, parse_md_to_html)
     }
 
     fn image(src: &str, width: i64, alt: &str) -> String {
@@ -521,6 +521,8 @@ pub fn parse_md_to_html(document: &str) -> String {
     draftsmith_render::parse_md_to_html(document, Some(functions))
 }
 
+/// This function processes markdown content by evaluating Rhai functions
+/// In addition, this will replace any links to notes with their title
 pub fn process_md(document: &str) -> String {
     let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));

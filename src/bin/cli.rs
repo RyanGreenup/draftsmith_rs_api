@@ -311,6 +311,11 @@ enum NotesCommands {
         /// Directory to save notes to
         dir: String,
     },
+    /// Get note paths
+    Paths {
+        #[command(subcommand)]
+        command: PathsCommands,
+    },
     /// Get forward links for a note
     ForwardLinks,
     /// Get all link edges between notes
@@ -874,6 +879,53 @@ async fn main() {
                         }
                     }
                 }
+                NotesCommands::Paths { command } => match command {
+                    PathsCommands::List => {
+                        match rust_cli_app::client::notes::get_all_note_paths(&url).await {
+                            Ok(paths) => {
+                                println!("{}", serde_json::to_string_pretty(&paths).unwrap());
+                            }
+                            Err(e) => {
+                                eprintln!("Error getting note paths: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    PathsCommands::Get { note_id } => {
+                        match rust_cli_app::client::notes::get_note_path(&url, note_id).await {
+                            Ok(path) => {
+                                println!("{}", path);
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error getting note path: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    PathsCommands::Relative { note_id, from_id } => {
+                        match rust_cli_app::client::notes::get_relative_note_path(
+                            &url, note_id, from_id,
+                        )
+                        .await
+                        {
+                            Ok(path) => {
+                                println!("{}", path);
+                            }
+                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error getting relative path: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                },
             },
             ClientCommands::Assets { command } => match command {
                 AssetCommands::Create {
@@ -1430,6 +1482,24 @@ mod tests {
     }
 }
 */
+#[derive(Subcommand)]
+enum PathsCommands {
+    /// Get all note paths
+    List,
+    /// Get path for a specific note
+    Get {
+        /// Note ID to get path for
+        note_id: i32,
+    },
+    /// Get relative path from one note to another
+    Relative {
+        /// Target note ID to get path to
+        note_id: i32,
+        /// Source note ID to get path from
+        from_id: i32,
+    },
+}
+
 #[derive(Subcommand)]
 enum SearchCommands {
     /// Search notes in database

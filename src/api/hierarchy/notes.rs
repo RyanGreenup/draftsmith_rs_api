@@ -4,6 +4,7 @@ use super::generics::{
 };
 use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
 use crate::tables::NewNoteTag;
+use std::collections::HashMap;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
@@ -191,8 +192,133 @@ pub async fn get_note_tree(
     Ok(Json(tree))
 }
 
+/// Get all note paths
+#[debug_handler]
+pub async fn get_all_note_paths(
+    State(state): State<AppState>,
+) -> Result<Json<HashMap<i32, String>>, StatusCode> {
+    get_note_paths(&state).await.map(Json)
+}
+
+/// Get path for a single note
+#[debug_handler]
+pub async fn get_single_note_path(
+    State(state): State<AppState>,
+    Path(note_id): Path<i32>,
+) -> Result<String, StatusCode> {
+    get_note_path(&state, &note_id, None).await
+}
+
+/// Get relative path from one note to another
+#[debug_handler]
+pub async fn get_relative_note_path(
+    State(state): State<AppState>,
+    Path((note_id, from_id)): Path<(i32, i32)>,
+) -> Result<String, StatusCode> {
+    get_note_path(&state, &note_id, Some(&from_id)).await
+}
+
+async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, StatusCode> {
+    // Get the full tree structure
+    let tree = get_note_tree(State(state.clone())).await?.0;
+    let mut paths = HashMap::new();
+
+    // Helper function to recursively build paths
+    fn build_paths(node: &NoteTreeNode, current_path: String, paths: &mut HashMap<i32, String>) {
+        // Get the node's title, defaulting to "Untitled" if None
+        let title = node.title.as_deref().unwrap_or("Untitled");
+
+        // Build the full path for this node
+        let node_path = if current_path.is_empty() {
+            title.to_string()
+        } else {
+            format!("{} / {}", current_path, title)
+        };
+
+        // Store the path for this node's ID
+        // Use a leading / so there's no ambiguity for relative paths
+        paths.insert(node.id, format!("/ {}", node_path));
+
+        // Recursively process children
+        for child in &node.children {
+            build_paths(child, node_path.clone(), paths);
+        }
+    }
+
+    // Process each root node
+    for node in tree {
+        build_paths(&node, String::new(), &mut paths);
+    }
+
+    Ok(paths)
+}
+
+async fn get_note_path(
+    state: &AppState,
+    id: &i32,
+    from_id: Option<&i32>,
+) -> Result<String, StatusCode> {
+    // Get all paths
+    let paths = get_note_paths(state).await?;
+    let pullout_path = |id| paths.get(id).ok_or(StatusCode::NOT_FOUND);
+    let path = pullout_path(id)?;
+    match from_id {
+        None => Ok(path.clone()),
+        Some(from_id) => {
+            // If the from_id is invalid, just return the full path
+            let from_path = match pullout_path(from_id) {
+                Ok(path) => path,
+                // If the from_id is invalid, just return the full path
+                Err(_) => return Ok(path.clone()),
+            };
+            if path.contains(from_path) {
+                // Remove the from_path from the path
+                let mut trimmed_path = path.replace(from_path, "").trim().to_string();
+                // Now remove the leading /
+                let leader = "/ ";
+                if trimmed_path.starts_with(leader) {
+                    trimmed_path = trimmed_path[leader.len()..].to_string();
+                }
+                if !trimmed_path.is_empty() {
+                    Ok(trimmed_path)
+                } else {
+                    // This (usually) either:
+                    //   1. The from_id is the same as the id, and/or
+                    //   2. the from_id has the same name as a parent but is not actually a parent
+                    //      e.g. Notes that are "Untitled".
+                    Ok(path.clone())
+                }
+            } else {
+                // Just return the full path if the id is not under the from_id
+                Ok(path.clone())
+            }
+        }
+    }
+}
+
 // Handler for the PUT /notes/tree endpoint
 #[debug_handler]
+
+pub async fn detach_child_note(
+    State(state): State<AppState>,
+    Path(child_id): Path<i32>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::note_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Define specific delete logic for the note hierarchy
+    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
+        diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id))).execute(conn)
+    };
+
+    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
 pub async fn update_note_tree(
     State(state): State<AppState>,
     Json(note_trees): Json<Vec<NoteTreeNode>>,
@@ -619,25 +745,93 @@ mod note_hierarchy_tests {
         assert_eq!(updated_child1.content, note_1_content_updated);
         assert_eq!(updated_child2.content, note_2_content_updated);
     }
-}
 
-pub async fn detach_child_note(
-    State(state): State<AppState>,
-    Path(child_id): Path<i32>,
-) -> Result<StatusCode, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::*;
+    #[tokio::test]
+    async fn test_get_note_path() {
+        let state = setup_test_state();
+        use crate::api::create_note;
+        use crate::api::CreateNoteRequest;
 
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        // Create three notes with a hierarchy
+        let note_a = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Note A".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+         .0;
 
-    // Define specific delete logic for the note hierarchy
-    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
-        diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id))).execute(conn)
-    };
+        let note_b = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Note B".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+         .0;
 
-    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let note_c = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Note C".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+         .0;
 
-    Ok(StatusCode::NO_CONTENT)
+        // Create hierarchy A -> B -> C
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                parent_note_id: Some(note_a.id),
+                child_note_id: note_b.id,
+            }),
+        )
+        .await
+        .unwrap();
+
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                parent_note_id: Some(note_b.id),
+                child_note_id: note_c.id,
+            }),
+        )
+        .await
+        .unwrap();
+
+        // Test getting path for note C
+        let path = get_note_path(&state, &note_c.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A / Note B / Note C");
+
+        // Test getting path for note B
+        let path = get_note_path(&state, &note_b.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A / Note B");
+
+        // Test getting path for note A
+        let path = get_note_path(&state, &note_a.id, None).await.unwrap();
+        assert_eq!(path, "/ Note A");
+
+        // Test getting path for note C From Note A
+        let path = get_note_path(&state, &note_c.id, Some(&note_a.id))
+            .await
+            .unwrap();
+        assert_eq!(path, "Note B / Note C");
+
+        // Clean up
+        let _cleanup = TestCleanup {
+            pool: state.pool.as_ref().clone(),
+            note_ids: vec![note_a.id, note_b.id, note_c.id],
+        };
+    }
 }

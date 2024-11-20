@@ -1,4 +1,6 @@
 use crate::client::NoteError;
+// TODO API should not import from client, only client from API,
+//      consider use crate::api::hierarchy::notes::NoteError;
 use crate::tables::{Asset, HierarchyMapping, NewAsset, NoteWithParent};
 use crate::tables::{NewNote, NoteHierarchy, NoteWithoutFts};
 use crate::{FLAT_API, SEARCH_FTS_API, UPLOADS_DIR};
@@ -39,7 +41,9 @@ struct RenderedNote {
 use crate::api::hierarchy::notes::{
     attach_child_note, detach_child_note, get_note_tree, update_note_tree,
 };
-pub use hierarchy::notes::NoteTreeNode;
+pub use hierarchy::notes::{
+    get_all_note_paths, get_relative_note_path, get_single_note_path, NoteTreeNode,
+};
 use sha2::{Digest, Sha256};
 use state::{AppState, Pool};
 use std::collections::{HashMap, HashSet};
@@ -321,6 +325,9 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/flat/:id/backlinks", get(get_backlinks))
         .route("/notes/flat/:id/forward-links", get(get_forward_links))
         .route("/notes/flat/link-edge-list", get(get_link_edge_list))
+        .route("/notes/paths", get(get_all_note_paths))
+        .route("/notes/:id/path", get(get_single_note_path))
+        .route("/notes/:id/path/:from_id", get(get_relative_note_path))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
