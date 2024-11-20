@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
@@ -191,15 +192,54 @@ pub async fn get_note_tree(
     Ok(Json(tree))
 }
 
-async fn get_note_paths() -> TODO {
-    let tree = get_note_tree().await?
+async fn get_note_paths(
+    state: &AppState,
+) -> Result<HashMap<i32, String>, StatusCode> {
+    // Get the full tree structure
+    let tree = get_note_tree(State(state.clone())).await?.0;
     let mut paths = HashMap::new();
-    // TODO
+
+    // Helper function to recursively build paths
+    fn build_paths(
+        node: &NoteTreeNode,
+        current_path: String,
+        paths: &mut HashMap<i32, String>
+    ) {
+        // Get the node's title, defaulting to "Untitled" if None
+        let title = node.title.as_deref().unwrap_or("Untitled");
+        
+        // Build the full path for this node
+        let node_path = if current_path.is_empty() {
+            title.to_string()
+        } else {
+            format!("{} / {}", current_path, title)
+        };
+
+        // Store the path for this node's ID
+        paths.insert(node.id, node_path.clone());
+
+        // Recursively process children
+        for child in &node.children {
+            build_paths(child, node_path.clone(), paths);
+        }
+    }
+
+    // Process each root node
+    for node in tree {
+        build_paths(&node, String::new(), &mut paths);
+    }
+
+    Ok(paths)
 }
 
-async fn get_note_path(id: &i32) -> TODO {
-    let paths = get_note_paths().await?;
-    format!("/notes/{}", id)
+async fn get_note_path(
+    state: &AppState,
+    id: &i32
+) -> Result<String, StatusCode> {
+    let paths = get_note_paths(state).await?;
+    paths.get(id)
+        .cloned()
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 // Handler for the PUT /notes/tree endpoint
@@ -633,35 +673,83 @@ mod note_hierarchy_tests {
 
     #[tokio::test]
     async fn test_get_note_path() {
-        let id = 123;
-        let path = get_note_path(&id);
-        assert_eq!(path, "/notes/123");
         let state = setup_test_state();
-        use crate::api::create_note;
-        use crate::api::CreateNoteRequest;
+        
+        // Create three notes with a hierarchy
+        let note_a = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note A".to_string(),
+                content: "Content A".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+        .0;
 
-        let mut ids: Vec<i32> = Vec::new();
+        let note_b = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note B".to_string(),
+                content: "Content B".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+        .0;
 
-        for title in vec!["Note A", "Note B", "Note C"] {
-            // Create Three New Notes
-            let new_note = create_note(
-                State(state.clone()),
-                Json(CreateNoteRequest {
-                    title: title.to_string(),
-                    content: "This is the target note".to_string(),
-                }),
-            )
-            .await
-            .unwrap_or_else(|_| panic!("Failed to create target note:  {title}"))
-            .1
-             .0;
+        let note_c = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Note C".to_string(),
+                content: "Content C".to_string(),
+            }),
+        )
+        .await
+        .unwrap()
+        .1
+        .0;
 
-            ids.push(new_note.id);
-        }
+        // Create hierarchy A -> B -> C
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                parent_note_id: Some(note_a.id),
+                child_note_id: note_b.id,
+            }),
+        )
+        .await
+        .unwrap();
 
-        let path = get_note_path(&id);
-        dbg!(path.clone());
-        assert_eq!(path.clone(), "/Note A/Note B/Note C");
+        attach_child_note(
+            State(state.clone()),
+            Json(AttachChildNoteRequest {
+                parent_note_id: Some(note_b.id),
+                child_note_id: note_c.id,
+            }),
+        )
+        .await
+        .unwrap();
+
+        // Test getting path for note C
+        let path = get_note_path(&state, &note_c.id).await.unwrap();
+        assert_eq!(path, "Note A / Note B / Note C");
+
+        // Test getting path for note B
+        let path = get_note_path(&state, &note_b.id).await.unwrap();
+        assert_eq!(path, "Note A / Note B");
+
+        // Test getting path for note A
+        let path = get_note_path(&state, &note_a.id).await.unwrap();
+        assert_eq!(path, "Note A");
+
+        // Clean up
+        let _cleanup = TestCleanup {
+            pool: state.pool.clone(),
+            note_ids: vec![note_a.id, note_b.id, note_c.id],
+        };
     }
 }
 
