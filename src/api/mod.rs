@@ -406,6 +406,20 @@ pub fn get_note_content(note_id: i32) -> Result<std::string::String, diesel::res
         .first::<String>(&mut conn)
 }
 
+/// This function replaces links to notes with their title
+/// Example:
+///     [[1]] -> [Note Title](1)
+///     [[33|Custom Title]] -> [Custom Title](33)
+/// This is useful for automatically updating links when a note title changes
+/// and having dynamic content.
+/// If the link is below a parent, it will be relative.
+pub fn get_note_content_and_replace_links(note_id: i32) -> TODO
+    let content = get_note_content(note_id)
+    // TODO
+    // NOTE
+    // Use the function crate::api::notes::get_note_path function
+}
+
 async fn get_note(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
