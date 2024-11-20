@@ -1,10 +1,10 @@
-use std::collections::HashMap;
 use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
 use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path};
 use crate::tables::NewNoteTag;
+use std::collections::HashMap;
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
@@ -192,22 +192,16 @@ pub async fn get_note_tree(
     Ok(Json(tree))
 }
 
-async fn get_note_paths(
-    state: &AppState,
-) -> Result<HashMap<i32, String>, StatusCode> {
+async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, StatusCode> {
     // Get the full tree structure
     let tree = get_note_tree(State(state.clone())).await?.0;
     let mut paths = HashMap::new();
 
     // Helper function to recursively build paths
-    fn build_paths(
-        node: &NoteTreeNode,
-        current_path: String,
-        paths: &mut HashMap<i32, String>
-    ) {
+    fn build_paths(node: &NoteTreeNode, current_path: String, paths: &mut HashMap<i32, String>) {
         // Get the node's title, defaulting to "Untitled" if None
         let title = node.title.as_deref().unwrap_or("Untitled");
-        
+
         // Build the full path for this node
         let node_path = if current_path.is_empty() {
             title.to_string()
@@ -232,14 +226,9 @@ async fn get_note_paths(
     Ok(paths)
 }
 
-async fn get_note_path(
-    state: &AppState,
-    id: &i32
-) -> Result<String, StatusCode> {
+async fn get_note_path(state: &AppState, id: &i32) -> Result<String, StatusCode> {
     let paths = get_note_paths(state).await?;
-    paths.get(id)
-        .cloned()
-        .ok_or(StatusCode::NOT_FOUND)
+    paths.get(id).cloned().ok_or(StatusCode::NOT_FOUND)
 }
 
 // Handler for the PUT /notes/tree endpoint
@@ -674,43 +663,45 @@ mod note_hierarchy_tests {
     #[tokio::test]
     async fn test_get_note_path() {
         let state = setup_test_state();
-        
+        use crate::api::create_note;
+        use crate::api::CreateNoteRequest;
+
         // Create three notes with a hierarchy
         let note_a = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Note A".to_string(),
-                content: "Content A".to_string(),
+                title: "".to_string(),
+                content: "# Note A".to_string(),
             }),
         )
         .await
         .unwrap()
         .1
-        .0;
+         .0;
 
         let note_b = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Note B".to_string(),
-                content: "Content B".to_string(),
+                title: "".to_string(),
+                content: "# Note B".to_string(),
             }),
         )
         .await
         .unwrap()
         .1
-        .0;
+         .0;
 
         let note_c = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Note C".to_string(),
-                content: "Content C".to_string(),
+                title: "".to_string(),
+                content: "# Note C".to_string(),
             }),
         )
         .await
         .unwrap()
         .1
-        .0;
+         .0;
 
         // Create hierarchy A -> B -> C
         attach_child_note(
@@ -747,7 +738,7 @@ mod note_hierarchy_tests {
 
         // Clean up
         let _cleanup = TestCleanup {
-            pool: state.pool.clone(),
+            pool: state.pool.as_ref().clone(),
             note_ids: vec![note_a.id, note_b.id, note_c.id],
         };
     }

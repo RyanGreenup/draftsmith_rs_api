@@ -521,6 +521,8 @@ pub fn parse_md_to_html(document: &str) -> String {
     draftsmith_render::parse_md_to_html(document, Some(functions))
 }
 
+/// This function processes markdown content by evaluating Rhai functions
+/// In addition, this will replace any links to notes with their title
 pub fn process_md(document: &str) -> String {
     let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));
