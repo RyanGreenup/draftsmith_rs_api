@@ -964,8 +964,9 @@ mod note_hierarchy_tests {
         .expect("Failed to attach test note");
 
         // Get the processed content
-        let processed_content =
-            get_note_content_and_replace_links(test_note.id).await.expect("Failed to process content");
+        let processed_content = get_note_content_and_replace_links(&state, test_note.id)
+            .await
+            .expect("Failed to process content");
 
         // Verify the links are replaced correctly
         assert!(processed_content.contains(&format!("[Child]({})", child_note.id)));
