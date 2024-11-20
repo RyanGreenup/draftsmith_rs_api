@@ -303,23 +303,24 @@ async fn get_note_path(
 /// This is useful for automatically updating links when a note title changes
 /// and having dynamic content.
 /// If the link is below a parent, it will be relative.
-pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel::result::Error> {
-    use crate::api::get_note_content;
-    let content = get_note_content(note_id)?;
-
+pub async fn get_note_content_and_replace_links(
+    state: &AppState,
+    note_id: i32
+) -> Result<String, StatusCode> {
+    let content = get_note_content(note_id).map_err(|_| StatusCode::NOT_FOUND)?;
+    
     // Regular expression to match both [[id]] and [[id|title]] formats
     let link_regex = regex::Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
-
-    let mut result = content.clone();
+    
     let mut last_end = 0;
     let mut new_content = String::new();
 
     for cap in link_regex.captures_iter(&content) {
         let whole_match = cap.get(0).unwrap();
         let target_id: i32 = cap[1].parse().unwrap();
-
+        
         // Get the path for this link
-        let path = match get_note_path(&target_id, Some(&note_id)) {
+        let path = match get_note_path(state, &target_id, Some(&note_id)).await {
             Ok(p) => p,
             Err(_) => continue, // Skip this link if we can't get the path
         };
@@ -329,10 +330,10 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
 
         // Add the text between the last match and this one
         new_content.push_str(&content[last_end..whole_match.start()]);
-
+        
         // Add the new formatted link
         new_content.push_str(&format!("[{}]({})", display_text, target_id));
-
+        
         last_end = whole_match.end();
     }
 
