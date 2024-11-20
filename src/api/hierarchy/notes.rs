@@ -263,7 +263,7 @@ async fn get_note_path(
     let pullout_path = |id| paths.get(id).ok_or(StatusCode::NOT_FOUND);
     let path = pullout_path(id)?;
     match from_id {
-        None => return Ok(path.clone()),
+        None => Ok(path.clone()),
         Some(from_id) => {
             // If the from_id is invalid, just return the full path
             let from_path = match pullout_path(from_id) {
@@ -279,18 +279,18 @@ async fn get_note_path(
                 if trimmed_path.starts_with(leader) {
                     trimmed_path = trimmed_path[leader.len()..].to_string();
                 }
-                if trimmed_path != "" {
-                    return Ok(trimmed_path);
+                if !trimmed_path.is_empty() {
+                    Ok(trimmed_path)
                 } else {
                     // This (usually) either:
                     //   1. The from_id is the same as the id, and/or
                     //   2. the from_id has the same name as a parent but is not actually a parent
                     //      e.g. Notes that are "Untitled".
-                    return Ok(path.clone());
+                    Ok(path.clone())
                 }
             } else {
                 // Just return the full path if the id is not under the from_id
-                return Ok(path.clone());
+                Ok(path.clone())
             }
         }
     }
@@ -298,6 +298,27 @@ async fn get_note_path(
 
 // Handler for the PUT /notes/tree endpoint
 #[debug_handler]
+
+pub async fn detach_child_note(
+    State(state): State<AppState>,
+    Path(child_id): Path<i32>,
+) -> Result<StatusCode, StatusCode> {
+    use crate::schema::note_hierarchy::dsl::*;
+
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Define specific delete logic for the note hierarchy
+    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
+        diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id))).execute(conn)
+    };
+
+    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
 pub async fn update_note_tree(
     State(state): State<AppState>,
     Json(note_trees): Json<Vec<NoteTreeNode>>,
@@ -813,25 +834,4 @@ mod note_hierarchy_tests {
             note_ids: vec![note_a.id, note_b.id, note_c.id],
         };
     }
-}
-
-pub async fn detach_child_note(
-    State(state): State<AppState>,
-    Path(child_id): Path<i32>,
-) -> Result<StatusCode, StatusCode> {
-    use crate::schema::note_hierarchy::dsl::*;
-
-    let mut conn = state
-        .pool
-        .get()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Define specific delete logic for the note hierarchy
-    let delete_fn = |conn: &mut PgConnection, child_id: i32| {
-        diesel::delete(note_hierarchy.filter(child_note_id.eq(child_id))).execute(conn)
-    };
-
-    detach_child(delete_fn, child_id, &mut conn).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    Ok(StatusCode::NO_CONTENT)
 }
