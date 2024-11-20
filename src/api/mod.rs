@@ -1107,12 +1107,23 @@ async fn get_forward_links(
         .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    // Extract all [[id]] patterns from the content
-    let link_regex = regex::Regex::new(r"\[\[(\d+)\]\]").unwrap();
-    let linked_ids: Vec<i32> = link_regex
-        .captures_iter(&source_note.content)
-        .filter_map(|cap| cap[1].parse().ok())
-        .collect();
+    // Extract all patterns from the content
+    let link_regex =
+        regex::Regex::new(r"(?:\[\[(\d+)\]\]|\[\[(\d+)\|[^]]+\]\]|(?:\[.*?\])\((\d+)\))").unwrap();
+
+    let mut linked_ids: Vec<i32> = Vec::new();
+
+    for cap in link_regex.captures_iter(&source_note.content) {
+        // Check each capture group and parse the id if it exists.
+        for i in 1..=3 {
+            if let Some(id_str) = &cap.get(i) {
+                if let Ok(id_val) = id_str.as_str().parse::<i32>() {
+                    linked_ids.push(id_val);
+                    break; // Since we found a valid ID, no need to check other groups
+                }
+            }
+        }
+    }
 
     if linked_ids.is_empty() {
         return Ok(Json(Vec::new()));
@@ -1882,7 +1893,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_forward_links() {
+    async fn test_get_forward_links_wikilinks() {
         let state = setup_test_state();
 
         // Create some target notes that will be linked to
@@ -1917,6 +1928,174 @@ mod tests {
                 title: "Source Note".to_string(),
                 content: format!(
                     "This note links to [[{}]] and [[{}]]",
+                    target_note1.id, target_note2.id
+                ),
+            }),
+        )
+        .await
+        .expect("Failed to create source note")
+        .1
+         .0;
+
+        // Test getting forward links
+        let forward_links = get_forward_links(State(state.clone()), Path(source_note.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+
+        // Verify results
+        assert_eq!(forward_links.len(), 2, "Expected exactly 2 forward links");
+
+        let link_ids: Vec<i32> = forward_links.iter().map(|l| l.id).collect();
+        assert!(
+            link_ids.contains(&target_note1.id),
+            "Missing forward link to note 1"
+        );
+        assert!(
+            link_ids.contains(&target_note2.id),
+            "Missing forward link to note 2"
+        );
+
+        // Test getting forward links for note with no links
+        let no_links = get_forward_links(State(state.clone()), Path(target_note1.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+        assert_eq!(no_links.len(), 0, "Expected no forward links");
+
+        // Test getting forward links for non-existent note
+        let non_existent_result = get_forward_links(State(state.clone()), Path(99999)).await;
+        assert!(
+            non_existent_result.is_err(),
+            "Expected error for non-existent note"
+        );
+
+        // Clean up
+        let _ = delete_note(Path(source_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note2.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_forward_links_wikilinks_with_title() {
+        let state = setup_test_state();
+
+        // Create some target notes that will be linked to
+        let target_note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 1".to_string(),
+                content: "This is target note 1".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 1")
+        .1
+         .0;
+
+        let target_note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 2".to_string(),
+                content: "This is target note 2".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 2")
+        .1
+         .0;
+
+        // Create a source note that links to both targets
+        let source_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Source Note".to_string(),
+                content: format!(
+                    "This note links to [[{}|Note 1]] and [[{}|Note 2]]",
+                    target_note1.id, target_note2.id
+                ),
+            }),
+        )
+        .await
+        .expect("Failed to create source note")
+        .1
+         .0;
+
+        // Test getting forward links
+        let forward_links = get_forward_links(State(state.clone()), Path(source_note.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+
+        // Verify results
+        assert_eq!(forward_links.len(), 2, "Expected exactly 2 forward links");
+
+        let link_ids: Vec<i32> = forward_links.iter().map(|l| l.id).collect();
+        assert!(
+            link_ids.contains(&target_note1.id),
+            "Missing forward link to note 1"
+        );
+        assert!(
+            link_ids.contains(&target_note2.id),
+            "Missing forward link to note 2"
+        );
+
+        // Test getting forward links for note with no links
+        let no_links = get_forward_links(State(state.clone()), Path(target_note1.id))
+            .await
+            .expect("Failed to get forward links")
+            .0;
+        assert_eq!(no_links.len(), 0, "Expected no forward links");
+
+        // Test getting forward links for non-existent note
+        let non_existent_result = get_forward_links(State(state.clone()), Path(99999)).await;
+        assert!(
+            non_existent_result.is_err(),
+            "Expected error for non-existent note"
+        );
+
+        // Clean up
+        let _ = delete_note(Path(source_note.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note1.id), State(state.clone())).await;
+        let _ = delete_note(Path(target_note2.id), State(state.clone())).await;
+    }
+
+    #[tokio::test]
+    async fn test_get_forward_links_md_links() {
+        let state = setup_test_state();
+
+        // Create some target notes that will be linked to
+        let target_note1 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 1".to_string(),
+                content: "This is target note 1".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 1")
+        .1
+         .0;
+
+        let target_note2 = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Target Note 2".to_string(),
+                content: "This is target note 2".to_string(),
+            }),
+        )
+        .await
+        .expect("Failed to create target note 2")
+        .1
+         .0;
+
+        // Create a source note that links to both targets
+        let source_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Source Note".to_string(),
+                content: format!(
+                    "This note links to [Note 1]({}) and [Note 2]({})",
                     target_note1.id, target_note2.id
                 ),
             }),
