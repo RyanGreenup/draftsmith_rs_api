@@ -907,7 +907,11 @@ async fn main() {
                         }
                     }
                     PathsCommands::Relative { note_id, from_id } => {
-                        match rust_cli_app::client::notes::get_relative_note_path(&url, note_id, from_id).await {
+                        match rust_cli_app::client::notes::get_relative_note_path(
+                            &url, note_id, from_id,
+                        )
+                        .await
+                        {
                             Ok(path) => {
                                 println!("{}", path);
                             }
