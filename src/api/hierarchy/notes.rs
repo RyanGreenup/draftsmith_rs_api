@@ -492,11 +492,11 @@ pub async fn update_note_tree(
 mod note_hierarchy_tests {
     use super::*;
     use crate::api::tests::{setup_test_state, TestCleanup};
+    use crate::api::CreateNoteRequest;
     use crate::api::DieselError;
     use crate::tables::NoteBad;
     use axum::extract::State;
     use axum::Json;
-    use crate::api::CreateNoteRequest;
 
     /// Tests the function to update notes from a supplied tree structure
     /// This can't use a conn.test_transaction block because
@@ -898,7 +898,7 @@ mod note_hierarchy_tests {
         .await
         .expect("Failed to create root note")
         .1
-        .0;
+         .0;
 
         let child_note = create_note(
             State(state.clone()),
@@ -910,7 +910,7 @@ mod note_hierarchy_tests {
         .await
         .expect("Failed to create child note")
         .1
-        .0;
+         .0;
 
         let unrelated_note = create_note(
             State(state.clone()),
@@ -922,7 +922,7 @@ mod note_hierarchy_tests {
         .await
         .expect("Failed to create unrelated note")
         .1
-        .0;
+         .0;
 
         // Set up hierarchy
         attach_child_note(
@@ -963,8 +963,8 @@ mod note_hierarchy_tests {
         .expect("Failed to attach test note");
 
         // Get the processed content
-        let processed_content = get_note_content_and_replace_links(test_note.id)
-            .expect("Failed to process content");
+        let processed_content =
+            get_note_content_and_replace_links(test_note.id).expect("Failed to process content");
 
         // Verify the links are replaced correctly
         assert!(processed_content.contains(&format!("[Child]({})", child_note.id)));

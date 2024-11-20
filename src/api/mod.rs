@@ -382,7 +382,6 @@ async fn list_notes(
     }
 }
 
-
 fn get_connection() -> PgConnection {
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     PgConnection::establish(&database_url).expect("Error connecting to database")
@@ -406,7 +405,6 @@ pub fn get_note_content(note_id: i32) -> Result<std::string::String, diesel::res
         .select(content)
         .first::<String>(&mut conn)
 }
-
 
 async fn get_note(
     Path(note_id): Path<i32>,
