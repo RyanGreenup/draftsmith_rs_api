@@ -191,6 +191,17 @@ pub async fn get_note_tree(
     Ok(Json(tree))
 }
 
+async fn get_note_paths() -> TODO {
+    let tree = get_note_tree().await?
+    let mut paths = HashMap::new();
+    // TODO
+}
+
+async fn get_note_path(id: &i32) -> TODO {
+    let paths = get_note_paths().await?;
+    format!("/notes/{}", id)
+}
+
 // Handler for the PUT /notes/tree endpoint
 #[debug_handler]
 pub async fn update_note_tree(
@@ -618,6 +629,39 @@ mod note_hierarchy_tests {
         assert_eq!(updated_root.content, note_root_content_updated);
         assert_eq!(updated_child1.content, note_1_content_updated);
         assert_eq!(updated_child2.content, note_2_content_updated);
+    }
+
+    #[tokio::test]
+    async fn test_get_note_path() {
+        let id = 123;
+        let path = get_note_path(&id);
+        assert_eq!(path, "/notes/123");
+        let state = setup_test_state();
+        use crate::api::create_note;
+        use crate::api::CreateNoteRequest;
+
+        let mut ids: Vec<i32> = Vec::new();
+
+        for title in vec!["Note A", "Note B", "Note C"] {
+            // Create Three New Notes
+            let new_note = create_note(
+                State(state.clone()),
+                Json(CreateNoteRequest {
+                    title: title.to_string(),
+                    content: "This is the target note".to_string(),
+                }),
+            )
+            .await
+            .unwrap_or_else(|_| panic!("Failed to create target note:  {title}"))
+            .1
+             .0;
+
+            ids.push(new_note.id);
+        }
+
+        let path = get_note_path(&id);
+        dbg!(path.clone());
+        assert_eq!(path.clone(), "/Note A/Note B/Note C");
     }
 }
 
