@@ -2,7 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{get_notes_tags, state::AppState, tags::TagResponse, Path, get_note_content};
+use crate::api::{get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path};
 use crate::tables::NewNoteTag;
 use std::collections::HashMap;
 
@@ -305,7 +305,7 @@ async fn get_note_path(
 /// If the link is below a parent, it will be relative.
 pub async fn get_note_content_and_replace_links(
     state: &AppState,
-    note_id: i32
+    note_id: i32,
 ) -> Result<String, StatusCode> {
     let content = get_note_content(note_id).map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -892,8 +892,8 @@ mod note_hierarchy_tests {
         let root_note = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Root".to_string(),
-                content: "Root content".to_string(),
+                title: "".to_string(),
+                content: "# Root".to_string(),
             }),
         )
         .await
@@ -904,8 +904,8 @@ mod note_hierarchy_tests {
         let child_note = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Child".to_string(),
-                content: "Child content".to_string(),
+                title: "".to_string(),
+                content: "# Child".to_string(),
             }),
         )
         .await
@@ -916,8 +916,8 @@ mod note_hierarchy_tests {
         let unrelated_note = create_note(
             State(state.clone()),
             Json(CreateNoteRequest {
-                title: "Unrelated".to_string(),
-                content: "Unrelated content".to_string(),
+                title: "".to_string(),
+                content: "# Unrelated".to_string(),
             }),
         )
         .await
@@ -942,15 +942,26 @@ mod note_hierarchy_tests {
             Json(CreateNoteRequest {
                 title: "Test Note".to_string(),
                 content: format!(
-                    "Link to child: [[{}]]\nLink to unrelated: [[{}]]\nCustom title link: [[{}|Custom]]",
-                    child_note.id, unrelated_note.id, root_note.id
+                    r"
+# Test Note
+
+Link to child: [[{child_id}]]
+
+Link to unrelated: [[{unrelated_id}]]
+
+Custom title link: [[{root_id}|Custom]]",
+                    child_id = child_note.id,
+                    unrelated_id = unrelated_note.id,
+                    root_id = root_note.id
                 ),
             }),
         )
         .await
         .expect("Failed to create test note")
         .1
-        .0;
+         .0;
+
+        dbg!(&test_note);
 
         // Attach test note under root
         attach_child_note(
@@ -963,20 +974,36 @@ mod note_hierarchy_tests {
         .await
         .expect("Failed to attach test note");
 
+        /*
+        - unrelated_note
+        - root_note
+          - test_note
+          - child_note
+
+        So:
+        # Test Note
+
+              [[{child_id}]] => [/ Root / Child ]
+              [[{root_id}]] => [[Custom|{root_id}]] => [Custom](root_note.id)
+              [[{unrelated_id}]] => [/ Unrelated ]
+        */
+
         // Get the processed content
         let processed_content = get_note_content_and_replace_links(&state, test_note.id)
             .await
             .expect("Failed to process content");
 
+        dbg!(&processed_content);
+
         // Verify the links are replaced correctly
-        assert!(processed_content.contains(&format!("[Child]({})", child_note.id)));
+        assert!(processed_content.contains(&format!("[/ Root / Child]({})", child_note.id)));
         assert!(processed_content.contains(&format!("[/ Unrelated]({})", unrelated_note.id)));
         assert!(processed_content.contains(&format!("[Custom]({})", root_note.id)));
 
         // Clean up
-        let _ = delete_note(Path(root_note.id), State(state.clone())).await;
-        let _ = delete_note(Path(child_note.id), State(state.clone())).await;
-        let _ = delete_note(Path(unrelated_note.id), State(state.clone())).await;
-        let _ = delete_note(Path(test_note.id), State(state.clone())).await;
+        let _cleanup = TestCleanup {
+            pool: state.pool.as_ref().clone(),
+            note_ids: vec![root_note.id, child_note.id, unrelated_note.id, test_note.id],
+        };
     }
 }
