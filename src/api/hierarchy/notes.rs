@@ -197,12 +197,10 @@ pub async fn get_note_tree(
 pub async fn get_all_note_paths(
     State(state): State<AppState>,
 ) -> Result<Json<HashMap<i32, String>>, StatusCode> {
-    get_note_paths(&state)
-        .await
-        .map(Json)
+    get_note_paths(&state).await.map(Json)
 }
 
-/// Get path for a single note  
+/// Get path for a single note
 #[debug_handler]
 pub async fn get_single_note_path(
     State(state): State<AppState>,
@@ -267,7 +265,12 @@ async fn get_note_path(
     match from_id {
         None => return Ok(path.clone()),
         Some(from_id) => {
-            let from_path = pullout_path(from_id)?;
+            // If the from_id is invalid, just return the full path
+            let from_path = match pullout_path(from_id) {
+                Ok(path) => path,
+                // If the from_id is invalid, just return the full path
+                Err(_) => return Ok(path.clone()),
+            };
             if path.contains(from_path) {
                 // Remove the from_path from the path
                 let mut trimmed_path = path.replace(from_path, "").trim().to_string();
@@ -276,7 +279,15 @@ async fn get_note_path(
                 if trimmed_path.starts_with(leader) {
                     trimmed_path = trimmed_path[leader.len()..].to_string();
                 }
-                return Ok(trimmed_path);
+                if trimmed_path != "" {
+                    return Ok(trimmed_path);
+                } else {
+                    // This (usually) either:
+                    //   1. The from_id is the same as the id, and/or
+                    //   2. the from_id has the same name as a parent but is not actually a parent
+                    //      e.g. Notes that are "Untitled".
+                    return Ok(path.clone());
+                }
             } else {
                 // Just return the full path if the id is not under the from_id
                 return Ok(path.clone());
