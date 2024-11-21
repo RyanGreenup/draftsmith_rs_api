@@ -1303,19 +1303,28 @@ Custom title link: [[{root_id}|Custom]]",
         attach_child(note_d, note_e);
 
 
-// TODO finish this assertions etc.
+        // Test cases
+        let test_cases = vec![
+            // Get the path vector of A
+            (note_a.id, None, vec!["A"]),
+            // Get the path vector of C
+            (note_c.id, None, vec!["A", "B", "C"]),
+            // Get the path vector of C starting from B
+            (note_c.id, Some(note_b.id), vec!["C"]),
+            // Get the path vector of C starting from A
+            (note_c.id, Some(note_a.id), vec!["B", "C"]),
+            // Get the path vector of C starting from D (should return full path as D is not a parent)
+            (note_c.id, Some(note_d.id), vec!["A", "B", "C"]),
+        ];
 
-// Get the path vector of A
-get_note_path_new(1, None) == ["A"]
-// Get the path vector of C
-get_note_path_new(3, None) == ["A", "B", "C"]
-// Get the path vector of C starting from B
-get_note_path_new(3, Some(2)) == ["C"]
-// Get the path vector of C starting from A
-get_note_path_new(3, Some(1)) == ["B", "C"]
-// Get the path vector of C starting from D
-// This is not possible as D is not a parent of C
-// So the result should be the full path (i.e. user error must be handled by giving a useful path)
+        for (note_id, from_id, expected_path) in test_cases {
+            let path = get_note_path_new(&note_id, from_id).await;
+            assert_eq!(
+                path, expected_path,
+                "Path mismatch for note_id={}, from_id={:?}",
+                note_id, from_id
+            );
+        }
 get_note_path_new(3, Some(4)) == ["A", "B", "C"]
 
         // Verify the links are replaced correctly
