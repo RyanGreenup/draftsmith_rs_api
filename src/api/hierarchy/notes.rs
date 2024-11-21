@@ -302,7 +302,8 @@ async fn build_hierarchy_path(path_items: Vec<String>) -> String {
     format!("/ {}", path_items.join(" / "))
 }
 
-async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> String {
+// Return a vector as it makes tests simpler
+async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new(); // Store IDs to check for from_id
@@ -353,12 +354,90 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> String {
     if let Some(from_id) = from_id {
         if let Some(pos) = path_ids.iter().position(|&id| id == *from_id) {
             // If from_id is found in the path, return only components after it
-            return build_hierarchy_path(path_components.split_off(pos + 1)).await;
-        }
+            return path_components.split_off(pos + 1);
+        };
     }
 
     // Return full path if from_id is not specified or not found in path
-    build_hierarchy_path(path_components).await
+    path_components
+}
+
+async fn get_all_note_paths_new() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error> {
+    let mut conn = get_connection();
+    let mut paths: HashMap<i32, Vec<String>> = HashMap::new();
+    let mut note_cache: HashMap<i32, String> = HashMap::new();
+    let mut hierarchy_cache: HashMap<i32, Option<i32>> = HashMap::new();
+
+    // SELECT id, title FROM notes
+    // in a single query (get_note_from_path only queries for single note,
+    // repeating this logic is more performant)
+    {
+        use crate::schema::notes::dsl::*;
+        let all_notes = notes.select((id, title)).load::<(i32, String)>(&mut conn)?;
+        note_cache.extend(all_notes);
+    }
+
+    // Then, get all hierarchical relationships in one query
+    {
+        use crate::schema::note_hierarchy::dsl::*;
+        let all_hierarchies = note_hierarchy
+            .select((child_note_id, parent_note_id))
+            .load::<(Option<i32>, Option<i32>)>(&mut conn)?;
+
+        hierarchy_cache.extend(
+            all_hierarchies
+                .into_iter()
+                .filter_map(|(child, parent)| child.map(|c| (c, parent))),
+        );
+    }
+
+    // Helper function to build path for a single note using cached data
+    fn build_note_path(
+        note_id: i32,
+        note_cache: &HashMap<i32, String>,
+        hierarchy_cache: &HashMap<i32, Option<i32>>,
+        paths: &mut HashMap<i32, Vec<String>>,
+    ) -> Vec<String> {
+        // Return cached path if available
+        if let Some(path) = paths.get(&note_id) {
+            return path.clone();
+        }
+
+        let mut current_path = Vec::new();
+        let mut current_id = note_id;
+
+        // Build path from current note to root
+        loop {
+            // Add current note's title to path
+            if let Some(title) = note_cache.get(&current_id) {
+                current_path.push(title.clone());
+            } else {
+                break;
+            }
+
+            // Look up parent
+            match hierarchy_cache.get(&current_id).and_then(|&x| x) {
+                Some(parent_id) => current_id = parent_id,
+                None => break,
+            }
+        }
+
+        // Reverse path since we collected from child to parent
+        current_path.reverse();
+
+        // Cache and return the path
+        paths.insert(note_id, current_path.clone());
+        current_path
+    }
+
+    // Build paths for all notes
+    for &note_id in note_cache.keys() {
+        if !paths.contains_key(&note_id) {
+            build_note_path(note_id, &note_cache, &hierarchy_cache, &mut paths);
+        }
+    }
+
+    Ok(paths)
 }
 
 /// This function replaces links to notes with their title
