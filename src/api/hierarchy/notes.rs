@@ -1029,6 +1029,88 @@ mod note_hierarchy_tests {
     }
 
     #[tokio::test]
+    async fn test_get_note_path_new() {
+        let state = setup_test_state();
+
+        // Create a hierarchy of notes
+        // A -> B -> C
+        // D -> E
+        let notes = vec![
+            ("A", None),       // id: 0
+            ("B", Some(0)),    // id: 1, parent: A
+            ("C", Some(1)),    // id: 2, parent: B
+            ("D", None),       // id: 3
+            ("E", Some(3)),    // id: 4, parent: D
+        ];
+
+        // Create the notes and store their IDs
+        let mut note_ids = Vec::new();
+        for (title, _) in &notes {
+            let note = create_note(
+                State(state.clone()),
+                Json(CreateNoteRequest {
+                    title: String::new(),
+                    content: format!("# {}\n\n", title),
+                }),
+            )
+            .await
+            .expect("Failed to create note")
+            .1
+            .0;
+            note_ids.push(note.id);
+        }
+
+        // Set up the hierarchy
+        for (i, (_, parent_idx)) in notes.iter().enumerate() {
+            if let Some(parent_idx) = parent_idx {
+                attach_child_note(
+                    State(state.clone()),
+                    Json(AttachChildNoteRequest {
+                        child_note_id: note_ids[i],
+                        parent_note_id: Some(note_ids[*parent_idx]),
+                    }),
+                )
+                .await
+                .expect("Failed to attach child note");
+            }
+        }
+
+        // Create cleanup struct that will automatically clean up when dropped
+        let _cleanup = TestCleanup {
+            pool: state.pool.as_ref().clone(),
+            note_ids: note_ids.clone(),
+        };
+
+        // Test cases
+        let test_cases = vec![
+            // Get the path vector of A
+            (note_ids[0], None, vec!["A"]),
+            // Get the path vector of C
+            (note_ids[2], None, vec!["A", "B", "C"]),
+            // Get the path vector of C starting from B
+            (note_ids[2], Some(note_ids[1]), vec!["C"]),
+            // Get the path vector of C starting from A
+            (note_ids[2], Some(note_ids[0]), vec!["B", "C"]),
+            // Get the path vector of C starting from D (should return full path as D is not a parent)
+            (note_ids[2], Some(note_ids[3]), vec!["A", "B", "C"]),
+        ];
+
+        for (note_id, from_id, expected_path) in test_cases {
+            let path = get_note_path_new(&note_id, from_id).await;
+            let path_components: Vec<&str> = path
+                .trim_start_matches("/ ")
+                .split(" / ")
+                .collect();
+            
+            assert_eq!(
+                path_components, expected_path,
+                "Path mismatch for note_id={}, from_id={:?}",
+                note_id, from_id
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn test_get_note_content_and_replace_links() {
         let state = setup_test_state();
         use crate::api::{create_note, delete_note};
