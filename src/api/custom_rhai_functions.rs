@@ -1,3 +1,4 @@
+use crate::api::hierarchy::notes::get_note_content_and_replace_links;
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
@@ -188,7 +189,11 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
 
     fn process_content(note_id: i64, processor: fn(&str) -> String) -> String {
         if note_id > 0 {
-            match get_note_content(note_id as i32) {
+            // Could also use:
+            // crate::api::get_note_content
+            // this however, will replace links with titles
+            // which is convenient for end users and considered a feature
+            match get_note_content_and_replace_links(note_id as i32) {
                 Ok(content) => processor(&content),
                 Err(e) => format!("Error fetching note content: {}", e),
             }
