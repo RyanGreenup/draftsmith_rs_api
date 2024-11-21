@@ -337,7 +337,7 @@ async fn get_note_path_components(
             let cut_path_components = path_components.split_off(pos);
             // If it's empty, return the full path as it's the same as the target, or from_id is not an ancestor
             if !cut_path_components.is_empty() {
-                return (cut_path_components, true);
+                return Ok((cut_path_components, true));
             }
         };
     }
