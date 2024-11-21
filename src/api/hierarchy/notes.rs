@@ -302,48 +302,51 @@ async fn build_hierarchy_path(path_items: Vec<&str>) -> String {
     format!("/{}", path_items.join("/"))
 }
 
-async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
+async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
     // Get a new database connection
     let mut conn = get_connection();
-
-    // Pull out the note
-    let get_note = |note_id| {
-        use crate::schema::notes::dsl::*;
-        notes.find(note_id).select(title).first::<String>(&mut conn)
-    };
-
-    // Create a vector to store the path components
     let mut path_components = Vec::new();
     let mut current_id = *id;
 
-    // Keep looking up parents until we reach the root (no parent)
-    while let Ok(title) = get_note(&current_id) {
+    loop {
+        // Get the current note's title
+        let title = {
+            use crate::schema::notes::dsl::*;
+            match notes
+                .find(current_id)
+                .select(title)
+                .first::<String>(&mut conn)
+            {
+                Ok(t) => t,
+                Err(_) => break,
+            }
+        };
+        
         path_components.push(title);
 
-        // Look up parent using note_hierarchy
-        use crate::schema::note_hierarchy::dsl::*;
-        match note_hierarchy
-            .filter(child_note_id.eq(current_id))
-            .select(parent_note_id)
-            .first::<Option<i32>>(&mut conn)
-            .optional()
-            .unwrap_or(None)
-            .flatten()
-        {
-            Some(parent_id) => {
-                // Continue with parent
-                current_id = parent_id;
+        // Look up parent
+        let parent_id = {
+            use crate::schema::note_hierarchy::dsl::*;
+            match note_hierarchy
+                .filter(child_note_id.eq(current_id))
+                .select(parent_note_id)
+                .first::<Option<i32>>(&mut conn)
+                .optional()
+                .unwrap_or(None)
+                .flatten()
+            {
+                Some(pid) => pid,
+                None => break,
             }
-            None => {
-                // No more parents, break the loop
-                break;
-            }
-        }
+        };
+
+        // Update current_id for next iteration
+        current_id = parent_id;
     }
 
     // Reverse the vector since we collected from child to parent
     path_components.reverse();
-
+    
     path_components
 }
 
