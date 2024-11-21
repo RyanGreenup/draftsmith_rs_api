@@ -302,7 +302,7 @@ async fn build_hierarchy_path(path_items: Vec<&str>) -> String {
     format!("/{}", path_items.join("/"))
 }
 
-async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<&str> {
+async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     // Get a new database connection
     let mut conn = get_connection();
 
@@ -312,9 +312,39 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<&str> {
         notes.find(note_id).select(title).first::<String>(&mut conn)
     };
 
-    let note = get_note(id);
+    // Create a vector to store the path components
+    let mut path_components = Vec::new();
+    let mut current_id = *id;
 
-    // use note_hierarchy to look up parents and collect them into a vector
+    // Keep looking up parents until we reach the root (no parent)
+    while let Ok(title) = get_note(&current_id) {
+        path_components.push(title);
+        
+        // Look up parent using note_hierarchy
+        use crate::schema::note_hierarchy::dsl::*;
+        match note_hierarchy
+            .filter(child_note_id.eq(current_id))
+            .select(parent_note_id)
+            .first::<Option<i32>>(&mut conn)
+            .optional()
+            .unwrap_or(None)
+            .flatten()
+        {
+            Some(parent_id) => {
+                // Continue with parent
+                current_id = parent_id;
+            }
+            None => {
+                // No more parents, break the loop
+                break;
+            }
+        }
+    }
+
+    // Reverse the vector since we collected from child to parent
+    path_components.reverse();
+    
+    path_components
 }
 
 /// This function replaces links to notes with their title
