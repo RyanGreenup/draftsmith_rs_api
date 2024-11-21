@@ -989,7 +989,9 @@ mod note_hierarchy_tests {
         ];
 
         for (note_id, from_id, expected_path) in test_cases {
-            let (path, _relative) = get_note_path_components(&note_id, from_id.as_ref()).await;
+            let (path, _relative) = get_note_path_components(&note_id, from_id.as_ref())
+                .await
+                .expect("Failed to get note path components");
 
             assert_eq!(
                 path, expected_path,
