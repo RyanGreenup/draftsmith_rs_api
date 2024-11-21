@@ -203,7 +203,7 @@ pub async fn get_all_note_paths() -> Result<Json<HashMap<i32, String>>, StatusCo
 /// Get path for a single note
 #[debug_handler]
 pub async fn get_single_note_path(Path(note_id): Path<i32>) -> Result<String, StatusCode> {
-    get_note_path(&note_id, None).await
+    get_note_path(&note_id, None)
 }
 
 /// Get relative path from one note to another
@@ -211,7 +211,7 @@ pub async fn get_single_note_path(Path(note_id): Path<i32>) -> Result<String, St
 pub async fn get_relative_note_path(
     Path((note_id, from_id)): Path<(i32, i32)>,
 ) -> Result<String, StatusCode> {
-    get_note_path(&note_id, Some(&from_id)).await
+    get_note_path(&note_id, Some(&from_id))
 }
 
 async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
@@ -223,7 +223,7 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
     let path_futures: Vec<_> = all_components
         .into_iter()
         .map(|(id, components)| async move {
-            let path = build_hierarchy_path(components, false).await.to_string();
+            let path = build_hierarchy_path(components, false).to_string();
             (id, path)
         })
         .collect();
@@ -235,16 +235,13 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
     Ok(paths.into_iter().collect())
 }
 
-async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
-    let (components, relative) =
-        get_note_path_components(id, from_id)
-            .await
-            .map_err(|e| match e {
-                diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            })?;
+fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
+    let (components, relative) = get_note_path_components(id, from_id).map_err(|e| match e {
+        diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    })?;
 
-    let path = build_hierarchy_path(components, relative).await;
+    let path = build_hierarchy_path(components, relative);
     Ok(path)
 }
 
@@ -261,13 +258,13 @@ async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, Status
 ///
 /// # Examples
 ///
-/// ```
-/// use your_crate_name::build_hierarchy_path;
+/// ```rust,ignore
+/// use rust_cli_app::api::hierarchy::notes::build_hierarchy_path;
 ///
 /// let path = build_hierarchy_path(vec!["root".to_string(), "folder".to_string(), "file.txt".to_string()], false);
 /// assert_eq!(path, "/ root / folder / file.txt");
 /// ```
-async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String {
+fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String {
     if relative {
         path_items.join(" / ")
     } else {
@@ -277,7 +274,7 @@ async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String
 
 // Includes a boolean indicating if the path is trimmed to be relative
 // NOTE this Return a vector as it makes tests simpler
-async fn get_note_path_components(
+fn get_note_path_components(
     id: &i32,
     from_id: Option<&i32>,
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
@@ -426,15 +423,48 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
     Ok(paths)
 }
 
-/// This function replaces links to notes with their title
-/// Example:
-///     [[1]] -> [Note Title](1)
-///     [[33|Custom Title]] -> [Custom Title](33)
-/// This is useful for automatically updating links when a note title changes
-/// and having dynamic content.
-/// If the link is below a parent, it will be relative.
-pub async fn get_note_content_and_replace_links(note_id: i32) -> Result<String, StatusCode> {
-    let content = get_note_content(note_id).map_err(|_| StatusCode::NOT_FOUND)?;
+/// Replaces internal note links in the content of a given note with their respective titles.
+///
+/// The function processes the content of a specified note (identified by `note_id`) to find and replace
+/// links in two formats:
+/// - `[[id]]`: These are replaced with `[Note Title](id)`.
+/// - `[[id|title]]`: These are replaced with `[Custom Title](id)`, using the custom title if provided.
+///
+/// This is particularly useful for dynamically updating links when note titles change, ensuring that
+/// all references to notes remain accurate and up-to-date. If a link points to a note under a parent,
+/// the path will be made relative.
+///
+/// # Arguments
+///
+/// * `note_id` - The ID of the note whose content needs processing.
+///
+/// # Returns
+///
+/// A `Result<String, StatusCode>` which is:
+/// - `Ok(String)`: The processed content with all internal links replaced by their respective titles.
+/// - `Err(StatusCode)`: An error status code if the initial content fetch fails (e.g., `NOT_FOUND`).
+///
+/// # Example
+///
+/// Given a note with ID `1` and content:
+/// ```markdown,ignore
+/// This is a link to [[2]] and another one to [[3|Custom Title]].
+/// ```
+///
+/// If note `2` has the title "Second Note" and note `3` has the title "Third Note",
+/// the function will return:
+/// ```markdown,ignore
+/// This is a link to [Second Note](2) and another one to [Custom Title](3).
+/// ```
+///
+/// # Error Handling
+///
+/// The function handles errors in fetching the path of linked notes by skipping those links.
+/// If the initial content fetch fails, it returns an appropriate status code.
+pub fn get_note_content_and_replace_links(
+    note_id: i32,
+) -> Result<std::string::String, diesel::result::Error> {
+    let content = get_note_content(note_id)?;
 
     // Regular expression to match both [[id]] and [[id|title]] formats
     let link_regex = regex::Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
@@ -447,7 +477,7 @@ pub async fn get_note_content_and_replace_links(note_id: i32) -> Result<String, 
         let target_id: i32 = cap[1].parse().unwrap();
 
         // Get the path for this link
-        let path = match get_note_path(&target_id, Some(&note_id)).await {
+        let path = match get_note_path(&target_id, Some(&note_id)) {
             Ok(p) => p,
             Err(_) => continue, // Skip this link if we can't get the path
         };
@@ -990,7 +1020,6 @@ mod note_hierarchy_tests {
 
         for (note_id, from_id, expected_path) in test_cases {
             let (path, _relative) = get_note_path_components(&note_id, from_id.as_ref())
-                .await
                 .expect("Failed to get note path components");
 
             assert_eq!(
@@ -1106,9 +1135,8 @@ Custom title link: [[{root_id}|Custom]]",
         */
 
         // Get the processed content
-        let processed_content = get_note_content_and_replace_links(test_note.id)
-            .await
-            .expect("Failed to process content");
+        let processed_content =
+            get_note_content_and_replace_links(test_note.id).expect("Failed to process content");
 
         dbg!(&processed_content);
 
