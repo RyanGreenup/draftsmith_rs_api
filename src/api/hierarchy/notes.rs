@@ -319,7 +319,7 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     // Keep looking up parents until we reach the root (no parent)
     while let Ok(title) = get_note(&current_id) {
         path_components.push(title);
-        
+
         // Look up parent using note_hierarchy
         use crate::schema::note_hierarchy::dsl::*;
         match note_hierarchy
@@ -343,7 +343,7 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
 
     // Reverse the vector since we collected from child to parent
     path_components.reverse();
-    
+
     path_components
 }
 
