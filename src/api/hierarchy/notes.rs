@@ -2,7 +2,9 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path};
+use crate::api::{
+    get_connection, get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path,
+};
 use crate::tables::NewNoteTag;
 use std::collections::HashMap;
 
@@ -294,6 +296,25 @@ async fn get_note_path(
             }
         }
     }
+}
+
+async fn build_hierarchy_path(path_items: Vec<&str>) -> String {
+    format!("/{}", path_items.join("/"))
+}
+
+async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<&str> {
+    // Get a new database connection
+    let mut conn = get_connection();
+
+    // Pull out the note
+    let get_note = |note_id| {
+        use crate::schema::notes::dsl::*;
+        notes.find(note_id).select(title).first::<String>(&mut conn)
+    };
+
+    let note = get_note(id);
+
+    // use note_hierarchy to look up parents and collect them into a vector
 }
 
 /// This function replaces links to notes with their title
