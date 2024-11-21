@@ -637,7 +637,7 @@ pub async fn update_note_tree(
 mod note_hierarchy_tests {
     use super::*;
     use crate::api::tests::{setup_test_state, TestCleanup};
-    use crate::api::CreateNoteRequest;
+    use crate::api::{create_note, CreateNoteRequest};
     use crate::api::DieselError;
     use crate::client::delete_note;
     use crate::tables::NoteBad;
@@ -940,9 +940,8 @@ mod note_hierarchy_tests {
     }
 
     #[tokio::test]
-    async fn test_get_note_path() {
+    async fn test_get_note_path_new() {
         let state = setup_test_state();
-        use crate::api::create_note;
         use crate::api::CreateNoteRequest;
 
         // Create three notes with a hierarchy
@@ -1234,106 +1233,4 @@ Custom title link: [[{root_id}|Custom]]",
         };
     }
 
-    #[tokio::test]
-    async fn test_get_note_path_new() {
-        let state = setup_test_state();
-        use crate::api::{create_note, delete_note};
-
-        // Create a hierarchy of notes
-        //
-        // ```yaml
-        // - id: note_a.id
-        //   title: "A"
-        //   children:
-        //     - id: note_b.id
-        //       title: "B"
-        //       children:
-        //         - id: note_c.id
-        //           title: "C"
-        //     - id: note_d.id
-        //       title: "D"
-        //       children:
-        //         - id: note_e.id
-        //           title: "E"
-        //
-        // ```
-        let letters = vec!["A", "B", "C", "D", "E"];
-        let headings = letters
-            .into_iter()
-            .map(|letter| format!("# Note {letter}\n\n"))
-            .collect::<Vec<String>>();
-        let mut notes: Vec<NoteWithoutFts> = Vec::with_capacity(headings.len());
-        for (i, h) in headings.iter().enumerate() {
-            let note = create_note(
-                State(state.clone()),
-                Json(CreateNoteRequest {
-                    // title is legacy and not used but needs to be included
-                    title: "".to_string(),
-                    // Title is inferred from first markdown heading by postgresql trigger
-                    content: h.to_string(),
-                }),
-            )
-            .await
-            .expect("Failed to create Note")
-            .1
-             .0;
-
-            notes[i] = note;
-        }
-        let note_a = notes[0];
-        let note_b = notes[1];
-        let note_c = notes[2];
-        let note_d = notes[3];
-        let note_e = notes[4];
-        let attach_child = |parent: NoteWithoutFts, child: NoteWithoutFts| async {
-            // Set up hierarchy
-            attach_child_note(
-                State(state.clone()),
-                Json(AttachChildNoteRequest {
-                    child_note_id: parent.id,
-                    parent_note_id: Some(child.id),
-                }),
-            )
-            .await
-            .expect("Failed to attach child note");
-        };
-
-        attach_child(note_a, note_b);
-        attach_child(note_b, note_c);
-        attach_child(note_d, note_e);
-
-
-        // Test cases
-        let test_cases = vec![
-            // Get the path vector of A
-            (note_a.id, None, vec!["A"]),
-            // Get the path vector of C
-            (note_c.id, None, vec!["A", "B", "C"]),
-            // Get the path vector of C starting from B
-            (note_c.id, Some(note_b.id), vec!["C"]),
-            // Get the path vector of C starting from A
-            (note_c.id, Some(note_a.id), vec!["B", "C"]),
-            // Get the path vector of C starting from D (should return full path as D is not a parent)
-            (note_c.id, Some(note_d.id), vec!["A", "B", "C"]),
-        ];
-
-        for (note_id, from_id, expected_path) in test_cases {
-            let path = get_note_path_new(&note_id, from_id).await;
-            assert_eq!(
-                path, expected_path,
-                "Path mismatch for note_id={}, from_id={:?}",
-                note_id, from_id
-            );
-        }
-get_note_path_new(3, Some(4)) == ["A", "B", "C"]
-
-        // Verify the links are replaced correctly
-        //        assert!(processed_content.contains(&format!("[/ Root / Child]({})", child_note.id)));
-
-        // TODO
-        //        for n in notes {
-        //          let id = n.id;
-        //        delete_note(id, state.clone());
-        //  }
-    }
 }
