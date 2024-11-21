@@ -298,13 +298,13 @@ async fn get_note_path(
     }
 }
 
-async fn build_hierarchy_path(path_items: Vec<&str>) -> String {
-    format!("/{}", path_items.join("/"))
+async fn build_hierarchy_path(path_items: Vec<String>) -> String {
+    format!("/ {}", path_items.join(" / "))
 }
 
-async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
+async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> String {
     let mut conn = get_connection();
-    let mut path_components = Vec::new();
+    let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new();  // Store IDs to check for from_id
     let mut current_id = *id;
 
@@ -322,7 +322,7 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
                 Err(_) => break,
             }
         };
-        
+
         path_components.push(title);
         path_ids.push(current_id);
 
@@ -353,12 +353,12 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     if let Some(from_id) = from_id {
         if let Some(pos) = path_ids.iter().position(|&id| id == *from_id) {
             // If from_id is found in the path, return only components after it
-            return path_components.split_off(pos + 1);
+            return build_hierarchy_path(path_components.split_off(pos + 1)).await;
         }
     }
-    
+
     // Return full path if from_id is not specified or not found in path
-    path_components
+    build_hierarchy_path(path_components).await
 }
 
 /// This function replaces links to notes with their title
