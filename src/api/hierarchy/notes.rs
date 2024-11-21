@@ -236,7 +236,13 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
 }
 
 async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
-    let (components, relative) = get_note_path_components(id, from_id).await;
+    let (components, relative) = get_note_path_components(id, from_id)
+        .await
+        .map_err(|e| match e {
+            diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
+    
     let path = build_hierarchy_path(components, relative).await;
     Ok(path)
 }
@@ -270,7 +276,10 @@ async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String
 
 // Includes a boolean indicating if the path is trimmed to be relative
 // NOTE this Return a vector as it makes tests simpler
-async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> (Vec<String>, bool) {
+async fn get_note_path_components(
+    id: &i32, 
+    from_id: Option<&i32>
+) -> Result<(Vec<String>, bool), diesel::result::Error> {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new(); // Store IDs to check for from_id
@@ -281,13 +290,17 @@ async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> (Vec<Strin
         // Get the current note's title
         let title = {
             use crate::schema::notes::dsl::*;
+            // Change this to return early if note not found
             match notes
                 .find(current_id)
                 .select(title)
                 .first::<String>(&mut conn)
             {
                 Ok(t) => t,
-                Err(_) => break,
+                Err(diesel::result::Error::NotFound) => {
+                    return Err(diesel::result::Error::NotFound);
+                }
+                Err(e) => return Err(e),
             }
         };
 
@@ -331,7 +344,7 @@ async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> (Vec<Strin
 
 
     // Return full path if from_id is not specified or not found in path
-    return (path_components, false)
+    Ok((path_components, false))
 }
 
 async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error>
