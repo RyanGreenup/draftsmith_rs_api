@@ -321,7 +321,7 @@ async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
                 Err(_) => break,
             }
         };
-        
+
         path_components.push(title);
 
         // Look up parent
@@ -346,7 +346,7 @@ async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
 
     // Reverse the vector since we collected from child to parent
     path_components.reverse();
-    
+
     path_components
 }
 
