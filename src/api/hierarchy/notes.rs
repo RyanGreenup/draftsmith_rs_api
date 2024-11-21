@@ -196,28 +196,22 @@ pub async fn get_note_tree(
 
 /// Get all note paths
 #[debug_handler]
-pub async fn get_all_note_paths(
-    State(state): State<AppState>,
-) -> Result<Json<HashMap<i32, String>>, StatusCode> {
-    get_note_paths(&state).await.map(Json)
+pub async fn get_all_note_paths() -> Result<Json<HashMap<i32, String>>, StatusCode> {
+    get_note_paths().await.map(Json)
 }
 
 /// Get path for a single note
 #[debug_handler]
-pub async fn get_single_note_path(
-    State(state): State<AppState>,
-    Path(note_id): Path<i32>,
-) -> Result<String, StatusCode> {
-    get_note_path(&state, &note_id, None).await
+pub async fn get_single_note_path(Path(note_id): Path<i32>) -> Result<String, StatusCode> {
+    get_note_path(&note_id, None).await
 }
 
 /// Get relative path from one note to another
 #[debug_handler]
 pub async fn get_relative_note_path(
-    State(state): State<AppState>,
     Path((note_id, from_id)): Path<(i32, i32)>,
 ) -> Result<String, StatusCode> {
-    get_note_path(&state, &note_id, Some(&from_id)).await
+    get_note_path(&note_id, Some(&from_id)).await
 }
 
 async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
@@ -229,7 +223,7 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
     let path_futures: Vec<_> = all_components
         .into_iter()
         .map(|(id, components)| async move {
-            let path = build_hierarchy_path(components).await.to_string();
+            let path = build_hierarchy_path(components, false).await.to_string();
             (id, path)
         })
         .collect();
@@ -242,17 +236,41 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
 }
 
 async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
-    let components = get_note_path_components(id, from_id).await;
-    let path = build_hierarchy_path(components).await;
+    let (components, relative) = get_note_path_components(id, from_id).await;
+    let path = build_hierarchy_path(components, relative).await;
     Ok(path)
 }
 
-async fn build_hierarchy_path(path_items: Vec<String>) -> String {
-    format!("/ {}", path_items.join(" / "))
+/// Constructs a hierarchy path string from a vector of path items.
+///
+/// # Arguments
+///
+/// * `path_items` - A vector of strings representing each item in the hierarchy.
+/// * `relative` - A boolean indicating whether the path should be relative or not.
+///
+/// # Returns
+///
+/// A `String` that represents the constructed hierarchy path. Each item in the hierarchy is separated by " / ".
+///
+/// # Examples
+///
+/// ```
+/// use your_crate_name::build_hierarchy_path;
+///
+/// let path = build_hierarchy_path(vec!["root".to_string(), "folder".to_string(), "file.txt".to_string()], false);
+/// assert_eq!(path, "/ root / folder / file.txt");
+/// ```
+async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String {
+    if relative {
+        return path_items.join(" / ");
+    } else {
+        format!("/ {}", path_items.join(" / "))
+    }
 }
 
-// Return a vector as it makes tests simpler
-async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> Vec<String> {
+// Includes a boolean indicating if the path is trimmed to be relative
+// NOTE this Return a vector as it makes tests simpler
+async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> (Vec<String>, bool) {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new(); // Store IDs to check for from_id
@@ -303,12 +321,17 @@ async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> Vec<String
     if let Some(from_id) = from_id {
         if let Some(pos) = path_ids.iter().position(|&id| id == *from_id) {
             // If from_id is found in the path, return only components after it
-            return path_components.split_off(pos + 1);
+            let cut_path_components = path_components.split_off(pos);
+            // If it's empty, return the full path as it's the same as the target, or from_id is not an ancestor
+            if !cut_path_components.is_empty() {
+                return (cut_path_components, true);
+            }
         };
     }
 
+
     // Return full path if from_id is not specified or not found in path
-    path_components
+    return (path_components, false)
 }
 
 async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error>
@@ -397,10 +420,7 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 /// This is useful for automatically updating links when a note title changes
 /// and having dynamic content.
 /// If the link is below a parent, it will be relative.
-pub async fn get_note_content_and_replace_links(
-    state: &AppState,
-    note_id: i32,
-) -> Result<String, StatusCode> {
+pub async fn get_note_content_and_replace_links(note_id: i32) -> Result<String, StatusCode> {
     let content = get_note_content(note_id).map_err(|_| StatusCode::NOT_FOUND)?;
 
     // Regular expression to match both [[id]] and [[id|title]] formats
@@ -414,7 +434,7 @@ pub async fn get_note_content_and_replace_links(
         let target_id: i32 = cap[1].parse().unwrap();
 
         // Get the path for this link
-        let path = match get_note_path(state, &target_id, Some(&note_id)).await {
+        let path = match get_note_path(&target_id, Some(&note_id)).await {
             Ok(p) => p,
             Err(_) => continue, // Skip this link if we can't get the path
         };
@@ -589,7 +609,6 @@ mod note_hierarchy_tests {
     use crate::api::tests::{setup_test_state, TestCleanup};
     use crate::api::DieselError;
     use crate::api::{create_note, CreateNoteRequest};
-    use crate::client::delete_note;
     use crate::tables::NoteBad;
     use axum::extract::State;
     use axum::Json;
@@ -957,7 +976,7 @@ mod note_hierarchy_tests {
         ];
 
         for (note_id, from_id, expected_path) in test_cases {
-            let path = get_note_path_components(&note_id, from_id.as_ref()).await;
+            let (path, _relative) = get_note_path_components(&note_id, from_id.as_ref()).await;
 
             assert_eq!(
                 path, expected_path,
@@ -970,7 +989,6 @@ mod note_hierarchy_tests {
     #[tokio::test]
     async fn test_get_note_content_and_replace_links() {
         let state = setup_test_state();
-        use crate::api::{create_note, delete_note};
 
         // Create a hierarchy of notes
         let root_note = create_note(
@@ -1073,7 +1091,7 @@ Custom title link: [[{root_id}|Custom]]",
         */
 
         // Get the processed content
-        let processed_content = get_note_content_and_replace_links(&state, test_note.id)
+        let processed_content = get_note_content_and_replace_links(test_note.id)
             .await
             .expect("Failed to process content");
 
