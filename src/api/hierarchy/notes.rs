@@ -220,82 +220,31 @@ pub async fn get_relative_note_path(
     get_note_path(&state, &note_id, Some(&from_id)).await
 }
 
-async fn get_note_paths(state: &AppState) -> Result<HashMap<i32, String>, StatusCode> {
-    // Get the full tree structure
-    let tree = get_note_tree(State(state.clone())).await?.0;
-    let mut paths = HashMap::new();
+async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
+    let all_components = get_all_note_path_components()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Helper function to recursively build paths
-    fn build_paths(node: &NoteTreeNode, current_path: String, paths: &mut HashMap<i32, String>) {
-        // Get the node's title, defaulting to "Untitled" if None
-        let title = node.title.as_deref().unwrap_or("Untitled");
+    // Create a vector of futures
+    let path_futures: Vec<_> = all_components
+        .into_iter()
+        .map(|(id, components)| async move {
+            let path = build_hierarchy_path(components).await.to_string();
+            (id, path)
+        })
+        .collect();
 
-        // Build the full path for this node
-        let node_path = if current_path.is_empty() {
-            title.to_string()
-        } else {
-            format!("{} / {}", current_path, title)
-        };
+    // Wait for all futures to complete
+    let paths = futures::future::join_all(path_futures).await;
 
-        // Store the path for this node's ID
-        // Use a leading / so there's no ambiguity for relative paths
-        paths.insert(node.id, format!("/ {}", node_path));
-
-        // Recursively process children
-        for child in &node.children {
-            build_paths(child, node_path.clone(), paths);
-        }
-    }
-
-    // Process each root node
-    for node in tree {
-        build_paths(&node, String::new(), &mut paths);
-    }
-
-    Ok(paths)
+    // Collect the results into a HashMap
+    Ok(paths.into_iter().collect())
 }
 
-async fn get_note_path(
-    state: &AppState,
-    id: &i32,
-    from_id: Option<&i32>,
-) -> Result<String, StatusCode> {
-    // Get all paths
-    let paths = get_note_paths(state).await?;
-    let pullout_path = |id| paths.get(id).ok_or(StatusCode::NOT_FOUND);
-    let path = pullout_path(id)?;
-    match from_id {
-        None => Ok(path.clone()),
-        Some(from_id) => {
-            // If the from_id is invalid, just return the full path
-            let from_path = match pullout_path(from_id) {
-                Ok(path) => path,
-                // If the from_id is invalid, just return the full path
-                Err(_) => return Ok(path.clone()),
-            };
-            if path.contains(from_path) {
-                // Remove the from_path from the path
-                let mut trimmed_path = path.replace(from_path, "").trim().to_string();
-                // Now remove the leading /
-                let leader = "/ ";
-                if trimmed_path.starts_with(leader) {
-                    trimmed_path = trimmed_path[leader.len()..].to_string();
-                }
-                if !trimmed_path.is_empty() {
-                    Ok(trimmed_path)
-                } else {
-                    // This (usually) either:
-                    //   1. The from_id is the same as the id, and/or
-                    //   2. the from_id has the same name as a parent but is not actually a parent
-                    //      e.g. Notes that are "Untitled".
-                    Ok(path.clone())
-                }
-            } else {
-                // Just return the full path if the id is not under the from_id
-                Ok(path.clone())
-            }
-        }
-    }
+async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
+    let components = get_note_path_components(id, from_id).await;
+    let path = build_hierarchy_path(components).await;
+    Ok(path)
 }
 
 async fn build_hierarchy_path(path_items: Vec<String>) -> String {
@@ -303,7 +252,7 @@ async fn build_hierarchy_path(path_items: Vec<String>) -> String {
 }
 
 // Return a vector as it makes tests simpler
-async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
+async fn get_note_path_components(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new(); // Store IDs to check for from_id
@@ -362,7 +311,8 @@ async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     path_components
 }
 
-async fn get_all_note_paths_new() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error> {
+async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error>
+{
     let mut conn = get_connection();
     let mut paths: HashMap<i32, Vec<String>> = HashMap::new();
     let mut note_cache: HashMap<i32, String> = HashMap::new();
@@ -637,8 +587,8 @@ pub async fn update_note_tree(
 mod note_hierarchy_tests {
     use super::*;
     use crate::api::tests::{setup_test_state, TestCleanup};
-    use crate::api::{create_note, CreateNoteRequest};
     use crate::api::DieselError;
+    use crate::api::{create_note, CreateNoteRequest};
     use crate::client::delete_note;
     use crate::tables::NoteBad;
     use axum::extract::State;
@@ -942,104 +892,16 @@ mod note_hierarchy_tests {
     #[tokio::test]
     async fn test_get_note_path_new() {
         let state = setup_test_state();
-        use crate::api::CreateNoteRequest;
-
-        // Create three notes with a hierarchy
-        let note_a = create_note(
-            State(state.clone()),
-            Json(CreateNoteRequest {
-                title: "".to_string(),
-                content: "# Note A".to_string(),
-            }),
-        )
-        .await
-        .unwrap()
-        .1
-         .0;
-
-        let note_b = create_note(
-            State(state.clone()),
-            Json(CreateNoteRequest {
-                title: "".to_string(),
-                content: "# Note B".to_string(),
-            }),
-        )
-        .await
-        .unwrap()
-        .1
-         .0;
-
-        let note_c = create_note(
-            State(state.clone()),
-            Json(CreateNoteRequest {
-                title: "".to_string(),
-                content: "# Note C".to_string(),
-            }),
-        )
-        .await
-        .unwrap()
-        .1
-         .0;
-
-        // Create hierarchy A -> B -> C
-        attach_child_note(
-            State(state.clone()),
-            Json(AttachChildNoteRequest {
-                parent_note_id: Some(note_a.id),
-                child_note_id: note_b.id,
-            }),
-        )
-        .await
-        .unwrap();
-
-        attach_child_note(
-            State(state.clone()),
-            Json(AttachChildNoteRequest {
-                parent_note_id: Some(note_b.id),
-                child_note_id: note_c.id,
-            }),
-        )
-        .await
-        .unwrap();
-
-        // Test getting path for note C
-        let path = get_note_path(&state, &note_c.id, None).await.unwrap();
-        assert_eq!(path, "/ Note A / Note B / Note C");
-
-        // Test getting path for note B
-        let path = get_note_path(&state, &note_b.id, None).await.unwrap();
-        assert_eq!(path, "/ Note A / Note B");
-
-        // Test getting path for note A
-        let path = get_note_path(&state, &note_a.id, None).await.unwrap();
-        assert_eq!(path, "/ Note A");
-
-        // Test getting path for note C From Note A
-        let path = get_note_path(&state, &note_c.id, Some(&note_a.id))
-            .await
-            .unwrap();
-        assert_eq!(path, "Note B / Note C");
-
-        // Clean up
-        let _cleanup = TestCleanup {
-            pool: state.pool.as_ref().clone(),
-            note_ids: vec![note_a.id, note_b.id, note_c.id],
-        };
-    }
-
-    #[tokio::test]
-    async fn test_get_note_path_new() {
-        let state = setup_test_state();
 
         // Create a hierarchy of notes
         // A -> B -> C
         // D -> E
         let notes = vec![
-            ("A", None),       // id: 0
-            ("B", Some(0)),    // id: 1, parent: A
-            ("C", Some(1)),    // id: 2, parent: B
-            ("D", None),       // id: 3
-            ("E", Some(3)),    // id: 4, parent: D
+            ("A", None),    // id: 0
+            ("B", Some(0)), // id: 1, parent: A
+            ("C", Some(1)), // id: 2, parent: B
+            ("D", None),    // id: 3
+            ("E", Some(3)), // id: 4, parent: D
         ];
 
         // Create the notes and store their IDs
@@ -1055,7 +917,7 @@ mod note_hierarchy_tests {
             .await
             .expect("Failed to create note")
             .1
-            .0;
+             .0;
             note_ids.push(note.id);
         }
 
@@ -1095,14 +957,10 @@ mod note_hierarchy_tests {
         ];
 
         for (note_id, from_id, expected_path) in test_cases {
-            let path = get_note_path_new(&note_id, from_id).await;
-            let path_components: Vec<&str> = path
-                .trim_start_matches("/ ")
-                .split(" / ")
-                .collect();
-            
+            let path = get_note_path_components(&note_id, from_id.as_ref()).await;
+
             assert_eq!(
-                path_components, expected_path,
+                path, expected_path,
                 "Path mismatch for note_id={}, from_id={:?}",
                 note_id, from_id
             );
@@ -1232,5 +1090,4 @@ Custom title link: [[{root_id}|Custom]]",
             note_ids: vec![root_note.id, child_note.id, unrelated_note.id, test_note.id],
         };
     }
-
 }
