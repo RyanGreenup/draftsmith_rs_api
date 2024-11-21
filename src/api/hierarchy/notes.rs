@@ -305,7 +305,7 @@ async fn build_hierarchy_path(path_items: Vec<String>) -> String {
 async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> String {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
-    let mut path_ids = Vec::new();  // Store IDs to check for from_id
+    let mut path_ids = Vec::new(); // Store IDs to check for from_id
     let mut current_id = *id;
 
     // Build path from target to root
