@@ -236,12 +236,13 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
 }
 
 async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
-    let (components, relative) = get_note_path_components(id, from_id)
-        .await
-        .map_err(|e| match e {
-            diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        })?;
+    let (components, relative) =
+        get_note_path_components(id, from_id)
+            .await
+            .map_err(|e| match e {
+                diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            })?;
 
     let path = build_hierarchy_path(components, relative).await;
     Ok(path)
@@ -268,7 +269,7 @@ async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, Status
 /// ```
 async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String {
     if relative {
-        return path_items.join(" / ");
+        path_items.join(" / ")
     } else {
         format!("/ {}", path_items.join(" / "))
     }
@@ -278,7 +279,7 @@ async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String
 // NOTE this Return a vector as it makes tests simpler
 async fn get_note_path_components(
     id: &i32,
-    from_id: Option<&i32>
+    from_id: Option<&i32>,
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
     let mut conn = get_connection();
     let mut path_components: Vec<String> = Vec::new();
@@ -341,7 +342,6 @@ async fn get_note_path_components(
             }
         };
     }
-
 
     // Return full path if from_id is not specified or not found in path
     Ok((path_components, false))
