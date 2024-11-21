@@ -242,7 +242,7 @@ async fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, Status
             diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         })?;
-    
+
     let path = build_hierarchy_path(components, relative).await;
     Ok(path)
 }
@@ -277,7 +277,7 @@ async fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String
 // Includes a boolean indicating if the path is trimmed to be relative
 // NOTE this Return a vector as it makes tests simpler
 async fn get_note_path_components(
-    id: &i32, 
+    id: &i32,
     from_id: Option<&i32>
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
     let mut conn = get_connection();
@@ -929,11 +929,11 @@ mod note_hierarchy_tests {
         // A -> B -> C
         // D -> E
         let notes = vec![
-            ("A", None),    // id: 0
-            ("B", Some(0)), // id: 1, parent: A
-            ("C", Some(1)), // id: 2, parent: B
-            ("D", None),    // id: 3
-            ("E", Some(3)), // id: 4, parent: D
+            ("A", None),    // test_id: 0
+            ("B", Some(0)), // test_id: 1, parent: A
+            ("C", Some(1)), // test_id: 2, parent: B
+            ("D", None),    // test_id: 3
+            ("E", Some(3)), // test_id: 4, parent: D
         ];
 
         // Create the notes and store their IDs
