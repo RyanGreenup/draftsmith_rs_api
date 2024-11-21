@@ -302,12 +302,13 @@ async fn build_hierarchy_path(path_items: Vec<&str>) -> String {
     format!("/{}", path_items.join("/"))
 }
 
-async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
-    // Get a new database connection
+async fn get_note_path_new(id: &i32, from_id: Option<&i32>) -> Vec<String> {
     let mut conn = get_connection();
     let mut path_components = Vec::new();
+    let mut path_ids = Vec::new();  // Store IDs to check for from_id
     let mut current_id = *id;
 
+    // Build path from target to root
     loop {
         // Get the current note's title
         let title = {
@@ -321,8 +322,9 @@ async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
                 Err(_) => break,
             }
         };
-
+        
         path_components.push(title);
+        path_ids.push(current_id);
 
         // Look up parent
         let parent_id = {
@@ -340,13 +342,22 @@ async fn get_note_path_new(id: &i32, _from_id: Option<&i32>) -> Vec<String> {
             }
         };
 
-        // Update current_id for next iteration
         current_id = parent_id;
     }
 
-    // Reverse the vector since we collected from child to parent
+    // Reverse both vectors since we collected from child to parent
     path_components.reverse();
+    path_ids.reverse();
 
+    // If from_id is specified, try to find it in the path
+    if let Some(from_id) = from_id {
+        if let Some(pos) = path_ids.iter().position(|&id| id == *from_id) {
+            // If from_id is found in the path, return only components after it
+            return path_components.split_off(pos + 1);
+        }
+    }
+    
+    // Return full path if from_id is not specified or not found in path
     path_components
 }
 
