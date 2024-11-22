@@ -1223,7 +1223,8 @@ Custom title link: [Custom]({root_id})",
         */
 
         // Get the processed content
-        let content = get_note_content(test_note.id).expect("Failed to get note content");
+        let content =
+            get_note_content(test_note.id, Some(&state)).expect("Failed to get note content");
         let processed_content =
             replace_internal_links_with_titles(&content, Some(&test_note.id), Some(&state))
                 .expect("Failed to process content");

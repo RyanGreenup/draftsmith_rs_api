@@ -3,9 +3,9 @@ use crate::api::AppState;
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
+use regex::Regex;
 use rhai::{Array, Dynamic, Engine, ImmutableString};
-use std::cell::RefCell;
-use std::thread_local;
+use std::collections::HashSet;
 
 // enum for html vs markdown
 enum RenderTarget {
@@ -13,55 +13,7 @@ enum RenderTarget {
     Markdown,
 }
 
-// Defines a thread-local vector for tracking recursion path
-thread_local! {
-    static RECURSION_PATH: RefCell<Vec<i64>> = const { RefCell::new(Vec::new()) };
-}
-
-// RAII guard for managing recursion stack
-struct RecursionGuard {
-    note_id: i64,
-}
-
-impl RecursionGuard {
-    fn new(note_id: i64) -> Option<Self> {
-        let already_in_path = RECURSION_PATH.with(|vec| {
-            let mut vec = vec.borrow_mut();
-            if vec.contains(&note_id) {
-                true // Recursion detected
-            } else {
-                vec.push(note_id);
-                false
-            }
-        });
-        if already_in_path {
-            None
-        } else {
-            Some(Self { note_id })
-        }
-    }
-}
-
-impl Drop for RecursionGuard {
-    fn drop(&mut self) {
-        RECURSION_PATH.with(|vec| {
-            let mut vec = vec.borrow_mut();
-            match vec.pop() {
-                Some(id) if id == self.note_id => {} // Correctly removed
-                Some(id) => eprintln!(
-                    "Warning: RecursionGuard drop: expected {}, but found {}",
-                    self.note_id, id
-                ),
-                None => eprintln!(
-                    "Warning: RecursionGuard drop: expected {}, but recursion path is empty",
-                    self.note_id
-                ),
-            }
-        });
-    }
-}
-
-fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
+fn build_custom_rhai_functions(_render_target: RenderTarget) -> Vec<CustomFn> {
     // Register custom functions
     fn double(x: i64) -> i64 {
         x * 2
@@ -178,60 +130,6 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
             Err(e) => format!("Note not found: {}. Error: {e}", note_id),
             Ok(title) => format!("[{}](/note/{})", title, note_id),
         }
-    }
-
-    fn handle_recursion(note_id: i64) -> Option<String> {
-        match RecursionGuard::new(note_id) {
-            None => {
-                let path = RECURSION_PATH.with(|vec| {
-                    vec.borrow()
-                        .iter()
-                        .map(|id| id.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" → ")
-                });
-                Some(format!(
-                    "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
-                    path, note_id
-                ))
-            }
-            Some(_guard) => None,
-        }
-    }
-
-    fn process_content(
-        note_id: i64,
-        processor: fn(&str, Option<&i32>, Option<&AppState>) -> String,
-    ) -> String {
-        if note_id > 0 {
-            // Could also use:
-            // crate::api::get_note_content
-            // this however, will replace links with titles
-            // which is convenient for end users and considered a feature
-            match get_note_content(note_id as i32) {
-                Ok(content) => {
-                    let content = pre_process_md(&content, Some(&(note_id as i32)), None);
-                    processor(&content, Some(&(note_id as i32)), None)
-                }
-                Err(e) => format!("Error fetching note content: {}", e),
-            }
-        } else {
-            format!("ID must be > 0, id: {} invalid", note_id)
-        }
-    }
-
-    fn transclusion_to_md(note_id: i64) -> String {
-        if let Some(recursion_msg) = handle_recursion(note_id) {
-            return recursion_msg;
-        }
-        process_content(note_id, process_md)
-    }
-
-    fn transclusion_to_html(note_id: i64) -> String {
-        if let Some(recursion_msg) = handle_recursion(note_id) {
-            return recursion_msg;
-        }
-        process_content(note_id, parse_md_to_html)
     }
 
     fn image(src: &str, width: i64, alt: &str) -> String {
@@ -447,7 +345,7 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
 
     let separator = "¶"; // This will be cloned into the closure below
     let sep2 = "$"; // The closure will take an immutable reference to this string
-    let mut functions: Vec<CustomFn> = vec![
+    let functions: Vec<CustomFn> = vec![
         Box::new(|engine: &mut Engine| {
             engine.register_fn("phone", embed_input_in_phone_mockup);
         }),
@@ -527,15 +425,6 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }),
     ];
 
-    match render_target {
-        RenderTarget::Html => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
-            engine.register_fn("transclusion", transclusion_to_html);
-        })]),
-        RenderTarget::Markdown => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
-            engine.register_fn("transclusion", transclusion_to_md);
-        })]),
-    }
-
     functions
 }
 
@@ -559,9 +448,87 @@ pub fn process_md(document: &str, note_id: Option<&i32>, state: Option<&AppState
 /// :::fold divs
 /// but the API must handle the following:
 ///   - Replaces links to notes with their title
+fn replace_transclusions(
+    content: &str,
+    note_id: Option<i32>,
+    state: Option<&AppState>,
+    visited_notes: &mut HashSet<i32>,
+) -> Result<String, String> {
+    let mut result = content.to_string();
+
+    let re = Regex::new(r"(?:^|\s)!\[\[(\d+)\]\]").map_err(|e| e.to_string())?;
+
+    // Find all transclusion patterns in the content
+    for cap in re.captures_iter(content) {
+        let transclude_id: i32 = cap[1]
+            .parse()
+            .map_err(|e: std::num::ParseIntError| e.to_string())?;
+
+        // Detect recursion
+        if let Some(current_id) = note_id {
+            if visited_notes.contains(&transclude_id) {
+                // Recursion detected
+                let recursion_message = format!(
+                    "<div class='bg-red-100 p-2'>Recursion detected: {} -> {}</div>",
+                    current_id, transclude_id
+                );
+                result = result.replace(&cap[0], &recursion_message);
+                continue;
+            }
+        }
+
+        // Add to visited notes
+        visited_notes.insert(transclude_id);
+
+        // Get the note content
+        let transcluded_content = match get_note_content(transclude_id, state) {
+            Ok(content) => content,
+            Err(_) => format!(
+                "<div class='bg-red-100 p-2'>Note not found: {}</div>",
+                transclude_id
+            ),
+        };
+
+        // Recursively process the transcluded content
+        let processed_content = replace_transclusions(
+            &transcluded_content,
+            Some(transclude_id),
+            state,
+            visited_notes,
+        )?;
+
+        // Replace the transclusion tag with the processed content
+        result = result.replace(&cap[0], &processed_content);
+
+        // Remove from visited notes after processing
+        visited_notes.remove(&transclude_id);
+    }
+
+    Ok(result)
+}
+
 pub fn pre_process_md(document: &str, note_id: Option<&i32>, state: Option<&AppState>) -> String {
-    replace_internal_links_with_titles(document, note_id, state).unwrap_or_else(|e| {
+    // Initialize a HashSet to keep track of visited notes
+    let mut visited_notes = HashSet::new();
+
+    // If we have a note_id, include it in the visited notes
+    if let Some(&id) = note_id {
+        visited_notes.insert(id);
+    }
+
+    // Replace transclusions
+    let with_transclusions =
+        match replace_transclusions(document, note_id.copied(), state, &mut visited_notes) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error replacing transclusions: {}", e);
+                document.to_string()
+            }
+        };
+
+    // Continue with other pre-processing steps
+    replace_internal_links_with_titles(&with_transclusions, note_id, state).unwrap_or_else(|e| {
         eprintln!("Error replacing internal links with titles: {}", e);
-        document.to_string()
+        with_transclusions
     })
 }

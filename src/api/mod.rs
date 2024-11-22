@@ -395,10 +395,30 @@ pub fn get_note_title(note_id: i32) -> Result<std::string::String, diesel::resul
     notes.find(note_id).select(title).first::<String>(&mut conn)
 }
 
-pub fn get_note_content(note_id: i32) -> Result<std::string::String, diesel::result::Error> {
+pub fn get_note_content(
+    note_id: i32,
+    state: Option<&AppState>,
+) -> Result<std::string::String, diesel::result::Error> {
     use crate::schema::notes::dsl::*;
+    use diesel::r2d2::{ConnectionManager, Pool};
 
-    let mut conn = get_connection();
+    // Create a single-use connection or get one from the pool
+    let mut conn = match state {
+        Some(state) => state
+            .pool
+            .get()
+            .map_err(|_| diesel::result::Error::NotFound)?,
+        None => {
+            let manager = ConnectionManager::<PgConnection>::new(
+                std::env::var("DATABASE_URL").expect("DATABASE_URL must be set"),
+            );
+            Pool::builder()
+                .build(manager)
+                .map_err(|_| diesel::result::Error::NotFound)?
+                .get()
+                .map_err(|_| diesel::result::Error::NotFound)?
+        }
+    };
 
     notes
         .find(note_id)
