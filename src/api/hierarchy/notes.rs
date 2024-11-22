@@ -1071,7 +1071,7 @@ mod note_hierarchy_tests {
     }
 
     #[tokio::test]
-    async fn test_get_note_content_and_replace_links() {
+    async fn test_replace_internal_links_with_titles() {
         use crate::api::get_note_content;
         let state = setup_test_state();
 
