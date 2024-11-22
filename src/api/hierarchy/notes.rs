@@ -484,7 +484,7 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
     for cap in LINK_REGEX.find_iter(&content) {
         if let Some(cap_text) = content.get(cap.start()..cap.end()) {
             if let Some(captures) = LINK_REGEX.captures(cap_text) {
-                if let (Some(id_match), Ok(target_id)) =
+                if let (Some(_id_match), Ok(target_id)) =
                     (captures.get(1), captures[1].parse::<i32>())
                 {
                     let custom_title = captures.get(2).map(|m| m.as_str().to_string());
