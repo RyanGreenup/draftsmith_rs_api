@@ -396,18 +396,14 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
         let mut current_id = note_id;
 
         // Build path from current note to root
-        loop {
-            // Add current note's title to path
-            if let Some(title) = note_cache.get(&current_id) {
-                current_path.push(title.clone());
+        while let Some(title) = note_cache.get(&current_id) {
+            current_path.push(title.clone());
+        
+            // Look up parent and break if none found
+            if let Some(parent_id) = hierarchy_cache.get(&current_id).and_then(|&x| x) {
+                current_id = parent_id;
             } else {
                 break;
-            }
-
-            // Look up parent
-            match hierarchy_cache.get(&current_id).and_then(|&x| x) {
-                Some(parent_id) => current_id = parent_id,
-                None => break,
             }
         }
 
