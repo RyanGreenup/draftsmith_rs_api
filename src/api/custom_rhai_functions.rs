@@ -1,5 +1,5 @@
-use crate::api::get_note_title;
-use crate::api::hierarchy::notes::get_note_content_and_replace_links;
+use crate::api::hierarchy::notes::replace_internal_links_with_titles;
+use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
 use lazy_static::lazy_static;
@@ -187,14 +187,17 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
-    fn process_content(note_id: i64, processor: fn(&str) -> String) -> String {
+    fn process_content(note_id: i64, processor: fn(&str, Option<&i32>) -> String) -> String {
         if note_id > 0 {
             // Could also use:
             // crate::api::get_note_content
             // this however, will replace links with titles
             // which is convenient for end users and considered a feature
-            match get_note_content_and_replace_links(note_id as i32) {
-                Ok(content) => processor(&content),
+            match get_note_content(note_id as i32) {
+                Ok(content) => {
+                    let content = pre_process_md(&content, Some(&(note_id as i32)));
+                    processor(&content, Some(&(note_id as i32)))
+                }
                 Err(e) => format!("Error fetching note content: {}", e),
             }
         } else {
@@ -521,15 +524,29 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     functions
 }
 
-pub fn parse_md_to_html(document: &str) -> String {
+pub fn parse_md_to_html(document: &str, note_id: Option<&i32>) -> String {
+    let document = pre_process_md(document, note_id);
     let functions = build_custom_rhai_functions(RenderTarget::Html);
-    draftsmith_render::parse_md_to_html(document, Some(functions))
+    draftsmith_render::parse_md_to_html(&document, Some(functions))
 }
 
 /// This function processes markdown content by evaluating Rhai functions
 /// In addition, this will replace any links to notes with their title
-pub fn process_md(document: &str) -> String {
+pub fn process_md(document: &str, note_id: Option<&i32>) -> String {
+    let document = pre_process_md(document, note_id);
     let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));
-    processor.process(document)
+    processor.process(&document)
+}
+
+/// This function pre-processes markdown content with any custom logic
+/// that must be handled by the API. For example the renderer can handle
+/// :::fold divs
+/// but the API must handle the following:
+///   - Replaces links to notes with their title
+pub fn pre_process_md(document: &str, note_id: Option<&i32>) -> String {
+    replace_internal_links_with_titles(document, note_id).unwrap_or_else(|e| {
+        eprintln!("Error replacing internal links with titles: {}", e);
+        document.to_string()
+    })
 }

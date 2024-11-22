@@ -2,9 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{
-    get_connection, get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path,
-};
+use crate::api::{get_connection, get_notes_tags, state::AppState, tags::TagResponse, Path};
 use crate::tables::NewNoteTag;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -398,7 +396,7 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
         // Build path from current note to root
         while let Some(title) = note_cache.get(&current_id) {
             current_path.push(title.clone());
-        
+
             // Look up parent and break if none found
             if let Some(parent_id) = hierarchy_cache.get(&current_id).and_then(|&x| x) {
                 current_id = parent_id;
@@ -438,7 +436,10 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 ///
 /// # Arguments
 ///
+/// * `content` - The content to render
 /// * `note_id` - The ID of the note whose content needs processing.
+///               This is optional and can be `None` if the content is not associated with a note.
+///               this is useful for endpoints that seek markdown rendering without a note context (e.g. preview/conversion etc.)
 ///
 /// # Returns
 ///
@@ -463,12 +464,13 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 ///
 /// The function handles errors in fetching the path of linked notes by skipping those links.
 /// If the initial content fetch fails, it returns an appropriate status code.
-pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel::result::Error> {
-    let content = get_note_content(note_id)?;
-
+pub fn replace_internal_links_with_titles(
+    content: &str,
+    note_id: Option<&i32>,
+) -> Result<String, diesel::result::Error> {
     // Early return if no links found
-    if !LINK_REGEX.is_match(&content) {
-        return Ok(content);
+    if !LINK_REGEX.is_match(content) {
+        return Ok(content.to_string());
     }
 
     let mut new_content = String::new();
@@ -477,7 +479,7 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
     let mut last_end = 0;
 
     // Find all the links in the content
-    for cap in LINK_REGEX.find_iter(&content) {
+    for cap in LINK_REGEX.find_iter(content) {
         if let Some(cap_text) = content.get(cap.start()..cap.end()) {
             if let Some(captures) = LINK_REGEX.captures(cap_text) {
                 if let (Some(_id_match), Ok(target_id)) =
@@ -493,7 +495,7 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
 
     // Early return if no valid links found
     if link_positions.is_empty() {
-        return Ok(content);
+        return Ok(content.to_string());
     }
 
     // Pre-allocate string with estimated capacity
@@ -507,7 +509,7 @@ pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel
 
         // Batch process paths for this chunk
         for &(_, _, target_id, _) in chunk {
-            let (components, relative) = get_note_path_components(&target_id, Some(&note_id))?;
+            let (components, relative) = get_note_path_components(&target_id, note_id)?;
             let path = if relative {
                 components.join(" / ")
             } else {
@@ -1070,6 +1072,7 @@ mod note_hierarchy_tests {
 
     #[tokio::test]
     async fn test_get_note_content_and_replace_links() {
+        use crate::api::get_note_content;
         let state = setup_test_state();
 
         // Create a hierarchy of notes
@@ -1189,8 +1192,9 @@ Custom title link: [Custom]({root_id})",
         */
 
         // Get the processed content
-        let processed_content =
-            get_note_content_and_replace_links(test_note.id).expect("Failed to process content");
+        let content = get_note_content(test_note.id).expect("Failed to get note content");
+        let processed_content = replace_internal_links_with_titles(&content, Some(&test_note.id))
+            .expect("Failed to process content");
 
         dbg!(&processed_content);
         dbg!(&after);

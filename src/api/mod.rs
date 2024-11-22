@@ -712,7 +712,10 @@ async fn render_note_html(
         .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(custom_rhai_functions::parse_md_to_html(&note.content))
+    Ok(custom_rhai_functions::parse_md_to_html(
+        &note.content,
+        Some(&note_id),
+    ))
 }
 
 async fn render_note_md(
@@ -732,7 +735,10 @@ async fn render_note_md(
         .first::<NoteWithoutFts>(&mut conn)
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    Ok(custom_rhai_functions::process_md(&note.content))
+    Ok(custom_rhai_functions::process_md(
+        &note.content,
+        Some(&note_id),
+    ))
 }
 
 // All notes rendering handlers
@@ -754,7 +760,7 @@ async fn render_all_notes_html(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                custom_rhai_functions::parse_md_to_html(&note.content)
+                custom_rhai_functions::parse_md_to_html(&note.content, Some(&note.id))
             ),
         })
         .collect();
@@ -780,7 +786,7 @@ async fn render_all_notes_md(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                custom_rhai_functions::process_md(&note.content)
+                custom_rhai_functions::process_md(&note.content, Some(&note.id))
             ),
         })
         .collect();
@@ -1249,8 +1255,11 @@ async fn get_link_edge_list(
 /// - `format`: The output format, either "html" or None (markdown)
 async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<String, StatusCode> {
     match payload.format.as_deref() {
-        Some("html") => Ok(custom_rhai_functions::parse_md_to_html(&payload.content)),
-        _ => Ok(custom_rhai_functions::process_md(&payload.content)),
+        Some("html") => Ok(custom_rhai_functions::parse_md_to_html(
+            &payload.content,
+            None,
+        )),
+        _ => Ok(custom_rhai_functions::process_md(&payload.content, None)),
     }
 }
 
