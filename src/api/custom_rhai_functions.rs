@@ -2,9 +2,9 @@ use crate::api::hierarchy::notes::replace_internal_links_with_titles;
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
-use lazy_static::lazy_static;
 use rhai::{Array, Dynamic, Engine, ImmutableString};
-use std::sync::Mutex;
+use std::cell::RefCell;
+use std::thread_local;
 
 // enum for html vs markdown
 enum RenderTarget {
@@ -12,9 +12,9 @@ enum RenderTarget {
     Markdown,
 }
 
-// Defines a global, mutable vector protected by a Mutex for tracking recursion path
-lazy_static! {
-    static ref RECURSION_PATH: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+// Defines a thread-local vector for tracking recursion path
+thread_local! {
+    static RECURSION_PATH: RefCell<Vec<i64>> = RefCell::new(Vec::new());
 }
 
 // RAII guard for managing recursion stack
@@ -24,14 +24,18 @@ struct RecursionGuard {
 
 impl RecursionGuard {
     fn new(note_id: i64) -> Option<Self> {
-        let mut vec = RECURSION_PATH
-            .lock()
-            .expect("Failed to lock recursion vector");
-        if vec.contains(&note_id) {
-            // Found recursion - leave the vector as is so we can show the full path
+        let already_in_path = RECURSION_PATH.with(|vec| {
+            let mut vec = vec.borrow_mut();
+            if vec.contains(&note_id) {
+                true // Recursion detected
+            } else {
+                vec.push(note_id);
+                false
+            }
+        });
+        if already_in_path {
             None
         } else {
-            vec.push(note_id);
             Some(Self { note_id })
         }
     }
@@ -39,14 +43,14 @@ impl RecursionGuard {
 
 impl Drop for RecursionGuard {
     fn drop(&mut self) {
-        let mut vec = RECURSION_PATH
-            .lock()
-            .expect("Failed to lock recursion vector");
-        match vec.pop() {
-            Some(id) if id == self.note_id => {},
-            Some(id) => eprintln!("Warning: RecursionGuard drop: expected {}, but found {}", self.note_id, id),
-            None => eprintln!("Warning: RecursionGuard drop: expected {}, but recursion path is empty", self.note_id),
-        }
+        RECURSION_PATH.with(|vec| {
+            let mut vec = vec.borrow_mut();
+            match vec.pop() {
+                Some(id) if id == self.note_id => {}, // Correctly removed
+                Some(id) => eprintln!("Warning: RecursionGuard drop: expected {}, but found {}", self.note_id, id),
+                None => eprintln!("Warning: RecursionGuard drop: expected {}, but recursion path is empty", self.note_id),
+            }
+        });
     }
 }
 
@@ -172,14 +176,12 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     fn handle_recursion(note_id: i64) -> Option<String> {
         match RecursionGuard::new(note_id) {
             None => {
-                let vec = RECURSION_PATH
-                    .lock()
-                    .expect("Failed to lock recursion vector");
-                let path = vec
-                    .iter()
-                    .map(|id| id.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" → ");
+                let path = RECURSION_PATH.with(|vec| {
+                    vec.borrow().iter()
+                        .map(|id| id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" → ")
+                });
                 Some(format!(
                     "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
                     path, note_id
