@@ -264,7 +264,7 @@ fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> 
 /// # Examples
 ///
 /// ```rust,ignore
-/// use rust_cli_app::api::hierarchy::notes::build_hierarchy_path;
+/// use draftsmith_rest_api::api::hierarchy::notes::build_hierarchy_path;
 ///
 /// let path = build_hierarchy_path(vec!["root".to_string(), "folder".to_string(), "file.txt".to_string()], false);
 /// assert_eq!(path, "/ root / folder / file.txt");

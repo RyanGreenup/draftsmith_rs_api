@@ -3,18 +3,18 @@ use chrono::NaiveDateTime;
 use clap::{Parser, Subcommand};
 use diesel::pg::PgConnection;
 use diesel::r2d2::{self, ConnectionManager};
-use rust_cli_app::client::tags::{
+use draftsmith_rest_api::client::tags::{
     self, attach_child_tag, attach_tag_to_note, create_tag, delete_tag, detach_child_tag,
     detach_tag_from_note, get_hierarchy_mappings, get_tag, list_note_tags, list_tags, update_tag,
     CreateTagRequest, TagError, TagTreeNode, UpdateTagRequest,
 };
-use rust_cli_app::client::tasks::{
+use draftsmith_rest_api::client::tasks::{
     attach_child_task, create_task, delete_task, detach_child_task, fetch_task, fetch_task_tree,
     fetch_tasks, update_task, AttachChildRequest, CreateTaskRequest, TaskError, TaskTreeNode,
     UpdateTaskRequest,
 };
-use rust_cli_app::client::NoteTreeNode;
-use rust_cli_app::{api, client::tasks::*};
+use draftsmith_rest_api::client::NoteTreeNode;
+use draftsmith_rest_api::{api, client::tasks::*};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -180,7 +180,7 @@ enum Commands {
     /// Client commands
     Client {
         /// The base URL of the API
-        #[arg(long, default_value = rust_cli_app::BASE_URL)]
+        #[arg(long, default_value = draftsmith_rest_api::BASE_URL)]
         url: String,
         #[command(subcommand)]
         command: ClientCommands,
@@ -444,13 +444,13 @@ async fn main() {
                 };
 
                 // Create render request
-                let request = rust_cli_app::client::notes::RenderMarkdownRequest {
+                let request = draftsmith_rest_api::client::notes::RenderMarkdownRequest {
                     content,
                     format: format.map(|_| "html".to_string()),
                 };
 
                 // Render content
-                match rust_cli_app::client::notes::render_markdown(&url, request).await {
+                match draftsmith_rest_api::client::notes::render_markdown(&url, request).await {
                     Ok(rendered) => {
                         // Write to output file or stdout
                         match output {
@@ -474,13 +474,13 @@ async fn main() {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::List { metadata_only } => {
                         if let Some(note_id) = id {
-                            match rust_cli_app::client::fetch_note(&url, note_id, metadata_only)
+                            match draftsmith_rest_api::client::fetch_note(&url, note_id, metadata_only)
                                 .await
                             {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
                                 }
-                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                     eprintln!("Error: Note with id {} not found", id);
                                     std::process::exit(1);
                                 }
@@ -490,16 +490,16 @@ async fn main() {
                                 }
                             }
                         } else {
-                            let notes = rust_cli_app::client::fetch_notes(&url, metadata_only)
+                            let notes = draftsmith_rest_api::client::fetch_notes(&url, metadata_only)
                                 .await
                                 .unwrap();
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
                     }
                     FlatCommands::Create { content } => {
-                        let note = rust_cli_app::client::create_note(
+                        let note = draftsmith_rest_api::client::create_note(
                             &url,
-                            rust_cli_app::client::CreateNoteRequest {
+                            draftsmith_rest_api::client::CreateNoteRequest {
                                 title: String::new(),
                                 content,
                             },
@@ -510,10 +510,10 @@ async fn main() {
                     }
                     FlatCommands::Update { title, content } => {
                         if let Some(note_id) = id {
-                            match rust_cli_app::client::update_note(
+                            match draftsmith_rest_api::client::update_note(
                                 &url,
                                 note_id,
-                                rust_cli_app::client::UpdateNoteRequest {
+                                draftsmith_rest_api::client::UpdateNoteRequest {
                                     title: Some(title),
                                     content,
                                 },
@@ -523,7 +523,7 @@ async fn main() {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
                                 }
-                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                     eprintln!("Error: Note with id {} not found", id);
                                     std::process::exit(1);
                                 }
@@ -539,11 +539,11 @@ async fn main() {
                     }
                     FlatCommands::Delete => {
                         if let Some(note_id) = id {
-                            match rust_cli_app::client::delete_note(&url, note_id).await {
+                            match draftsmith_rest_api::client::delete_note(&url, note_id).await {
                                 Ok(_) => {
                                     println!("Note {} deleted successfully", note_id);
                                 }
-                                Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                     eprintln!("Error: Note with id {} not found", id);
                                     std::process::exit(1);
                                 }
@@ -561,11 +561,11 @@ async fn main() {
                 NotesCommands::Hierarchy { command } => match command {
                     HierarchyCommands::Attach { parent_id } => {
                         if let Some(child_id) = id {
-                            let request = rust_cli_app::client::AttachChildRequest {
+                            let request = draftsmith_rest_api::client::AttachChildRequest {
                                 child_note_id: child_id,
                                 parent_note_id: Some(parent_id),
                             };
-                            match rust_cli_app::client::attach_child_note(&url, request).await {
+                            match draftsmith_rest_api::client::attach_child_note(&url, request).await {
                                 Ok(_) => println!(
                                     "Successfully attached note {} to parent {}",
                                     child_id, parent_id
@@ -582,7 +582,7 @@ async fn main() {
                     }
                     HierarchyCommands::Detach => {
                         if let Some(child_id) = id {
-                            match rust_cli_app::client::detach_child_note(&url, child_id).await {
+                            match draftsmith_rest_api::client::detach_child_note(&url, child_id).await {
                                 Ok(_) => println!("Successfully detached note {}", child_id),
                                 Err(e) => {
                                     eprintln!("Error: {}", e);
@@ -595,7 +595,7 @@ async fn main() {
                         }
                     }
                     HierarchyCommands::Mappings => {
-                        match rust_cli_app::client::fetch_hierarchy_mappings(&url).await {
+                        match draftsmith_rest_api::client::fetch_hierarchy_mappings(&url).await {
                             Ok(mappings) => {
                                 println!("{}", serde_json::to_string_pretty(&mappings).unwrap());
                             }
@@ -607,7 +607,7 @@ async fn main() {
                     }
                 },
                 NotesCommands::Tree { simple } => {
-                    match rust_cli_app::client::fetch_note_tree(&url).await {
+                    match draftsmith_rest_api::client::fetch_note_tree(&url).await {
                         Ok(tree) => {
                             if simple {
                                 print_simple_tree(&tree, 0);
@@ -632,7 +632,7 @@ async fn main() {
                     }
 
                     // Fetch notes and tree
-                    let notes = match rust_cli_app::client::fetch_notes(&url, false).await {
+                    let notes = match draftsmith_rest_api::client::fetch_notes(&url, false).await {
                         Ok(notes) => notes,
                         Err(e) => {
                             eprintln!("Error fetching notes: {}", e);
@@ -640,7 +640,7 @@ async fn main() {
                         }
                     };
 
-                    let tree = match rust_cli_app::client::fetch_note_tree(&url).await {
+                    let tree = match draftsmith_rest_api::client::fetch_note_tree(&url).await {
                         Ok(tree) => tree,
                         Err(e) => {
                             eprintln!("Error fetching note tree: {}", e);
@@ -649,7 +649,7 @@ async fn main() {
                     };
 
                     // Download the notes
-                    match rust_cli_app::client::write_notes_to_disk(
+                    match draftsmith_rest_api::client::write_notes_to_disk(
                         &notes,
                         &tree,
                         std::path::Path::new(&dir),
@@ -674,8 +674,8 @@ async fn main() {
                     };
 
                     // Parse the JSON into a Vec<NoteTreeNode>
-                    let trees: Vec<rust_cli_app::client::NoteTreeNode> = match serde_json::from_str::<
-                        Vec<rust_cli_app::client::NoteTreeNode>,
+                    let trees: Vec<draftsmith_rest_api::client::NoteTreeNode> = match serde_json::from_str::<
+                        Vec<draftsmith_rest_api::client::NoteTreeNode>,
                     >(
                         &content
                     ) {
@@ -700,7 +700,7 @@ async fn main() {
                     };
 
                     // Upload the trees
-                    match rust_cli_app::client::update_note_tree(&url, trees).await {
+                    match draftsmith_rest_api::client::update_note_tree(&url, trees).await {
                         Ok(_) => println!("Tree structure updated successfully"),
                         Err(e) => {
                             eprintln!("Error updating tree: {}", e);
@@ -710,7 +710,7 @@ async fn main() {
                 }
                 NotesCommands::Push { dir } => {
                     let dir_path = std::path::Path::new(&dir);
-                    match rust_cli_app::client::read_from_disk(&url, dir_path).await {
+                    match draftsmith_rest_api::client::read_from_disk(&url, dir_path).await {
                         Ok(_) => println!("Successfully pushed notes from {}", dir),
                         Err(e) => {
                             eprintln!("Error pushing notes: {}", e);
@@ -726,11 +726,11 @@ async fn main() {
                         // Render single note
                         let rendered_content = match render_type {
                             RenderType::Html => {
-                                match rust_cli_app::client::get_note_rendered_html(&url, note_id)
+                                match draftsmith_rest_api::client::get_note_rendered_html(&url, note_id)
                                     .await
                                 {
                                     Ok(html) => html,
-                                    Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                    Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                         eprintln!("Error: Note with id {} not found", id);
                                         std::process::exit(1);
                                     }
@@ -741,11 +741,11 @@ async fn main() {
                                 }
                             }
                             RenderType::Md => {
-                                match rust_cli_app::client::get_note_rendered_md(&url, note_id)
+                                match draftsmith_rest_api::client::get_note_rendered_md(&url, note_id)
                                     .await
                                 {
                                     Ok(md) => md,
-                                    Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                                    Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                         eprintln!("Error: Note with id {} not found", id);
                                         std::process::exit(1);
                                     }
@@ -757,7 +757,7 @@ async fn main() {
                             }
                         };
                         // For single note, create a JSON structure
-                        serde_json::to_string_pretty(&rust_cli_app::client::RenderedNote {
+                        serde_json::to_string_pretty(&draftsmith_rest_api::client::RenderedNote {
                             id: note_id,
                             rendered_content,
                         })
@@ -766,7 +766,7 @@ async fn main() {
                         // Render all notes
                         let rendered_notes = match render_type {
                             RenderType::Html => {
-                                match rust_cli_app::client::get_all_notes_rendered_html(&url).await
+                                match draftsmith_rest_api::client::get_all_notes_rendered_html(&url).await
                                 {
                                     Ok(notes) => notes,
                                     Err(e) => {
@@ -776,7 +776,7 @@ async fn main() {
                                 }
                             }
                             RenderType::Md => {
-                                match rust_cli_app::client::get_all_notes_rendered_md(&url).await {
+                                match draftsmith_rest_api::client::get_all_notes_rendered_md(&url).await {
                                     Ok(notes) => notes,
                                     Err(e) => {
                                         eprintln!("Error: {}", e);
@@ -814,7 +814,7 @@ async fn main() {
                 }
                 NotesCommands::Search { command } => match command {
                     SearchCommands::Db { query } => {
-                        match rust_cli_app::client::fts_search_notes(&url, &query).await {
+                        match draftsmith_rest_api::client::fts_search_notes(&url, &query).await {
                             Ok(notes) => {
                                 println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                             }
@@ -827,11 +827,11 @@ async fn main() {
                 },
                 NotesCommands::Backlinks => {
                     if let Some(note_id) = id {
-                        match rust_cli_app::client::get_backlinks(&url, note_id).await {
+                        match draftsmith_rest_api::client::get_backlinks(&url, note_id).await {
                             Ok(backlinks) => {
                                 println!("{}", serde_json::to_string_pretty(&backlinks).unwrap());
                             }
-                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                            Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                 eprintln!("Error: Note with id {} not found", id);
                                 std::process::exit(1);
                             }
@@ -847,14 +847,14 @@ async fn main() {
                 }
                 NotesCommands::ForwardLinks => {
                     if let Some(note_id) = id {
-                        match rust_cli_app::client::get_forward_links(&url, note_id).await {
+                        match draftsmith_rest_api::client::get_forward_links(&url, note_id).await {
                             Ok(forward_links) => {
                                 println!(
                                     "{}",
                                     serde_json::to_string_pretty(&forward_links).unwrap()
                                 );
                             }
-                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                            Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                 eprintln!("Error: Note with id {} not found", id);
                                 std::process::exit(1);
                             }
@@ -869,7 +869,7 @@ async fn main() {
                     }
                 }
                 NotesCommands::LinkEdges => {
-                    match rust_cli_app::client::get_link_edge_list(&url).await {
+                    match draftsmith_rest_api::client::get_link_edge_list(&url).await {
                         Ok(edges) => {
                             println!("{}", serde_json::to_string_pretty(&edges).unwrap());
                         }
@@ -881,7 +881,7 @@ async fn main() {
                 }
                 NotesCommands::Paths { command } => match command {
                     PathsCommands::List => {
-                        match rust_cli_app::client::notes::get_all_note_paths(&url).await {
+                        match draftsmith_rest_api::client::notes::get_all_note_paths(&url).await {
                             Ok(paths) => {
                                 println!("{}", serde_json::to_string_pretty(&paths).unwrap());
                             }
@@ -892,11 +892,11 @@ async fn main() {
                         }
                     }
                     PathsCommands::Get { note_id } => {
-                        match rust_cli_app::client::notes::get_note_path(&url, note_id).await {
+                        match draftsmith_rest_api::client::notes::get_note_path(&url, note_id).await {
                             Ok(path) => {
                                 println!("{}", path);
                             }
-                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                            Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                 eprintln!("Error: Note with id {} not found", id);
                                 std::process::exit(1);
                             }
@@ -907,7 +907,7 @@ async fn main() {
                         }
                     }
                     PathsCommands::Relative { note_id, from_id } => {
-                        match rust_cli_app::client::notes::get_relative_note_path(
+                        match draftsmith_rest_api::client::notes::get_relative_note_path(
                             &url, note_id, from_id,
                         )
                         .await
@@ -915,7 +915,7 @@ async fn main() {
                             Ok(path) => {
                                 println!("{}", path);
                             }
-                            Err(rust_cli_app::client::NoteError::NotFound(id)) => {
+                            Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
                                 eprintln!("Error: Note with id {} not found", id);
                                 std::process::exit(1);
                             }
@@ -934,7 +934,7 @@ async fn main() {
                     description,
                     filename,
                 } => {
-                    match rust_cli_app::client::assets::create_asset(
+                    match draftsmith_rest_api::client::assets::create_asset(
                         &url,
                         &file,
                         note_id,
@@ -953,7 +953,7 @@ async fn main() {
                     }
                 }
                 AssetCommands::List { note_id } => {
-                    match rust_cli_app::client::assets::list_assets(&url, note_id).await {
+                    match draftsmith_rest_api::client::assets::list_assets(&url, note_id).await {
                         Ok(assets) => {
                             println!("{}", serde_json::to_string_pretty(&assets).unwrap());
                         }
@@ -964,7 +964,7 @@ async fn main() {
                     }
                 }
                 AssetCommands::Get { id, output } => {
-                    match rust_cli_app::client::assets::get_asset(&url, id, &output).await {
+                    match draftsmith_rest_api::client::assets::get_asset(&url, id, &output).await {
                         Ok(_) => {
                             println!("Asset {} downloaded to {}", id, output.display());
                         }
@@ -975,7 +975,7 @@ async fn main() {
                     }
                 }
                 AssetCommands::GetByName { path, output } => {
-                    match rust_cli_app::client::assets::get_asset_by_name(&url, &path, &output)
+                    match draftsmith_rest_api::client::assets::get_asset_by_name(&url, &path, &output)
                         .await
                     {
                         Ok(_) => {
@@ -992,11 +992,11 @@ async fn main() {
                     note_id,
                     description,
                 } => {
-                    let request = rust_cli_app::api::UpdateAssetRequest {
+                    let request = draftsmith_rest_api::api::UpdateAssetRequest {
                         note_id,
                         description,
                     };
-                    match rust_cli_app::client::assets::update_asset(&url, id, request).await {
+                    match draftsmith_rest_api::client::assets::update_asset(&url, id, request).await {
                         Ok(asset) => {
                             println!("{}", serde_json::to_string_pretty(&asset).unwrap());
                         }
@@ -1007,7 +1007,7 @@ async fn main() {
                     }
                 }
                 AssetCommands::Delete { id } => {
-                    match rust_cli_app::client::assets::delete_asset(&url, id).await {
+                    match draftsmith_rest_api::client::assets::delete_asset(&url, id).await {
                         Ok(_) => {
                             println!("Asset {} deleted successfully", id);
                         }
