@@ -1082,13 +1082,8 @@ mod note_hierarchy_tests {
         .await
         .expect("Failed to attach child note");
 
-        // Create a note with various types of links
-        let test_note = create_note(
-            State(state.clone()),
-            Json(CreateNoteRequest {
-                title: "Test Note".to_string(),
-                content: format!(
-                    r"
+        let before = format!(
+            r"
 # Test Note
 
 Link to child: [[{child_id}]]
@@ -1096,10 +1091,31 @@ Link to child: [[{child_id}]]
 Link to unrelated: [[{unrelated_id}]]
 
 Custom title link: [[{root_id}|Custom]]",
-                    child_id = child_note.id,
-                    unrelated_id = unrelated_note.id,
-                    root_id = root_note.id
-                ),
+            child_id = child_note.id,
+            unrelated_id = unrelated_note.id,
+            root_id = root_note.id
+        );
+
+        let after = format!(
+            r"
+# Test Note
+
+Link to child: [/ Root / Child]({child_id})
+
+Link to unrelated: [/ Unrelated]({unrelated_id})
+
+Custom title link: [Custom]({root_id})",
+            child_id = child_note.id,
+            unrelated_id = unrelated_note.id,
+            root_id = root_note.id
+        );
+
+        // Create a note with various types of links
+        let test_note = create_note(
+            State(state.clone()),
+            Json(CreateNoteRequest {
+                title: "Test Note".to_string(),
+                content: before,
             }),
         )
         .await
@@ -1139,11 +1155,15 @@ Custom title link: [[{root_id}|Custom]]",
             get_note_content_and_replace_links(test_note.id).expect("Failed to process content");
 
         dbg!(&processed_content);
+        dbg!(&after);
 
         // Verify the links are replaced correctly
         assert!(processed_content.contains(&format!("[/ Root / Child]({})", child_note.id)));
         assert!(processed_content.contains(&format!("[/ Unrelated]({})", unrelated_note.id)));
         assert!(processed_content.contains(&format!("[Custom]({})", root_note.id)));
+
+        // Verify the content looks right
+        assert!(processed_content.trim() == after.trim());
 
         // Clean up
         let _cleanup = TestCleanup {
