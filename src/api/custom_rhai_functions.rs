@@ -1,5 +1,5 @@
+use crate::api::get_note_title;
 use crate::api::hierarchy::notes::get_note_content_and_replace_links;
-use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
 use lazy_static::lazy_static;

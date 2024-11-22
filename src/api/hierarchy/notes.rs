@@ -6,9 +6,9 @@ use crate::api::{
     get_connection, get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path,
 };
 use crate::tables::NewNoteTag;
-use std::collections::{HashMap, HashSet};
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::collections::{HashMap, HashSet};
 
 lazy_static! {
     static ref LINK_REGEX: Regex = Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
@@ -467,11 +467,9 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 ///
 /// The function handles errors in fetching the path of linked notes by skipping those links.
 /// If the initial content fetch fails, it returns an appropriate status code.
-pub fn get_note_content_and_replace_links(
-    note_id: i32,
-) -> Result<String, diesel::result::Error> {
+pub fn get_note_content_and_replace_links(note_id: i32) -> Result<String, diesel::result::Error> {
     let content = get_note_content(note_id)?;
-    
+
     // Early return if no links found
     if !LINK_REGEX.is_match(&content) {
         return Ok(content);
@@ -486,14 +484,11 @@ pub fn get_note_content_and_replace_links(
     for cap in LINK_REGEX.find_iter(&content) {
         if let Some(cap_text) = content.get(cap.start()..cap.end()) {
             if let Some(captures) = LINK_REGEX.captures(cap_text) {
-                if let (Some(id_match), Ok(target_id)) = (captures.get(1), captures[1].parse::<i32>()) {
+                if let (Some(id_match), Ok(target_id)) =
+                    (captures.get(1), captures[1].parse::<i32>())
+                {
                     let custom_title = captures.get(2).map(|m| m.as_str().to_string());
-                    link_positions.push((
-                        cap.start(),
-                        cap.end(),
-                        target_id,
-                        custom_title,
-                    ));
+                    link_positions.push((cap.start(), cap.end(), target_id, custom_title));
                     unique_ids.insert(target_id);
                 }
             }
@@ -529,14 +524,14 @@ pub fn get_note_content_and_replace_links(
         for &(start, end, target_id, ref custom_title) in chunk {
             let path = path_cache.get(&target_id).unwrap();
             new_content.push_str(&content[last_end..start]);
-            
+
             // Use custom title if provided, otherwise use path
             if let Some(title) = custom_title {
                 new_content.push_str(&format!("[{}]({})", title, target_id));
             } else {
                 new_content.push_str(&format!("[{}]({})", path, target_id));
             }
-            
+
             last_end = end;
         }
     }
