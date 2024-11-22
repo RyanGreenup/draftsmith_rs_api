@@ -6,35 +6,37 @@ use rhai::{Array, Dynamic, Engine, ImmutableString};
 use std::cell::RefCell;
 use std::thread_local;
 
+thread_local! {
+    static RECURSION_DEPTH: RefCell<usize> = RefCell::new(0);
+}
+
 // enum for html vs markdown
 enum RenderTarget {
     Html,
     Markdown,
 }
 
-// Defines a thread-local vector for tracking recursion path
-thread_local! {
-    static RECURSION_PATH: RefCell<Vec<i64>> = RefCell::new(Vec::new());
-}
-
-// RAII guard for managing recursion stack
+// RAII guard for managing recursion depth
 struct RecursionGuard {
     note_id: i64,
 }
 
 impl RecursionGuard {
+    const MAX_RECURSION_DEPTH: usize = 10;
+
     fn new(note_id: i64) -> Option<Self> {
-        let already_in_path = RECURSION_PATH.with(|vec| {
-            let mut vec = vec.borrow_mut();
-            if vec.contains(&note_id) {
-                true // Recursion detected
+        let exceeded = RECURSION_DEPTH.with(|depth| {
+            let mut depth = depth.borrow_mut();
+            if *depth >= Self::MAX_RECURSION_DEPTH {
+                true
             } else {
-                vec.push(note_id);
+                *depth += 1;
                 false
             }
         });
-        if already_in_path {
-            None
+
+        if exceeded {
+            None // Recursion depth limit exceeded
         } else {
             Some(Self { note_id })
         }
@@ -43,12 +45,10 @@ impl RecursionGuard {
 
 impl Drop for RecursionGuard {
     fn drop(&mut self) {
-        RECURSION_PATH.with(|vec| {
-            let mut vec = vec.borrow_mut();
-            match vec.pop() {
-                Some(id) if id == self.note_id => {}, // Correctly removed
-                Some(id) => eprintln!("Warning: RecursionGuard drop: expected {}, but found {}", self.note_id, id),
-                None => eprintln!("Warning: RecursionGuard drop: expected {}, but recursion path is empty", self.note_id),
+        RECURSION_DEPTH.with(|depth| {
+            let mut depth = depth.borrow_mut();
+            if *depth > 0 {
+                *depth -= 1;
             }
         });
     }
@@ -176,15 +176,10 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     fn handle_recursion(note_id: i64) -> Option<String> {
         match RecursionGuard::new(note_id) {
             None => {
-                let path = RECURSION_PATH.with(|vec| {
-                    vec.borrow().iter()
-                        .map(|id| id.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" → ")
-                });
                 Some(format!(
-                    "<div class='bg-red-100 p-2'>Recursion detected: {} → {}</div>",
-                    path, note_id
+                    "<div class='bg-red-100 p-2'>Maximum recursion depth ({}) reached at note {}</div>",
+                    RecursionGuard::MAX_RECURSION_DEPTH,
+                    note_id
                 ))
             }
             Some(_guard) => None,
