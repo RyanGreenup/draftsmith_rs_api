@@ -42,8 +42,10 @@ impl Drop for RecursionGuard {
         let mut vec = RECURSION_PATH
             .lock()
             .expect("Failed to lock recursion vector");
-        if let Some(pos) = vec.iter().position(|&x| x == self.note_id) {
-            vec.truncate(pos); // Remove this and all subsequent items
+        match vec.pop() {
+            Some(id) if id == self.note_id => {},
+            Some(id) => eprintln!("Warning: RecursionGuard drop: expected {}, but found {}", self.note_id, id),
+            None => eprintln!("Warning: RecursionGuard drop: expected {}, but recursion path is empty", self.note_id),
         }
     }
 }
