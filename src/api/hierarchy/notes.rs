@@ -219,7 +219,7 @@ pub async fn get_relative_note_path(
 }
 
 async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
-    let all_components = get_all_note_path_components()
+    let all_components = get_all_note_path_components(None)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -240,10 +240,11 @@ async fn get_note_paths() -> Result<HashMap<i32, String>, StatusCode> {
 }
 
 fn get_note_path(id: &i32, from_id: Option<&i32>) -> Result<String, StatusCode> {
-    let (components, relative) = get_note_path_components(id, from_id).map_err(|e| match e {
-        diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
-    })?;
+    let (components, relative) =
+        get_note_path_components(id, from_id, None).map_err(|e| match e {
+            diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
 
     let path = build_hierarchy_path(components, relative);
     Ok(path)
@@ -281,8 +282,10 @@ fn build_hierarchy_path(path_items: Vec<String>, relative: bool) -> String {
 fn get_note_path_components(
     id: &i32,
     from_id: Option<&i32>,
+    state: Option<&AppState>,
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
-    let mut conn = get_connection();
+    let mut conn_holder = None;
+    let conn = get_conn_from_state_or_new(state, &mut conn_holder)?;
     let mut path_components: Vec<String> = Vec::new();
     let mut path_ids = Vec::new(); // Store IDs to check for from_id
     let mut current_id = *id;
@@ -293,11 +296,7 @@ fn get_note_path_components(
         let title = {
             use crate::schema::notes::dsl::*;
             // Change this to return early if note not found
-            match notes
-                .find(current_id)
-                .select(title)
-                .first::<String>(&mut conn)
-            {
+            match notes.find(current_id).select(title).first::<String>(conn) {
                 Ok(t) => t,
                 Err(diesel::result::Error::NotFound) => {
                     return Err(diesel::result::Error::NotFound);
@@ -315,7 +314,7 @@ fn get_note_path_components(
             match note_hierarchy
                 .filter(child_note_id.eq(current_id))
                 .select(parent_note_id)
-                .first::<Option<i32>>(&mut conn)
+                .first::<Option<i32>>(conn)
                 .optional()
                 .unwrap_or(None)
                 .flatten()
@@ -348,9 +347,11 @@ fn get_note_path_components(
     Ok((path_components, false))
 }
 
-async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, diesel::result::Error>
-{
-    let mut conn = get_connection();
+async fn get_all_note_path_components(
+    state: Option<&AppState>,
+) -> Result<HashMap<i32, Vec<String>>, diesel::result::Error> {
+    let mut conn_holder = None;
+    let conn = get_conn_from_state_or_new(state, &mut conn_holder)?;
     let mut paths: HashMap<i32, Vec<String>> = HashMap::new();
     let mut note_cache: HashMap<i32, String> = HashMap::new();
     let mut hierarchy_cache: HashMap<i32, Option<i32>> = HashMap::new();
@@ -360,7 +361,7 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
     // repeating this logic is more performant)
     {
         use crate::schema::notes::dsl::*;
-        let all_notes = notes.select((id, title)).load::<(i32, String)>(&mut conn)?;
+        let all_notes = notes.select((id, title)).load::<(i32, String)>(conn)?;
         note_cache.extend(all_notes);
     }
 
@@ -369,7 +370,7 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
         use crate::schema::note_hierarchy::dsl::*;
         let all_hierarchies = note_hierarchy
             .select((child_note_id, parent_note_id))
-            .load::<(Option<i32>, Option<i32>)>(&mut conn)?;
+            .load::<(Option<i32>, Option<i32>)>(conn)?;
 
         hierarchy_cache.extend(
             all_hierarchies
@@ -464,9 +465,36 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 ///
 /// The function handles errors in fetching the path of linked notes by skipping those links.
 /// If the initial content fetch fails, it returns an appropriate status code.
+fn get_conn_from_state_or_new<'a>(
+    state: Option<&AppState>,
+    conn_holder: &'a mut Option<PgConnection>,
+) -> Result<&'a mut PgConnection, diesel::result::Error> {
+    match state {
+        Some(state) => {
+            // Get a connection from the pool
+            let _pooled_conn = state.pool.get().map_err(|e| {
+                diesel::result::Error::DatabaseError(
+                    diesel::result::DatabaseErrorKind::Unknown,
+                    Box::new(e.to_string()),
+                )
+            })?;
+            // Create a new connection instead of trying to clone
+            *conn_holder = Some(get_connection());
+            Ok(conn_holder.as_mut().unwrap())
+        }
+        None => {
+            if conn_holder.is_none() {
+                *conn_holder = Some(get_connection());
+            }
+            Ok(conn_holder.as_mut().unwrap())
+        }
+    }
+}
+
 pub fn replace_internal_links_with_titles(
     content: &str,
     note_id: Option<&i32>,
+    state: Option<&AppState>,
 ) -> Result<String, diesel::result::Error> {
     // Early return if no links found
     if !LINK_REGEX.is_match(content) {
@@ -477,6 +505,7 @@ pub fn replace_internal_links_with_titles(
     let mut link_positions = Vec::new();
     let mut unique_ids = HashSet::new();
     let mut last_end = 0;
+    let mut conn = None;
 
     // Find all the links in the content
     for cap in LINK_REGEX.find_iter(content) {
@@ -509,7 +538,8 @@ pub fn replace_internal_links_with_titles(
 
         // Batch process paths for this chunk
         for &(_, _, target_id, _) in chunk {
-            let (components, relative) = get_note_path_components(&target_id, note_id)?;
+            let _conn = get_conn_from_state_or_new(state, &mut conn)?;
+            let (components, relative) = get_note_path_components(&target_id, note_id, state)?;
             let path = if relative {
                 components.join(" / ")
             } else {
@@ -1059,8 +1089,9 @@ mod note_hierarchy_tests {
         ];
 
         for (note_id, from_id, expected_path) in test_cases {
-            let (path, _relative) = get_note_path_components(&note_id, from_id.as_ref())
-                .expect("Failed to get note path components");
+            let (path, _relative) =
+                get_note_path_components(&note_id, from_id.as_ref(), Some(&state))
+                    .expect("Failed to get note path components");
 
             assert_eq!(
                 path, expected_path,
@@ -1193,8 +1224,9 @@ Custom title link: [Custom]({root_id})",
 
         // Get the processed content
         let content = get_note_content(test_note.id).expect("Failed to get note content");
-        let processed_content = replace_internal_links_with_titles(&content, Some(&test_note.id))
-            .expect("Failed to process content");
+        let processed_content =
+            replace_internal_links_with_titles(&content, Some(&test_note.id), Some(&state))
+                .expect("Failed to process content");
 
         dbg!(&processed_content);
         dbg!(&after);

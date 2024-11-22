@@ -715,6 +715,7 @@ async fn render_note_html(
     Ok(custom_rhai_functions::parse_md_to_html(
         &note.content,
         Some(&note_id),
+        Some(&state),
     ))
 }
 
@@ -738,6 +739,7 @@ async fn render_note_md(
     Ok(custom_rhai_functions::process_md(
         &note.content,
         Some(&note_id),
+        Some(&state),
     ))
 }
 
@@ -760,7 +762,11 @@ async fn render_all_notes_html(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                custom_rhai_functions::parse_md_to_html(&note.content, Some(&note.id))
+                custom_rhai_functions::parse_md_to_html(
+                    &note.content,
+                    Some(&note.id),
+                    Some(&state)
+                )
             ),
         })
         .collect();
@@ -786,7 +792,7 @@ async fn render_all_notes_md(
             rendered_content: format!(
                 "# {}\n\n{}",
                 note.title,
-                custom_rhai_functions::process_md(&note.content, Some(&note.id))
+                custom_rhai_functions::process_md(&note.content, Some(&note.id), Some(&state))
             ),
         })
         .collect();
@@ -1258,8 +1264,13 @@ async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<S
         Some("html") => Ok(custom_rhai_functions::parse_md_to_html(
             &payload.content,
             None,
+            None,
         )),
-        _ => Ok(custom_rhai_functions::process_md(&payload.content, None)),
+        _ => Ok(custom_rhai_functions::process_md(
+            &payload.content,
+            None,
+            None,
+        )),
     }
 }
 

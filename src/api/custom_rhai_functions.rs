@@ -1,4 +1,5 @@
 use crate::api::hierarchy::notes::replace_internal_links_with_titles;
+use crate::api::AppState;
 use crate::api::{get_note_content, get_note_title};
 use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
@@ -14,7 +15,7 @@ enum RenderTarget {
 
 // Defines a thread-local vector for tracking recursion path
 thread_local! {
-    static RECURSION_PATH: RefCell<Vec<i64>> = RefCell::new(Vec::new());
+    static RECURSION_PATH: RefCell<Vec<i64>> = const { RefCell::new(Vec::new()) };
 }
 
 // RAII guard for managing recursion stack
@@ -46,9 +47,15 @@ impl Drop for RecursionGuard {
         RECURSION_PATH.with(|vec| {
             let mut vec = vec.borrow_mut();
             match vec.pop() {
-                Some(id) if id == self.note_id => {}, // Correctly removed
-                Some(id) => eprintln!("Warning: RecursionGuard drop: expected {}, but found {}", self.note_id, id),
-                None => eprintln!("Warning: RecursionGuard drop: expected {}, but recursion path is empty", self.note_id),
+                Some(id) if id == self.note_id => {} // Correctly removed
+                Some(id) => eprintln!(
+                    "Warning: RecursionGuard drop: expected {}, but found {}",
+                    self.note_id, id
+                ),
+                None => eprintln!(
+                    "Warning: RecursionGuard drop: expected {}, but recursion path is empty",
+                    self.note_id
+                ),
             }
         });
     }
@@ -177,7 +184,8 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         match RecursionGuard::new(note_id) {
             None => {
                 let path = RECURSION_PATH.with(|vec| {
-                    vec.borrow().iter()
+                    vec.borrow()
+                        .iter()
                         .map(|id| id.to_string())
                         .collect::<Vec<_>>()
                         .join(" → ")
@@ -191,7 +199,10 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
-    fn process_content(note_id: i64, processor: fn(&str, Option<&i32>) -> String) -> String {
+    fn process_content(
+        note_id: i64,
+        processor: fn(&str, Option<&i32>, Option<&AppState>) -> String,
+    ) -> String {
         if note_id > 0 {
             // Could also use:
             // crate::api::get_note_content
@@ -199,8 +210,8 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
             // which is convenient for end users and considered a feature
             match get_note_content(note_id as i32) {
                 Ok(content) => {
-                    let content = pre_process_md(&content, Some(&(note_id as i32)));
-                    processor(&content, Some(&(note_id as i32)))
+                    let content = pre_process_md(&content, Some(&(note_id as i32)), None);
+                    processor(&content, Some(&(note_id as i32)), None)
                 }
                 Err(e) => format!("Error fetching note content: {}", e),
             }
@@ -528,16 +539,16 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     functions
 }
 
-pub fn parse_md_to_html(document: &str, note_id: Option<&i32>) -> String {
-    let document = pre_process_md(document, note_id);
+pub fn parse_md_to_html(document: &str, note_id: Option<&i32>, state: Option<&AppState>) -> String {
+    let document = pre_process_md(document, note_id, state);
     let functions = build_custom_rhai_functions(RenderTarget::Html);
     draftsmith_render::parse_md_to_html(&document, Some(functions))
 }
 
 /// This function processes markdown content by evaluating Rhai functions
 /// In addition, this will replace any links to notes with their title
-pub fn process_md(document: &str, note_id: Option<&i32>) -> String {
-    let document = pre_process_md(document, note_id);
+pub fn process_md(document: &str, note_id: Option<&i32>, state: Option<&AppState>) -> String {
+    let document = pre_process_md(document, note_id, state);
     let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));
     processor.process(&document)
@@ -548,8 +559,8 @@ pub fn process_md(document: &str, note_id: Option<&i32>) -> String {
 /// :::fold divs
 /// but the API must handle the following:
 ///   - Replaces links to notes with their title
-pub fn pre_process_md(document: &str, note_id: Option<&i32>) -> String {
-    replace_internal_links_with_titles(document, note_id).unwrap_or_else(|e| {
+pub fn pre_process_md(document: &str, note_id: Option<&i32>, state: Option<&AppState>) -> String {
+    replace_internal_links_with_titles(document, note_id, state).unwrap_or_else(|e| {
         eprintln!("Error replacing internal links with titles: {}", e);
         document.to_string()
     })
