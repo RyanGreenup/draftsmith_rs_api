@@ -6,7 +6,13 @@ use crate::api::{
     get_connection, get_note_content, get_notes_tags, state::AppState, tags::TagResponse, Path,
 };
 use crate::tables::NewNoteTag;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use lazy_static::lazy_static;
+use regex::Regex;
+
+lazy_static! {
+    static ref LINK_REGEX: Regex = Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
+}
 
 #[derive(Debug, serde::Deserialize)]
 pub struct AttachChildNoteRequest {
@@ -463,38 +469,79 @@ async fn get_all_note_path_components() -> Result<HashMap<i32, Vec<String>>, die
 /// If the initial content fetch fails, it returns an appropriate status code.
 pub fn get_note_content_and_replace_links(
     note_id: i32,
-) -> Result<std::string::String, diesel::result::Error> {
+) -> Result<String, diesel::result::Error> {
     let content = get_note_content(note_id)?;
-
-    // Regular expression to match both [[id]] and [[id|title]] formats
-    let link_regex = regex::Regex::new(r"\[\[(\d+)(?:\|([^\]]+))?\]\]").unwrap();
-
-    let mut last_end = 0;
-    let mut new_content = String::new();
-
-    for cap in link_regex.captures_iter(&content) {
-        let whole_match = cap.get(0).unwrap();
-        let target_id: i32 = cap[1].parse().unwrap();
-
-        // Get the path for this link
-        let path = match get_note_path(&target_id, Some(&note_id)) {
-            Ok(p) => p,
-            Err(_) => continue, // Skip this link if we can't get the path
-        };
-
-        // Use custom title if provided, otherwise use the path
-        let display_text = cap.get(2).map(|m| m.as_str()).unwrap_or(&path);
-
-        // Add the text between the last match and this one
-        new_content.push_str(&content[last_end..whole_match.start()]);
-
-        // Add the new formatted link
-        new_content.push_str(&format!("[{}]({})", display_text, target_id));
-
-        last_end = whole_match.end();
+    
+    // Early return if no links found
+    if !LINK_REGEX.is_match(&content) {
+        return Ok(content);
     }
 
-    // Add any remaining content after the last match
+    let mut new_content = String::new();
+    let mut link_positions = Vec::new();
+    let mut unique_ids = HashSet::new();
+    let mut last_end = 0;
+
+    // Find all the links in the content
+    for cap in LINK_REGEX.find_iter(&content) {
+        if let Some(cap_text) = content.get(cap.start()..cap.end()) {
+            if let Some(captures) = LINK_REGEX.captures(cap_text) {
+                if let (Some(id_match), Ok(target_id)) = (captures.get(1), captures[1].parse::<i32>()) {
+                    let custom_title = captures.get(2).map(|m| m.as_str().to_string());
+                    link_positions.push((
+                        cap.start(),
+                        cap.end(),
+                        target_id,
+                        custom_title,
+                    ));
+                    unique_ids.insert(target_id);
+                }
+            }
+        }
+    }
+
+    // Early return if no valid links found
+    if link_positions.is_empty() {
+        return Ok(content);
+    }
+
+    // Pre-allocate string with estimated capacity
+    new_content.reserve(content.len() + link_positions.len() * 20); // Estimate 20 chars per path
+
+    const LINKS_PER_BATCH: usize = 10;
+
+    // Process links in batches
+    for chunk in link_positions.chunks(LINKS_PER_BATCH) {
+        let mut path_cache = HashMap::with_capacity(chunk.len());
+
+        // Batch process paths for this chunk
+        for &(_, _, target_id, _) in chunk {
+            let (components, relative) = get_note_path_components(&target_id, Some(&note_id))?;
+            let path = if relative {
+                components.join(" / ")
+            } else {
+                format!("/ {}", components.join(" / "))
+            };
+            path_cache.insert(target_id, path);
+        }
+
+        // Build the content for this batch
+        for &(start, end, target_id, ref custom_title) in chunk {
+            let path = path_cache.get(&target_id).unwrap();
+            new_content.push_str(&content[last_end..start]);
+            
+            // Use custom title if provided, otherwise use path
+            if let Some(title) = custom_title {
+                new_content.push_str(&format!("[{}]({})", title, target_id));
+            } else {
+                new_content.push_str(&format!("[{}]({})", path, target_id));
+            }
+            
+            last_end = end;
+        }
+    }
+
+    // Add remaining content after the last match
     new_content.push_str(&content[last_end..]);
 
     Ok(new_content)
