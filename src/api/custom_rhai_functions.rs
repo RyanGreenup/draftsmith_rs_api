@@ -4,54 +4,44 @@ use draftsmith_render::processor::{CustomFn, Processor};
 use glob::glob;
 use rhai::{Array, Dynamic, Engine, ImmutableString};
 use std::cell::RefCell;
-use std::thread_local;
+use std::rc::Rc;
 
-thread_local! {
-    static RECURSION_DEPTH: RefCell<usize> = RefCell::new(0);
+#[derive(Clone)]
+struct RecursionContext {
+    depth: Rc<RefCell<usize>>,
+    max_depth: usize,
+}
+
+impl RecursionContext {
+    fn new(max_depth: usize) -> Self {
+        Self {
+            depth: Rc::new(RefCell::new(0)),
+            max_depth,
+        }
+    }
+
+    fn increment(&self) -> Result<(), String> {
+        let mut depth = self.depth.borrow_mut();
+        if *depth >= self.max_depth {
+            Err(format!("Maximum recursion depth ({}) reached", self.max_depth))
+        } else {
+            *depth += 1;
+            Ok(())
+        }
+    }
+
+    fn decrement(&self) {
+        let mut depth = self.depth.borrow_mut();
+        if *depth > 0 {
+            *depth -= 1;
+        }
+    }
 }
 
 // enum for html vs markdown
 enum RenderTarget {
     Html,
     Markdown,
-}
-
-// RAII guard for managing recursion depth
-struct RecursionGuard {
-    note_id: i64,
-}
-
-impl RecursionGuard {
-    const MAX_RECURSION_DEPTH: usize = 10;
-
-    fn new(note_id: i64) -> Option<Self> {
-        let exceeded = RECURSION_DEPTH.with(|depth| {
-            let mut depth = depth.borrow_mut();
-            if *depth >= Self::MAX_RECURSION_DEPTH {
-                true
-            } else {
-                *depth += 1;
-                false
-            }
-        });
-
-        if exceeded {
-            None // Recursion depth limit exceeded
-        } else {
-            Some(Self { note_id })
-        }
-    }
-}
-
-impl Drop for RecursionGuard {
-    fn drop(&mut self) {
-        RECURSION_DEPTH.with(|depth| {
-            let mut depth = depth.borrow_mut();
-            if *depth > 0 {
-                *depth -= 1;
-            }
-        });
-    }
 }
 
 fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
@@ -173,25 +163,8 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
-    fn handle_recursion(note_id: i64) -> Option<String> {
-        match RecursionGuard::new(note_id) {
-            None => {
-                Some(format!(
-                    "<div class='bg-red-100 p-2'>Maximum recursion depth ({}) reached at note {}</div>",
-                    RecursionGuard::MAX_RECURSION_DEPTH,
-                    note_id
-                ))
-            }
-            Some(_guard) => None,
-        }
-    }
-
-    fn process_content(note_id: i64, processor: fn(&str, Option<&i32>) -> String) -> String {
+    fn process_content(note_id: i64, processor: impl Fn(&str, Option<&i32>) -> String) -> String {
         if note_id > 0 {
-            // Could also use:
-            // crate::api::get_note_content
-            // this however, will replace links with titles
-            // which is convenient for end users and considered a feature
             match get_note_content(note_id as i32) {
                 Ok(content) => {
                     let content = pre_process_md(&content, Some(&(note_id as i32)));
@@ -204,18 +177,33 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
         }
     }
 
-    fn transclusion_to_md(note_id: i64) -> String {
-        if let Some(recursion_msg) = handle_recursion(note_id) {
-            return recursion_msg;
+    fn transclusion_to_md(note_id: i64, context: RecursionContext) -> String {
+        if let Err(e) = context.increment() {
+            return format!("Maximum recursion depth reached at note {}: {}", note_id, e);
         }
-        process_content(note_id, process_md)
+    
+        let result = process_content(note_id, |content, note_id| {
+            process_md_with_context(&content, note_id, context.clone())
+        });
+    
+        context.decrement();
+        result
     }
 
-    fn transclusion_to_html(note_id: i64) -> String {
-        if let Some(recursion_msg) = handle_recursion(note_id) {
-            return recursion_msg;
+    fn transclusion_to_html(note_id: i64, context: RecursionContext) -> String {
+        if let Err(e) = context.increment() {
+            return format!(
+                "<div class='bg-red-100 p-2'>{} at note {}</div>",
+                e, note_id
+            );
         }
-        process_content(note_id, parse_md_to_html)
+    
+        let result = process_content(note_id, |content, note_id| {
+            parse_md_to_html_with_context(&content, note_id, context.clone())
+        });
+    
+        context.decrement();
+        result
     }
 
     fn image(src: &str, width: i64, alt: &str) -> String {
@@ -512,30 +500,42 @@ fn build_custom_rhai_functions(render_target: RenderTarget) -> Vec<CustomFn> {
     ];
 
     match render_target {
-        RenderTarget::Html => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
-            engine.register_fn("transclusion", transclusion_to_html);
-        })]),
-        RenderTarget::Markdown => functions.append(&mut vec![Box::new(|engine: &mut Engine| {
-            engine.register_fn("transclusion", transclusion_to_md);
-        })]),
+        RenderTarget::Html => functions.push(Box::new(move |engine: &mut Engine| {
+            let context = RecursionContext::new(10);
+            engine.register_fn("transclusion", move |note_id: i64| {
+                transclusion_to_html(note_id, context.clone())
+            });
+        })),
+        RenderTarget::Markdown => functions.push(Box::new(move |engine: &mut Engine| {
+            let context = RecursionContext::new(10);
+            engine.register_fn("transclusion", move |note_id: i64| {
+                transclusion_to_md(note_id, context.clone())
+            });
+        })),
     }
 
     functions
 }
 
-pub fn parse_md_to_html(document: &str, note_id: Option<&i32>) -> String {
+pub fn parse_md_to_html_with_context(document: &str, note_id: Option<&i32>, context: RecursionContext) -> String {
     let document = pre_process_md(document, note_id);
     let functions = build_custom_rhai_functions(RenderTarget::Html);
     draftsmith_render::parse_md_to_html(&document, Some(functions))
 }
 
-/// This function processes markdown content by evaluating Rhai functions
-/// In addition, this will replace any links to notes with their title
-pub fn process_md(document: &str, note_id: Option<&i32>) -> String {
+pub fn parse_md_to_html(document: &str, note_id: Option<&i32>) -> String {
+    parse_md_to_html_with_context(document, note_id, RecursionContext::new(10))
+}
+
+pub fn process_md_with_context(document: &str, note_id: Option<&i32>, context: RecursionContext) -> String {
     let document = pre_process_md(document, note_id);
     let functions = build_custom_rhai_functions(RenderTarget::Markdown);
     let mut processor = Processor::new(Some(functions));
     processor.process(&document)
+}
+
+pub fn process_md(document: &str, note_id: Option<&i32>) -> String {
+    process_md_with_context(document, note_id, RecursionContext::new(10))
 }
 
 /// This function pre-processes markdown content with any custom logic
