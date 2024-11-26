@@ -474,8 +474,12 @@ async fn main() {
                 NotesCommands::Flat { command } => match command {
                     FlatCommands::List { metadata_only } => {
                         if let Some(note_id) = id {
-                            match draftsmith_rest_api::client::fetch_note(&url, note_id, metadata_only)
-                                .await
+                            match draftsmith_rest_api::client::fetch_note(
+                                &url,
+                                note_id,
+                                metadata_only,
+                            )
+                            .await
                             {
                                 Ok(note) => {
                                     println!("{}", serde_json::to_string_pretty(&note).unwrap());
@@ -490,9 +494,10 @@ async fn main() {
                                 }
                             }
                         } else {
-                            let notes = draftsmith_rest_api::client::fetch_notes(&url, metadata_only)
-                                .await
-                                .unwrap();
+                            let notes =
+                                draftsmith_rest_api::client::fetch_notes(&url, metadata_only)
+                                    .await
+                                    .unwrap();
                             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                         }
                     }
@@ -565,7 +570,9 @@ async fn main() {
                                 child_note_id: child_id,
                                 parent_note_id: Some(parent_id),
                             };
-                            match draftsmith_rest_api::client::attach_child_note(&url, request).await {
+                            match draftsmith_rest_api::client::attach_child_note(&url, request)
+                                .await
+                            {
                                 Ok(_) => println!(
                                     "Successfully attached note {} to parent {}",
                                     child_id, parent_id
@@ -582,7 +589,9 @@ async fn main() {
                     }
                     HierarchyCommands::Detach => {
                         if let Some(child_id) = id {
-                            match draftsmith_rest_api::client::detach_child_note(&url, child_id).await {
+                            match draftsmith_rest_api::client::detach_child_note(&url, child_id)
+                                .await
+                            {
                                 Ok(_) => println!("Successfully detached note {}", child_id),
                                 Err(e) => {
                                     eprintln!("Error: {}", e);
@@ -674,30 +683,29 @@ async fn main() {
                     };
 
                     // Parse the JSON into a Vec<NoteTreeNode>
-                    let trees: Vec<draftsmith_rest_api::client::NoteTreeNode> = match serde_json::from_str::<
-                        Vec<draftsmith_rest_api::client::NoteTreeNode>,
-                    >(
-                        &content
-                    ) {
-                        Ok(trees) => {
-                            if trees.is_empty() {
-                                eprintln!("Error: JSON file contains empty array");
+                    let trees: Vec<draftsmith_rest_api::client::NoteTreeNode> =
+                        match serde_json::from_str::<Vec<draftsmith_rest_api::client::NoteTreeNode>>(
+                            &content,
+                        ) {
+                            Ok(trees) => {
+                                if trees.is_empty() {
+                                    eprintln!("Error: JSON file contains empty array");
+                                    std::process::exit(1);
+                                }
+                                trees
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "Error: JSON file must contain an array of note trees: {}",
+                                    e
+                                );
+                                eprintln!("Example format:");
+                                eprintln!(
+                                    r#"[{{"id": 1, "title": "Root", "content": "content", "children": [], "tags": []}}]"#
+                                );
                                 std::process::exit(1);
                             }
-                            trees
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "Error: JSON file must contain an array of note trees: {}",
-                                e
-                            );
-                            eprintln!("Example format:");
-                            eprintln!(
-                                r#"[{{"id": 1, "title": "Root", "content": "content", "children": [], "tags": []}}]"#
-                            );
-                            std::process::exit(1);
-                        }
-                    };
+                        };
 
                     // Upload the trees
                     match draftsmith_rest_api::client::update_note_tree(&url, trees).await {
@@ -726,8 +734,10 @@ async fn main() {
                         // Render single note
                         let rendered_content = match render_type {
                             RenderType::Html => {
-                                match draftsmith_rest_api::client::get_note_rendered_html(&url, note_id)
-                                    .await
+                                match draftsmith_rest_api::client::get_note_rendered_html(
+                                    &url, note_id,
+                                )
+                                .await
                                 {
                                     Ok(html) => html,
                                     Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
@@ -741,8 +751,10 @@ async fn main() {
                                 }
                             }
                             RenderType::Md => {
-                                match draftsmith_rest_api::client::get_note_rendered_md(&url, note_id)
-                                    .await
+                                match draftsmith_rest_api::client::get_note_rendered_md(
+                                    &url, note_id,
+                                )
+                                .await
                                 {
                                     Ok(md) => md,
                                     Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
@@ -766,7 +778,8 @@ async fn main() {
                         // Render all notes
                         let rendered_notes = match render_type {
                             RenderType::Html => {
-                                match draftsmith_rest_api::client::get_all_notes_rendered_html(&url).await
+                                match draftsmith_rest_api::client::get_all_notes_rendered_html(&url)
+                                    .await
                                 {
                                     Ok(notes) => notes,
                                     Err(e) => {
@@ -776,7 +789,9 @@ async fn main() {
                                 }
                             }
                             RenderType::Md => {
-                                match draftsmith_rest_api::client::get_all_notes_rendered_md(&url).await {
+                                match draftsmith_rest_api::client::get_all_notes_rendered_md(&url)
+                                    .await
+                                {
                                     Ok(notes) => notes,
                                     Err(e) => {
                                         eprintln!("Error: {}", e);
@@ -892,7 +907,8 @@ async fn main() {
                         }
                     }
                     PathsCommands::Get { note_id } => {
-                        match draftsmith_rest_api::client::notes::get_note_path(&url, note_id).await {
+                        match draftsmith_rest_api::client::notes::get_note_path(&url, note_id).await
+                        {
                             Ok(path) => {
                                 println!("{}", path);
                             }
@@ -975,8 +991,10 @@ async fn main() {
                     }
                 }
                 AssetCommands::GetByName { path, output } => {
-                    match draftsmith_rest_api::client::assets::get_asset_by_name(&url, &path, &output)
-                        .await
+                    match draftsmith_rest_api::client::assets::get_asset_by_name(
+                        &url, &path, &output,
+                    )
+                    .await
                     {
                         Ok(_) => {
                             println!("Asset '{}' downloaded to {}", path, output.display());
@@ -996,7 +1014,8 @@ async fn main() {
                         note_id,
                         description,
                     };
-                    match draftsmith_rest_api::client::assets::update_asset(&url, id, request).await {
+                    match draftsmith_rest_api::client::assets::update_asset(&url, id, request).await
+                    {
                         Ok(asset) => {
                             println!("{}", serde_json::to_string_pretty(&asset).unwrap());
                         }
