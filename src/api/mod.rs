@@ -39,7 +39,7 @@ struct RenderedNote {
     rendered_content: String,
 }
 use crate::api::hierarchy::notes::{
-    attach_child_note, detach_child_note, get_note_tree, update_note_tree,
+    attach_child_note, detach_child_note, get_note_tree, update_note_tree, get_note_path_components
 };
 pub use hierarchy::notes::{
     get_all_note_paths, get_relative_note_path, get_single_note_path, NoteTreeNode,
@@ -670,6 +670,7 @@ async fn delete_note(
         Err(StatusCode::NOT_FOUND)
     }
 }
+
 
 async fn get_hierarchy_mappings(
     State(state): State<AppState>,
