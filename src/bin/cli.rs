@@ -362,6 +362,8 @@ enum NotesCommands {
     },
     /// Get backlinks for a note
     Backlinks,
+    /// Get breadcrumb path to a note
+    Breadcrumbs,
 }
 
 #[derive(Subcommand)]
@@ -857,6 +859,26 @@ async fn main() {
                         }
                     } else {
                         eprintln!("Error: --id is required for backlinks command");
+                        std::process::exit(1);
+                    }
+                }
+                NotesCommands::Breadcrumbs => {
+                    if let Some(note_id) = id {
+                        match draftsmith_rest_api::client::notes::get_note_breadcrumbs(&url, note_id).await {
+                            Ok(breadcrumbs) => {
+                                println!("{}", serde_json::to_string_pretty(&breadcrumbs).unwrap());
+                            }
+                            Err(draftsmith_rest_api::client::NoteError::NotFound(id)) => {
+                                eprintln!("Error: Note with id {} not found", id);
+                                std::process::exit(1);
+                            }
+                            Err(e) => {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("Error: --id is required for breadcrumbs command");
                         std::process::exit(1);
                     }
                 }
