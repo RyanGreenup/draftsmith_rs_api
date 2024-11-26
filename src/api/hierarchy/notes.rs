@@ -373,67 +373,13 @@ fn get_note_path_components(
     from_id: Option<&i32>,
     state: Option<&AppState>,
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
-    let mut conn_holder = None;
-    let conn = get_conn_from_state_or_new(state, &mut conn_holder)?;
-    let mut path_components: Vec<String> = Vec::new();
-    let mut path_ids = Vec::new(); // Store IDs to check for from_id
-    let mut current_id = *id;
-
-    // Build path from target to root
-    loop {
-        // Get the current note's title
-        let title = {
-            use crate::schema::notes::dsl::*;
-            // Change this to return early if note not found
-            match notes.find(current_id).select(title).first::<String>(conn) {
-                Ok(t) => t,
-                Err(diesel::result::Error::NotFound) => {
-                    return Err(diesel::result::Error::NotFound);
-                }
-                Err(e) => return Err(e),
-            }
-        };
-
-        path_components.push(title);
-        path_ids.push(current_id);
-
-        // Look up parent
-        let parent_id = {
-            use crate::schema::note_hierarchy::dsl::*;
-            match note_hierarchy
-                .filter(child_note_id.eq(current_id))
-                .select(parent_note_id)
-                .first::<Option<i32>>(conn)
-                .optional()
-                .unwrap_or(None)
-                .flatten()
-            {
-                Some(pid) => pid,
-                None => break,
-            }
-        };
-
-        current_id = parent_id;
-    }
-
-    // Reverse both vectors since we collected from child to parent
-    path_components.reverse();
-    path_ids.reverse();
-
-    // If from_id is specified, try to find it in the path
-    if let Some(from_id) = from_id {
-        if let Some(pos) = path_ids.iter().position(|&id| id == *from_id) {
-            // If from_id is found in the path, return only components after it
-            let cut_path_components = path_components.split_off(pos + 1);
-            // If it's empty, return the full path as it's the same as the target, or from_id is not an ancestor
-            if !cut_path_components.is_empty() {
-                return Ok((cut_path_components, true));
-            }
-        };
-    }
-
-    // Return full path if from_id is not specified or not found in path
-    Ok((path_components, false))
+    let metadata_components = get_note_metadata_components(id, from_id, state)?;
+    let is_relative = from_id.is_some() && metadata_components.len() < get_note_metadata_components(id, None, state)?.len();
+    
+    Ok((
+        metadata_components.into_iter().map(|n| n.title).collect(),
+        is_relative
+    ))
 }
 
 async fn get_all_note_path_components(
