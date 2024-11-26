@@ -32,6 +32,15 @@ pub enum NoteError {
     TagError(crate::client::tags::TagError),
 }
 
+/// Represents a note's metadata in a breadcrumb path
+#[derive(Debug, serde::Deserialize)]
+pub struct NoteBreadcrumb {
+    pub id: i32,
+    pub title: String,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub modified_at: Option<chrono::NaiveDateTime>,
+}
+
 impl fmt::Display for NoteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -604,6 +613,20 @@ pub async fn get_note_path(base_url: &str, note_id: i32) -> Result<String, NoteE
     let response = response.error_for_status()?;
     let path = response.text().await?;
     Ok(path)
+}
+
+/// Get the breadcrumb path to a specific note
+pub async fn get_note_breadcrumbs(base_url: &str, note_id: i32) -> Result<Vec<NoteBreadcrumb>, NoteError> {
+    let url = format!("{}/notes/{}/breadcrumbs", base_url, note_id);
+    let response = reqwest::get(url).await?;
+
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(NoteError::NotFound(note_id));
+    }
+
+    let response = response.error_for_status()?;
+    let breadcrumbs = response.json::<Vec<NoteBreadcrumb>>().await?;
+    Ok(breadcrumbs)
 }
 
 /// Get the relative path from one note to another
@@ -1863,6 +1886,72 @@ mod tests {
             },
         )
         .await?;
+
+    #[tokio::test]
+    async fn test_get_note_breadcrumbs() -> Result<(), Box<dyn std::error::Error>> {
+        let base_url = BASE_URL;
+
+        // Create a hierarchy of notes
+        let root_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Root Note".to_string(),
+            },
+        ).await?;
+
+        let child_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Child Note".to_string(),
+            },
+        ).await?;
+
+        let grandchild_note = create_note(
+            base_url,
+            CreateNoteRequest {
+                title: "".to_string(),
+                content: "# Grandchild Note".to_string(),
+            },
+        ).await?;
+
+        // Create hierarchy
+        attach_child_note(base_url, AttachChildRequest {
+            child_note_id: child_note.id,
+            parent_note_id: Some(root_note.id),
+        }).await?;
+
+        attach_child_note(base_url, AttachChildRequest {
+            child_note_id: grandchild_note.id,
+            parent_note_id: Some(child_note.id),
+        }).await?;
+
+        // Give the server time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Get breadcrumbs for grandchild note
+        let breadcrumbs = get_note_breadcrumbs(base_url, grandchild_note.id).await?;
+
+        // Verify breadcrumb path
+        assert_eq!(breadcrumbs.len(), 3, "Expected 3 levels in breadcrumb path");
+        assert_eq!(breadcrumbs[0].id, root_note.id);
+        assert_eq!(breadcrumbs[1].id, child_note.id);
+        assert_eq!(breadcrumbs[2].id, grandchild_note.id);
+
+        // Verify breadcrumb metadata
+        for crumb in &breadcrumbs {
+            assert!(crumb.created_at.is_some());
+            assert!(crumb.modified_at.is_some());
+            assert!(!crumb.title.is_empty());
+        }
+
+        // Test non-existent note
+        let result = get_note_breadcrumbs(base_url, 99999).await;
+        assert!(matches!(result, Err(NoteError::NotFound(99999))));
+
+        Ok(())
+    }
 
         let child_note_title = "Child Note";
         let child_note = create_note(
