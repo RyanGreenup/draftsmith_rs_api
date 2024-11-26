@@ -42,7 +42,8 @@ use crate::api::hierarchy::notes::{
     attach_child_note, detach_child_note, get_note_tree, update_note_tree, get_note_path_components
 };
 pub use hierarchy::notes::{
-    get_all_note_paths, get_relative_note_path, get_single_note_path, NoteTreeNode,
+    get_all_note_paths, get_relative_note_path, get_single_note_path, 
+    NoteTreeNode, get_note_breadcrumbs,
 };
 use sha2::{Digest, Sha256};
 use state::{AppState, Pool};
@@ -328,6 +329,7 @@ pub fn create_router(pool: Pool) -> Router {
         .route("/notes/paths", get(get_all_note_paths))
         .route("/notes/:id/path", get(get_single_note_path))
         .route("/notes/:id/path/:from_id", get(get_relative_note_path))
+        .route("/notes/:id/breadcrumbs", get(get_note_breadcrumbs))
         .route(
             "/assets/download/*filepath",
             get(download_asset_by_filename),
