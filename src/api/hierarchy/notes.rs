@@ -2,7 +2,7 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{get_connection, get_notes_tags, state::AppState, tags::TagResponse, Path};
+use crate::api::{get_connection, get_notes_tags, state::AppState, tags::TagResponse, Path, NoteMetadataResponse};
 use crate::tables::NewNoteTag;
 use lazy_static::lazy_static;
 use regex::Regex;
