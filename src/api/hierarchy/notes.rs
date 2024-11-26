@@ -2,11 +2,15 @@ use super::generics::{
     attach_child, build_generic_tree, detach_child, is_circular_hierarchy, BasicTreeNode,
     HierarchyItem,
 };
-use crate::api::{get_connection, get_notes_tags, state::AppState, tags::TagResponse, Path, NoteMetadataResponse};
-use axum::extract::State;
+use crate::api::{
+    get_connection, get_notes_tags, state::AppState, tags::TagResponse, NoteMetadataResponse, Path,
+};
 use crate::tables::NewNoteTag;
+use axum::extract::State;
+use axum::{debug_handler, extract::Json, http::StatusCode};
 use lazy_static::lazy_static;
 use regex::Regex;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 lazy_static! {
@@ -73,12 +77,6 @@ impl HierarchyItem for NoteHierarchy {
             .map(|_| ())
     }
 }
-use axum::{
-    debug_handler,
-    extract::{Json, State},
-    http::StatusCode,
-};
-use serde::Serialize;
 
 #[derive(Debug, serde::Deserialize, Serialize, Clone)]
 pub struct NoteTreeNode {
@@ -218,12 +216,12 @@ pub async fn get_note_breadcrumbs(
     Path(note_id): Path<i32>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<NoteMetadataResponse>>, StatusCode> {
-    let components = get_note_metadata_components(&note_id, None, Some(&state))
-        .map_err(|e| match e {
+    let components =
+        get_note_metadata_components(&note_id, None, Some(&state)).map_err(|e| match e {
             diesel::result::Error::NotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         })?;
-    
+
     Ok(Json(components))
 }
 
@@ -247,7 +245,12 @@ fn get_note_metadata_components(
             match notes
                 .find(current_id)
                 .select((id, title, created_at, modified_at))
-                .first::<(i32, String, Option<chrono::NaiveDateTime>, Option<chrono::NaiveDateTime>)>(conn)
+                .first::<(
+                    i32,
+                    String,
+                    Option<chrono::NaiveDateTime>,
+                    Option<chrono::NaiveDateTime>,
+                )>(conn)
             {
                 Ok((note_id, note_title, created, modified)) => NoteMetadataResponse {
                     id: note_id,
@@ -255,7 +258,9 @@ fn get_note_metadata_components(
                     created_at: created,
                     modified_at: modified,
                 },
-                Err(diesel::result::Error::NotFound) => return Err(diesel::result::Error::NotFound),
+                Err(diesel::result::Error::NotFound) => {
+                    return Err(diesel::result::Error::NotFound)
+                }
                 Err(e) => return Err(e),
             }
         };
@@ -374,11 +379,12 @@ fn get_note_path_components(
     state: Option<&AppState>,
 ) -> Result<(Vec<String>, bool), diesel::result::Error> {
     let metadata_components = get_note_metadata_components(id, from_id, state)?;
-    let is_relative = from_id.is_some() && metadata_components.len() < get_note_metadata_components(id, None, state)?.len();
-    
+    let is_relative = from_id.is_some()
+        && metadata_components.len() < get_note_metadata_components(id, None, state)?.len();
+
     Ok((
         metadata_components.into_iter().map(|n| n.title).collect(),
-        is_relative
+        is_relative,
     ))
 }
 
