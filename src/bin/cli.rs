@@ -864,7 +864,11 @@ async fn main() {
                 }
                 NotesCommands::Breadcrumbs => {
                     if let Some(note_id) = id {
-                        match draftsmith_rest_api::client::notes::get_note_breadcrumbs(&url, note_id).await {
+                        match draftsmith_rest_api::client::notes::get_note_breadcrumbs(
+                            &url, note_id,
+                        )
+                        .await
+                        {
                             Ok(breadcrumbs) => {
                                 println!("{}", serde_json::to_string_pretty(&breadcrumbs).unwrap());
                             }
