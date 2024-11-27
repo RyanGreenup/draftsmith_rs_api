@@ -33,7 +33,7 @@ pub enum NoteError {
 }
 
 /// Represents a note's metadata in a breadcrumb path
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 pub struct NoteBreadcrumb {
     pub id: i32,
     pub title: String,
