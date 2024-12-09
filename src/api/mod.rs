@@ -1299,20 +1299,20 @@ async fn render_markdown(Json(payload): Json<RenderMarkdownRequest>) -> Result<S
 async fn cleanup_orphaned_assets(state: AppState) {
     use crate::schema::assets::dsl::*;
 
-    info!("Starting orphaned assets cleanup");
+    info!("Starting assets synchronization");
 
     // Get a connection from the pool
     let mut conn = match state.pool.get() {
         Ok(conn) => conn,
         Err(e) => {
-            error!("Failed to get database connection for cleanup: {}", e);
+            error!("Failed to get database connection for sync: {}", e);
             return;
         }
     };
 
     // Get all assets from database
     let db_assets = match assets.load::<Asset>(&mut conn) {
-        Ok(db_assets) => db_assets, // Changed variable name to avoid conflict
+        Ok(db_assets) => db_assets,
         Err(e) => {
             error!("Failed to load assets from database: {}", e);
             return;
@@ -1347,10 +1347,10 @@ async fn cleanup_orphaned_assets(state: AppState) {
     }
 
     // Track statistics
-    let mut orphaned_files = 0;
+    let mut added_files = 0;
     let mut dangling_records = 0;
 
-    // Check for files without database records
+    // Add files that exist on disk but not in database
     for file_path in &files_on_disk {
         let file_exists_in_db = db_assets.iter().any(|asset| {
             FilePath::new(&asset.location)
@@ -1360,19 +1360,29 @@ async fn cleanup_orphaned_assets(state: AppState) {
         });
 
         if !file_exists_in_db {
-            match fs::remove_file(file_path).await {
+            // Create new asset record
+            let new_asset = NewAsset {
+                note_id: None, // No associated note initially
+                location: file_path.to_str().unwrap_or_default(),
+                description: None,
+            };
+
+            match diesel::insert_into(assets)
+                .values(&new_asset)
+                .execute(&mut conn)
+            {
                 Ok(_) => {
-                    orphaned_files += 1;
-                    info!("Removed orphaned file: {:?}", file_path);
+                    added_files += 1;
+                    info!("Added new asset record for file: {:?}", file_path);
                 }
                 Err(e) => {
-                    warn!("Failed to remove orphaned file {:?}: {}", file_path, e);
+                    warn!("Failed to add asset record for file {:?}: {}", file_path, e);
                 }
             }
         }
     }
 
-    // Check for database records without files
+    // Remove database records for files that don't exist
     for asset in db_assets {
         let asset_path = FilePath::new(&asset.location);
         let canonical_path = match asset_path.canonicalize() {
@@ -1418,8 +1428,8 @@ async fn cleanup_orphaned_assets(state: AppState) {
     }
 
     info!(
-        "Cleanup completed. Removed {} orphaned files and {} dangling database records",
-        orphaned_files, dangling_records
+        "Sync completed. Added {} new assets and removed {} dangling database records",
+        added_files, dangling_records
     );
 }
 
