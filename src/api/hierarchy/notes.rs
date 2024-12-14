@@ -6,11 +6,11 @@ use crate::api::{
     get_connection, get_notes_tags, state::AppState, tags::TagResponse, NoteMetadataResponse, Path,
 };
 use crate::tables::NewNoteTag;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::{debug_handler, extract::Json, http::StatusCode};
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 lazy_static! {
@@ -21,6 +21,12 @@ lazy_static! {
 pub struct AttachChildNoteRequest {
     pub parent_note_id: Option<i32>,
     pub child_note_id: i32,
+}
+
+#[derive(Deserialize)]
+pub struct GetNoteTreeParams {
+    #[serde(default)]
+    exclude_content: bool,
 }
 use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
 use diesel::prelude::*;
@@ -132,6 +138,7 @@ pub async fn attach_child_note(
 #[debug_handler]
 pub async fn get_note_tree(
     State(state): State<AppState>,
+    Query(params): Query<GetNoteTreeParams>,
 ) -> Result<Json<Vec<NoteTreeNode>>, StatusCode> {
     use crate::schema::note_hierarchy::dsl::note_hierarchy;
     let mut conn = state
@@ -164,18 +171,23 @@ pub async fn get_note_tree(
     async fn convert_to_note_tree(
         basic_node: BasicTreeNode<NoteWithoutFts>,
         state: &AppState,
+        exclude_content: bool,
     ) -> NoteTreeNode {
         NoteTreeNode {
             id: basic_node.id,
             title: Some(basic_node.data.title),
-            content: Some(basic_node.data.content),
+            content: if exclude_content {
+                None
+            } else {
+                Some(basic_node.data.content)
+            },
             created_at: basic_node.data.created_at,
             modified_at: basic_node.data.modified_at,
             children: futures::future::join_all(
                 basic_node
                     .children
                     .into_iter()
-                    .map(|child| convert_to_note_tree(child, state)),
+                    .map(|child| convert_to_note_tree(child, state, exclude_content)),
             )
             .await,
             tags: get_notes_tags(State(state.clone()), vec![basic_node.id])
@@ -190,7 +202,7 @@ pub async fn get_note_tree(
     let tree = futures::future::join_all(
         basic_tree
             .into_iter()
-            .map(|node| convert_to_note_tree(node, &state)),
+            .map(|node| convert_to_note_tree(node, &state, params.exclude_content)),
     )
     .await;
 
