@@ -1,6 +1,8 @@
 use super::generics::{build_generic_tree, BasicTreeNode, HierarchyItem};
 use crate::api::get_tags_notes;
+use axum::extract::Query;
 use crate::api::hierarchy::generics::{attach_child, is_circular_hierarchy, AttachChildRequest};
+use crate::api::hierarchy::notes::{get_single_note_tree, NoteTreeNode};
 use crate::api::state::AppState;
 use crate::schema::tag_hierarchy;
 use crate::schema::tags::dsl::{id as tag_id, tags};
@@ -189,8 +191,25 @@ pub async fn attach_child_tag(
     Ok(StatusCode::OK)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GetTagTreeParams {
+    #[serde(default = "default_include_subpages")]
+    pub include_subpages: bool,
+    #[serde(default = "default_exclude_content")]
+    pub exclude_content: bool,
+}
+
+fn default_include_subpages() -> bool {
+    false
+}
+
+fn default_exclude_content() -> bool {
+    false
+}
+
 pub async fn get_tag_tree(
     State(state): State<AppState>,
+    Query(params): Query<GetTagTreeParams>,
 ) -> Result<Json<Vec<TagTreeNode>>, StatusCode> {
     use crate::schema::tag_hierarchy::dsl::tag_hierarchy;
     let mut conn = state
@@ -225,13 +244,33 @@ pub async fn get_tag_tree(
     let basic_tree = build_generic_tree(&tag_data, &hierarchy_tuples);
 
     // Convert BasicTreeNode to TagTreeNode
-    async fn convert_to_tag_tree(basic_node: BasicTreeNode<Tag>, state: &AppState) -> TagTreeNode {
-        let notes = get_tags_notes(State(state.clone()), vec![basic_node.id])
+    async fn convert_to_tag_tree(
+        basic_node: BasicTreeNode<Tag>,
+        state: &AppState,
+        include_subpages: bool,
+        exclude_content: bool,
+    ) -> TagTreeNode {
+        let mut notes = get_tags_notes(State(state.clone()), vec![basic_node.id])
             .await
             .unwrap_or_default()
             .0
             .remove(&basic_node.id)
             .unwrap_or_default();
+
+        if include_subpages {
+            let mut all_descendants = Vec::new();
+            for note in &notes {
+                if let Ok(note_tree) = get_single_note_tree(&state, note.id, exclude_content).await {
+                    // Don't include the root note since it's already in `notes`
+                    for child in &note_tree {
+                        all_descendants.extend(collect_all_notes(&[child.clone()]));
+                    }
+                }
+            }
+            // Deduplicate notes by ID before extending
+            all_descendants.retain(|descendant| !notes.iter().any(|n| n.id == descendant.id));
+            notes.extend(all_descendants);
+        }
 
         TagTreeNode {
             id: basic_node.id,
@@ -240,17 +279,32 @@ pub async fn get_tag_tree(
                 basic_node
                     .children
                     .into_iter()
-                    .map(|child| convert_to_tag_tree(child, state)),
+                    .map(|child| convert_to_tag_tree(child, state, include_subpages, exclude_content)),
             )
             .await,
             notes,
         }
     }
 
+    // Helper function to recursively collect all notes from a tree
+    fn collect_all_notes(tree: &[NoteTreeNode]) -> Vec<NoteMetadataResponse> {
+        let mut notes = Vec::new();
+        for node in tree {
+            notes.push(NoteMetadataResponse {
+                id: node.id,
+                title: node.title.clone().unwrap_or_default(),
+                created_at: node.created_at,
+                modified_at: node.modified_at,
+            });
+            notes.extend(collect_all_notes(&node.children));
+        }
+        notes
+    }
+
     let tree = futures::future::join_all(
         basic_tree
             .into_iter()
-            .map(|node| convert_to_tag_tree(node, &state)),
+            .map(|node| convert_to_tag_tree(node, &state, params.include_subpages, params.exclude_content)),
     )
     .await;
 
@@ -300,8 +354,21 @@ pub async fn get_hierarchy_mappings(
     Ok(Json(response))
 }
 
+use lazy_static::lazy_static;
+use std::sync::Mutex;
+
+lazy_static! {
+    static ref TEST_MUTEX: Mutex<()> = Mutex::new(());
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::schema::notes;
+    use crate::schema::note_hierarchy;
+    use crate::schema::note_tags;
+    use crate::tables::{NewNote, NewNoteHierarchy, NewNoteTag, NoteWithoutFts};
+    use diesel::associations::HasTable;
     use super::*;
     use crate::api::tests::setup_test_state;
     use crate::tables::{NewTag, NewTagHierarchy};
@@ -370,7 +437,7 @@ mod tests {
             .read_write()
             .run::<_, diesel::result::Error, _>(|conn| {
                 // Create parent tag
-                let parent_tag = diesel::insert_into(tags)
+                let parent_tag = diesel::insert_into(tags::table())
                     .values(NewTag { name: "parent_tag" })
                     .get_result::<Tag>(conn)?;
 
@@ -477,6 +544,143 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_tag_tree_with_subpages() {
+        let _lock = TEST_MUTEX.lock().unwrap();
+        let state = setup_test_state();
+        let mut conn = state.pool.get().expect("Failed to get database connection");
+
+        // Get initial tag count
+        let initial_tags: Vec<TagTreeNode> = get_tag_tree(
+            State(state.clone()),
+            Query(GetTagTreeParams {
+                include_subpages: false,
+                exclude_content: false,
+            })
+        ).await.unwrap().0;
+        
+        let initial_tag_count = initial_tags.len();
+
+        // Create test data and store IDs for cleanup
+        let (parent_tag_id, parent_note_id, child_note_id) = conn
+            .build_transaction()
+            .read_write()
+            .run::<_, diesel::result::Error, _>(|conn| {
+                // Create a tag
+                let parent_tag = diesel::insert_into(tags::table())
+                    .values(NewTag { name: "parent_tag" })
+                    .get_result::<Tag>(conn)?;
+
+                // Create a note
+                let parent_note = diesel::insert_into(notes::table)
+                    .values(NewNote {
+                        title: "Parent Note",
+                        content: "Parent content",
+                        created_at: Some(chrono::Utc::now().naive_utc()),
+                        modified_at: Some(chrono::Utc::now().naive_utc()),
+                    })
+                    .returning((
+                        notes::id,
+                        notes::title,
+                        notes::content,
+                        notes::created_at,
+                        notes::modified_at,
+                    ))
+                    .get_result::<NoteWithoutFts>(conn)?;
+
+                // Create a subpage
+                let child_note = diesel::insert_into(notes::table)
+                    .values(NewNote {
+                        title: "Child Note",
+                        content: "Child content",
+                        created_at: Some(chrono::Utc::now().naive_utc()),
+                        modified_at: Some(chrono::Utc::now().naive_utc()),
+                    })
+                    .returning((
+                        notes::id,
+                        notes::title,
+                        notes::content,
+                        notes::created_at,
+                        notes::modified_at,
+                    ))
+                    .get_result::<NoteWithoutFts>(conn)?;
+
+                // Link note to tag
+                diesel::insert_into(note_tags::table)
+                    .values(NewNoteTag {
+                        note_id: parent_note.id,
+                        tag_id: parent_tag.id,
+                    })
+                    .execute(conn)?;
+
+                // Create note hierarchy
+                diesel::insert_into(note_hierarchy::table)
+                    .values(NewNoteHierarchy {
+                        parent_note_id: Some(parent_note.id),
+                        child_note_id: Some(child_note.id),
+                    })
+                    .execute(conn)?;
+
+                Ok((parent_tag.id, parent_note.id, child_note.id))
+            })
+            .expect("Transaction failed");
+
+        // Get final tag count
+        let final_tags: Vec<TagTreeNode> = get_tag_tree(
+            State(state.clone()),
+            Query(GetTagTreeParams {
+                include_subpages: false,
+                exclude_content: false,
+            })
+        ).await.unwrap().0;
+
+        // Verify we only added one new tag
+        assert_eq!(
+            final_tags.len() - initial_tag_count,
+            1,
+            "Expected to add exactly one new tag. Initial count: {}, Final count: {}",
+            initial_tag_count,
+            final_tags.len()
+        );
+
+        // Find the new tag
+        let new_tag = final_tags
+            .iter()
+            .find(|t| !initial_tags.iter().any(|it| it.id == t.id))
+            .expect("Could not find the newly added tag");
+
+        // Verify the new tag has one note
+        assert_eq!(
+            new_tag.notes.len(),
+            1,
+            "New tag should have exactly one note"
+        );
+
+        // Test with subpages
+        let final_tags_with_subpages = get_tag_tree(
+            State(state.clone()),
+            Query(GetTagTreeParams {
+                include_subpages: true,
+                exclude_content: false,
+            })
+        ).await.unwrap().0;
+
+        // Find the new tag again
+        let new_tag_with_subpages = final_tags_with_subpages
+            .iter()
+            .find(|t| !initial_tags.iter().any(|it| it.id == t.id))
+            .expect("Could not find the newly added tag");
+
+        // Verify it now has both parent and child notes
+        assert_eq!(
+            new_tag_with_subpages.notes.len(),
+            2,
+            "Should have both parent and child notes"
+        );
+
+        // Clean up is handled by test database teardown
+    }
+
+    #[tokio::test]
     async fn test_get_tag_tree() {
         let state = setup_test_state();
         let mut conn = state.pool.get().expect("Failed to get database connection");
@@ -547,7 +751,13 @@ mod tests {
         let child2_tag_id = child2_tag_id.expect("Failed to retrieve child2_tag_id");
 
         // Call get_tag_tree
-        let response = get_tag_tree(State(state)).await.unwrap();
+        let response = get_tag_tree(
+            State(state),
+            Query(GetTagTreeParams {
+                include_subpages: false,
+                exclude_content: false,
+            })
+        ).await.unwrap();
         let tree = response.0;
 
         // Find our test root tag in the tree by ID

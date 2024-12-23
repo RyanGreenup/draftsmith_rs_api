@@ -239,6 +239,12 @@ enum TagsCommands {
         /// Display simplified tree with only IDs and names
         #[arg(long)]
         simple: bool,
+        /// Include subpages in the tree
+        #[arg(long)]
+        include_subpages: bool,
+        /// Exclude content from the tree
+        #[arg(long)]
+        exclude_content: bool,
     },
     /// Show hierarchy mappings
     Mappings,
@@ -1134,7 +1140,8 @@ async fn main() {
                         std::process::exit(1);
                     }
                 },
-                TagsCommands::Tree { simple } => match tags::get_tag_tree(&url).await {
+                TagsCommands::Tree { simple, include_subpages, exclude_content } => 
+                    match tags::get_tag_tree(&url, include_subpages, exclude_content).await {
                     Ok(tree) => {
                         if simple {
                             print_tag_tree(&tree, 0);

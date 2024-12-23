@@ -1786,12 +1786,12 @@ mod tests {
 
         // Create test tags
         let tag1 = diesel::insert_into(tags::table)
-            .values((tags::name.eq("tag1"),))
+            .values((crate::schema::tags::name.eq("tag1"),))
             .get_result::<crate::tables::Tag>(&mut conn)
             .expect("Failed to create tag 1");
 
         let tag2 = diesel::insert_into(tags::table)
-            .values((tags::name.eq("tag2"),))
+            .values((crate::schema::tags::name.eq("tag2"),))
             .get_result::<crate::tables::Tag>(&mut conn)
             .expect("Failed to create tag 2");
 

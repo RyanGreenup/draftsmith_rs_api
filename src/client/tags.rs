@@ -253,9 +253,18 @@ pub async fn detach_child_tag(base_url: &str, child_id: i32) -> Result<(), TagEr
 }
 
 // *** Get Tree ...............................................................
-pub async fn get_tag_tree(base_url: &str) -> Result<Vec<TagTreeNode>, TagError> {
+pub async fn get_tag_tree(
+    base_url: &str,
+    include_subpages: bool,
+    exclude_content: bool,
+) -> Result<Vec<TagTreeNode>, TagError> {
     let client = reqwest::Client::new();
-    let url = format!("{}/tags/tree", base_url);
+    let url = format!(
+        "{}/tags/tree?include_subpages={}&exclude_content={}", 
+        base_url,
+        include_subpages,
+        exclude_content
+    );
 
     let response = client
         .get(&url)
@@ -613,7 +622,7 @@ mod tests {
             .expect("Failed to attach child tag");
 
         // Get tag tree
-        let tree = get_tag_tree(base_url)
+        let tree = get_tag_tree(base_url, false, false)
             .await
             .expect("Failed to get tag tree");
 

@@ -249,6 +249,19 @@ impl NoteWithoutFts {
             .select((id, title, content, created_at, modified_at))
             .load::<NoteWithoutFts>(conn)
     }
+
+    pub fn get_by_id(note_id: i32, conn: &mut PgConnection) -> QueryResult<Self> {
+        use crate::schema::notes::dsl::*;
+        notes.filter(crate::schema::notes::id.eq(note_id))
+            .select((
+                crate::schema::notes::id,
+                title,
+                content,
+                created_at,
+                modified_at,
+            ))
+            .first::<Self>(conn)
+    }
 }
 
 // Direct conversion from Note to NoteWithoutFts is considered an anti-pattern. Use NoteWithoutFts::get_all to fetch data without FTS.

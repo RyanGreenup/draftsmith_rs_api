@@ -31,6 +31,37 @@ pub struct GetNoteTreeParams {
 use crate::tables::{NewNote, NewNoteHierarchy, NoteHierarchy, NoteWithoutFts};
 use diesel::prelude::*;
 
+async fn convert_to_note_tree(
+    basic_node: BasicTreeNode<NoteWithoutFts>,
+    state: &AppState,
+    exclude_content: bool,
+) -> NoteTreeNode {
+    NoteTreeNode {
+        id: basic_node.id,
+        title: Some(basic_node.data.title),
+        content: if exclude_content {
+            None
+        } else {
+            Some(basic_node.data.content)
+        },
+        created_at: basic_node.data.created_at,
+        modified_at: basic_node.data.modified_at,
+        children: futures::future::join_all(
+            basic_node
+                .children
+                .into_iter()
+                .map(|child| convert_to_note_tree(child, state, exclude_content)),
+        )
+        .await,
+        tags: get_notes_tags(State(state.clone()), vec![basic_node.id])
+            .await
+            .unwrap_or_default()
+            .get(&basic_node.id)
+            .cloned()
+            .unwrap_or_default(),
+    }
+}
+
 impl HierarchyItem for NoteHierarchy {
     type Id = i32;
 
@@ -135,7 +166,47 @@ pub async fn attach_child_note(
     Ok(StatusCode::OK)
 }
 
-#[debug_handler]
+pub async fn get_single_note_tree(
+    state: &AppState,
+    note_id: i32,
+    exclude_content: bool,
+) -> Result<Vec<NoteTreeNode>, StatusCode> {
+    use crate::schema::note_hierarchy::dsl::note_hierarchy;
+    let mut conn = state
+        .pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get the specific note
+    let note = NoteWithoutFts::get_by_id(note_id, &mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Get hierarchies for this note
+    let hierarchies: Vec<NoteHierarchy> = note_hierarchy
+        .load::<NoteHierarchy>(&mut conn)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Convert to tree format
+    let note_data = vec![(note_id, note)];
+    let hierarchy_tuples: Vec<(i32, i32)> = hierarchies
+        .iter()
+        .filter_map(|h| h.child_note_id.zip(h.parent_note_id))
+        .collect();
+
+    let basic_tree = build_generic_tree(&note_data, &hierarchy_tuples);
+
+    // Convert to NoteTreeNode format
+    let tree = futures::future::join_all(
+        basic_tree
+            .into_iter()
+            .map(|node| convert_to_note_tree(node, state, exclude_content)),
+    )
+    .await;
+
+    Ok(tree)
+}
+
+
 pub async fn get_note_tree(
     State(state): State<AppState>,
     Query(params): Query<GetNoteTreeParams>,
@@ -167,37 +238,6 @@ pub async fn get_note_tree(
     // Build the basic tree
     let basic_tree = build_generic_tree(&note_data, &hierarchy_tuples);
 
-    // Convert BasicTreeNode to NoteTreeNode
-    async fn convert_to_note_tree(
-        basic_node: BasicTreeNode<NoteWithoutFts>,
-        state: &AppState,
-        exclude_content: bool,
-    ) -> NoteTreeNode {
-        NoteTreeNode {
-            id: basic_node.id,
-            title: Some(basic_node.data.title),
-            content: if exclude_content {
-                None
-            } else {
-                Some(basic_node.data.content)
-            },
-            created_at: basic_node.data.created_at,
-            modified_at: basic_node.data.modified_at,
-            children: futures::future::join_all(
-                basic_node
-                    .children
-                    .into_iter()
-                    .map(|child| convert_to_note_tree(child, state, exclude_content)),
-            )
-            .await,
-            tags: get_notes_tags(State(state.clone()), vec![basic_node.id])
-                .await
-                .unwrap_or_default()
-                .get(&basic_node.id)
-                .cloned()
-                .unwrap_or_default(),
-        }
-    }
 
     let tree = futures::future::join_all(
         basic_tree
